@@ -7,7 +7,7 @@
 # Matomo Analytics for Laravel
 
 [![Latest Version](https://img.shields.io/packagist/v/pushery/matomo-analytics-for-laravel.svg)](https://packagist.org/packages/pushery/matomo-analytics-for-laravel)
-[![PHP Version](https://img.shields.io/packagist/php-v/pushery/matomo-analytics-for-laravel.svg)](https://packagist.org/packages/pushery/matomo-analytics-for-laravel)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/pushery/matomo-analytics-for-laravel/php.svg)](https://packagist.org/packages/pushery/matomo-analytics-for-laravel)
 [![PHPStan](https://img.shields.io/badge/PHPStan-max-blue.svg)](https://phpstan.org)
 [![Code Style](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
 [![License](https://img.shields.io/packagist/l/pushery/matomo-analytics-for-laravel.svg)](LICENSE)
