@@ -147,6 +147,26 @@ a one-click opt-out anywhere:
 @matomoOptOut
 ```
 
+### SPA / soft navigation
+
+Single-page navigations never reload the document, so they're invisible to the normal
+page view. Enable `spa.enabled` and the tracker records a **virtual page view** on each
+client-side navigation. Choose the adapters your app uses:
+
+```php
+'spa' => [
+    'enabled' => env('MATOMO_SPA', true),
+    'adapters' => ['livewire', 'inertia'], // livewire | inertia | generic
+],
+```
+
+- **`livewire`** — Livewire and [WireKit](https://docs.wirekit.app) `wire:navigate` (listens for `livewire:navigated`).
+- **`inertia`** — Inertia.js, covering both Vue and React (listens for `inertia:navigate`).
+- **`generic`** — any client-side router, via History `pushState` + `popstate`.
+
+A `window.matomoTrackPageView()` helper is always exposed for manual or custom triggers.
+(Matomo Tag Manager handles SPA navigation itself, so this only applies to the direct tracker.)
+
 ## Web Vitals
 
 Opt in (`web_vitals.enabled`) to capture Core Web Vitals. Drop the directive into your
