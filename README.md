@@ -48,6 +48,39 @@ inert in local and CI environments. Verify connectivity any time:
 php artisan matomo:test
 ```
 
+## Matomo Cloud
+
+Cloud and self-hosted use the **same code path** — only the host differs. Point
+`MATOMO_HOST` at your Cloud subdomain and everything (tracking `…/matomo.php`,
+Reporting API `…/index.php`, the JS tracker `…/matomo.js`, opt-out, no-script pixel)
+is derived from it:
+
+```dotenv
+MATOMO_HOST=https://your-instance.matomo.cloud
+MATOMO_SITE_ID=1
+MATOMO_TOKEN=your-cloud-auth-token   # Cloud UI → Personal → Security → Auth tokens
+```
+
+- **Set a token.** Matomo only honours the real visitor IP (`cip`), exact hit time
+  (`cdt`), and geolocation when a `token_auth` is sent — so for correct server-side
+  attribution on Cloud, `MATOMO_TOKEN` is effectively required (use a dedicated
+  tracking token). Without it, hits are attributed to your app server's IP.
+- **Plan limits.** Cloud bills by hits and is more likely to throttle the *Reporting*
+  API than tracking. This package already batches/bulk-sends and caches reports with
+  date-aware TTLs, so you stay well within limits.
+- **Optional CDN for the JS.** Cloud can also serve `matomo.js` from its CDN. Set
+  `MATOMO_JS_HOST` to load the asset from there while tracking stays on your subdomain:
+  ```dotenv
+  MATOMO_JS_HOST=https://cdn.matomo.cloud/your-instance.matomo.cloud
+  ```
+
+**Verify Cloud end-to-end** (the definitive check) with the built-in commands:
+
+```bash
+php artisan matomo:test                       # sends a real hit, reports the HTTP status
+php artisan matomo:report VisitsSummary.get   # confirms the Reporting API against Cloud
+```
+
 ## Server-side tracking
 
 Track from anywhere via the `Matomo` facade. Hits are gathered during the request

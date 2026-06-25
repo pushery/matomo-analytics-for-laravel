@@ -4,6 +4,17 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-25
+
+### Added
+
+- Optional `js.host` (`MATOMO_JS_HOST`) to load `matomo.js` from a separate asset host
+  — e.g. a Matomo Cloud CDN (`https://cdn.matomo.cloud/your-instance.matomo.cloud`) —
+  while tracking stays on the main host; the host is also dns-prefetched.
+- A dedicated "Matomo Cloud" guide in the README: host setup, the token requirement
+  for the real visitor IP / hit time / geolocation, the CDN option, and end-to-end
+  verification with `matomo:test` / `matomo:report`.
+
 ## [0.1.1] - 2026-06-25
 
 ### Fixed

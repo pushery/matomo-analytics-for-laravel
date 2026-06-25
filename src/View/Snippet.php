@@ -138,6 +138,11 @@ final readonly class Snippet
 
         if (Config::bool('matomo-analytics.js.dns_prefetch', true)) {
             $html = '<link rel="dns-prefetch" href="'.e($this->connection->host).'">'."\n".$html;
+
+            $jsHost = $this->jsHost();
+            if ($jsHost !== $this->connection->host) {
+                $html = '<link rel="dns-prefetch" href="'.e($jsHost).'">'."\n".$html;
+            }
         }
 
         if (Config::bool('matomo-analytics.js.noscript', true)) {
@@ -150,7 +155,19 @@ final readonly class Snippet
 
     private function jsUrl(): string
     {
-        return $this->connection->host.'/'.ltrim(Config::string('matomo-analytics.js_path', 'matomo.js'), '/');
+        return $this->jsHost().'/'.ltrim(Config::string('matomo-analytics.js_path', 'matomo.js'), '/');
+    }
+
+    /**
+     * Where matomo.js is loaded from — the tracker host by default, or a separate
+     * asset host (e.g. a Matomo Cloud CDN) when js.host is set. Tracking itself
+     * always stays on the tracker host.
+     */
+    private function jsHost(): string
+    {
+        $host = Config::nullableString('matomo-analytics.js.host');
+
+        return $host !== null ? rtrim($host, '/') : $this->connection->host;
     }
 
     private function js(string $value): string
