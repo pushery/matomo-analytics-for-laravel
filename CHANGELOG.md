@@ -4,6 +4,18 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-25
+
+### Added
+
+- Ecommerce tracking: `Matomo::ecommerceOrder()`, `ecommerceCartUpdate()` and `ecommerceView()`
+  (with `EcommerceItem`/`EcommerceOrder`/`EcommerceCartUpdate`/`EcommerceView` value objects) map
+  to Matomo's ecommerce parameters — `idgoal=0`, `ec_id`, `revenue`, `ec_st`/`ec_tx`/`ec_sh`/`ec_dt`,
+  the `ec_items` JSON array, and the `_pks`/`_pkn`/`_pkc`/`_pkp` product-view params.
+- Site-search build-out: `Matomo::searchFromRequest()` and `SiteSearch::fromRequest()` build a
+  search straight from request query parameters; a `matomo.search` middleware auto-tracks searches
+  on successful GET responses; no-result tracking via `siteSearch(..., count: 0)`.
+
 ## [0.6.0] - 2026-06-25
 
 ### Added

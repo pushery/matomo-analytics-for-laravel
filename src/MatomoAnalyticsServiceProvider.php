@@ -30,6 +30,7 @@ use MatomoAnalytics\Contracts\TrackingGate;
 use MatomoAnalytics\Contracts\VisitorIdResolver;
 use MatomoAnalytics\Gates\DefaultTrackingGate;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
+use MatomoAnalytics\Http\Middleware\TrackSiteSearch;
 use MatomoAnalytics\Identity\CookielessVisitorId;
 use MatomoAnalytics\Privacy\GdprManager;
 use MatomoAnalytics\Privacy\UrlRedactor;
@@ -105,6 +106,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     private function registerMiddleware(): void
     {
         Route::aliasMiddleware('matomo.track', TrackPageViews::class);
+        Route::aliasMiddleware('matomo.search', TrackSiteSearch::class);
 
         if (Config::bool('matomo-analytics.middleware.auto', false)) {
             Route::pushMiddlewareToGroup('web', TrackPageViews::class);

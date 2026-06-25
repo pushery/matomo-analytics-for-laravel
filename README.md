@@ -182,6 +182,49 @@ It expects Google's [`web-vitals`](https://github.com/GoogleChrome/web-vitals) l
 self-hosted copy. No third-party CDN is loaded by default, and the snippet is a clean
 no-op if the library isn't present.
 
+## Ecommerce
+
+Track product views, the cart, and completed orders server-side — all fail-safe and
+gated like every other hit:
+
+```php
+use MatomoAnalytics\Facades\Matomo;
+use MatomoAnalytics\Tracking\EcommerceItem;
+
+// A product (or category-only) view
+Matomo::ecommerceView(sku: 'TSHIRT-01', name: 'T-Shirt', category: 'Apparel', price: 29.90);
+
+// The cart changed — send its current contents and grand total
+Matomo::ecommerceCartUpdate(grandTotal: 59.80, items: [
+    new EcommerceItem('TSHIRT-01', 'T-Shirt', 'Apparel', 29.90, quantity: 2),
+]);
+
+// A completed order
+Matomo::ecommerceOrder(
+    orderId: 'ORDER-1001',
+    grandTotal: 59.80,
+    items: [new EcommerceItem('TSHIRT-01', 'T-Shirt', 'Apparel', 29.90, quantity: 2)],
+    subTotal: 50.00, tax: 9.80, shipping: 0.00, discount: 0.00,
+);
+```
+
+## Site search
+
+Beyond `Matomo::siteSearch($keyword, $category, $count)`, track straight from the request:
+
+```php
+Matomo::searchFromRequest(keywordKey: 'q', categoryKey: 'category', count: $results->total());
+
+// No-result searches are valuable — track them with a count of zero
+Matomo::siteSearch($keyword, count: 0);
+```
+
+Or auto-track every search on a route with the middleware (result count isn't known there):
+
+```php
+Route::get('/search', SearchController::class)->middleware('matomo.search:q,category');
+```
+
 ## Reporting (read side)
 
 Pull statistics back out of Matomo with the `MatomoReports` facade. It reuses your
