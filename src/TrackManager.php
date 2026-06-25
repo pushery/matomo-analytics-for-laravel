@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics;
 
 use Closure;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
@@ -18,6 +19,10 @@ use MatomoAnalytics\Jobs\SendHitsJob;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
 use MatomoAnalytics\Tracking\Download;
+use MatomoAnalytics\Tracking\EcommerceCartUpdate;
+use MatomoAnalytics\Tracking\EcommerceItem;
+use MatomoAnalytics\Tracking\EcommerceOrder;
+use MatomoAnalytics\Tracking\EcommerceView;
 use MatomoAnalytics\Tracking\Event;
 use MatomoAnalytics\Tracking\Goal;
 use MatomoAnalytics\Tracking\Hit;
@@ -138,6 +143,34 @@ final class TrackManager implements Tracker
     public function ping(): static
     {
         return $this->track(new Ping);
+    }
+
+    public function searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): static
+    {
+        $search = SiteSearch::fromRequest($request ?? request(), $keywordKey, $categoryKey, $count);
+
+        return $search instanceof SiteSearch ? $this->track($search) : $this;
+    }
+
+    public function ecommerceView(?string $sku = null, ?string $name = null, ?string $category = null, ?float $price = null, ?string $title = null, ?string $url = null): static
+    {
+        return $this->track(new EcommerceView($sku, $name, $category, $price, $title, $url));
+    }
+
+    /**
+     * @param  list<EcommerceItem>  $items
+     */
+    public function ecommerceCartUpdate(float $grandTotal, array $items = []): static
+    {
+        return $this->track(new EcommerceCartUpdate($grandTotal, $items));
+    }
+
+    /**
+     * @param  list<EcommerceItem>  $items
+     */
+    public function ecommerceOrder(string $orderId, float $grandTotal, array $items = [], ?float $subTotal = null, ?float $tax = null, ?float $shipping = null, ?float $discount = null): static
+    {
+        return $this->track(new EcommerceOrder($orderId, $grandTotal, $items, $subTotal, $tax, $shipping, $discount));
     }
 
     /**
