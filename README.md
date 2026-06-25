@@ -10,7 +10,7 @@
 [![PHP Version](https://img.shields.io/packagist/dependency-v/pushery/matomo-analytics-for-laravel/php.svg)](https://packagist.org/packages/pushery/matomo-analytics-for-laravel)
 [![PHPStan](https://img.shields.io/badge/PHPStan-max-blue.svg)](https://phpstan.org)
 [![Code Style](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
-[![License](https://img.shields.io/packagist/l/pushery/matomo-analytics-for-laravel.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Privacy-first Matomo tracking for Laravel — **client and server**, **single or
 batched**, with **AI-bot detection**, **env-driven tracking gates**, and
@@ -268,6 +268,33 @@ return back()->withCookie(OptOut::enable());   // stop tracking this browser
 return back()->withCookie(OptOut::disable());  // opt back in
 ```
 
+## GDPR data-subject requests
+
+Handle "right to be forgotten" and access requests through Matomo's PrivacyManager
+API. Identify a person with a segment (e.g. `userId`, `visitIp`) and erase or export
+every matching visit. These operations are **never cached** and need an **admin-access
+`token`** (the read/tracking token may not be enough).
+
+```php
+use MatomoAnalytics\Facades\MatomoGdpr;
+
+MatomoGdpr::forget('userId==alice@example.com');   // erase; returns deletion counts
+MatomoGdpr::export('userId==alice@example.com');   // export the subject's data
+MatomoGdpr::findDataSubjects('visitIp==203.0.113.7'); // preview the matching visits
+```
+
+Or from the CLI — it previews the match count and asks before deleting:
+
+```bash
+php artisan matomo:forget "userId==alice@example.com"          # confirm, then erase
+php artisan matomo:forget "userId==alice@example.com" --force  # no prompt
+php artisan matomo:forget "userId==alice@example.com" --export # export instead
+php artisan matomo:forget "userId==alice@example.com" --site=all
+```
+
+A `DataSubjectForgotten` event (visit count + per-area deletion counts) fires on every
+erasure, so you can keep an audit trail.
+
 ## Fail-safe by design
 
 Tracking never blocks a response and a tracking error never surfaces in your app.
@@ -283,8 +310,8 @@ Inspect and re-queue the dead-letter with `matomo:replay --list` and `matomo:rep
 
 ## Events
 
-Listen for `TrackingQueued`, `TrackingSent`, `TrackingFailed`, and
-`VisitorExcluded` to hook tracking into your own pipelines.
+Listen for `TrackingQueued`, `TrackingSent`, `TrackingFailed`,
+`VisitorExcluded`, and `DataSubjectForgotten` to hook tracking into your own pipelines.
 
 ## Testing
 
@@ -314,6 +341,18 @@ $reports->stub('VisitsSummary.get', ['nb_visits' => 42]);
 $reports->assertRequested('VisitsSummary.get');
 ```
 
+The GDPR tools fake the same way:
+
+```php
+use MatomoAnalytics\Facades\MatomoGdpr;
+
+$gdpr = MatomoGdpr::fake()->stubFound([['idsite' => 1, 'idvisit' => 10]]);
+
+// ... exercise code that calls MatomoGdpr::forget() ...
+
+$gdpr->assertForgotten('userId==alice@example.com');
+```
+
 ## Console commands
 
 | Command | Purpose |
@@ -324,6 +363,7 @@ $reports->assertRequested('VisitsSummary.get');
 | `matomo:work` | Long-running daemon that continuously drains the batch buffer. |
 | `matomo:replay` | Re-queue dead-lettered hits into the buffer (`--list`, `--limit`, `--prune`). |
 | `matomo:report` | Fetch a Reporting API method and print the JSON result. |
+| `matomo:forget` | Erase or export a data subject's data for GDPR requests (`--force`, `--export`, `--site`). |
 
 ## Security
 

@@ -4,6 +4,25 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-25
+
+### Added
+
+- GDPR data-subject tools over Matomo's PrivacyManager API: `MatomoGdpr::forget()`
+  erases (and `export()` exports) every visit matching a segment such as
+  `userId==alice@example.com`, plus lower-level `findDataSubjects()`/`deleteVisits()`/
+  `exportVisits()`. Calls are never cached and require an admin-access token.
+- `matomo:forget {segment}` console command — finds the data subject, confirms, then
+  erases (`--force` to skip the prompt, `--export` to export instead, `--site` to scope).
+- A `DataSubjectForgotten` event (visit count + deletion counts) for audit trails, and a
+  `MatomoGdpr::fake()` test double.
+
+### Changed
+
+- composer.json description and keywords now match the package's positioning
+  (privacy-first, cookieless, Web Vitals, reporting API, bot detection) for Packagist
+  discoverability.
+
 ## [0.2.0] - 2026-06-25
 
 ### Added

@@ -1,6 +1,6 @@
 {
     "name": "pushery/matomo-analytics-for-laravel",
-    "description": "Integrate the Matomo analytics platform with your Laravel application.",
+    "description": "Privacy-first Matomo analytics for Laravel with cookieless tracking, reports, Web Vitals, batching and bot filtering.",
     "keywords": [
         "laravel",
         "matomo",
@@ -9,7 +9,11 @@
         "privacy",
         "gdpr",
         "piwik",
-        "web-analytics"
+        "web-analytics",
+        "cookieless",
+        "web-vitals",
+        "reporting-api",
+        "bot-detection"
     ],
     "license": "MIT",
     "type": "library",
