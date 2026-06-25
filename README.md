@@ -20,7 +20,7 @@ Matomo and Matomo Cloud.
 ## Requirements
 
 - PHP 8.4+
-- Laravel 13+
+- Laravel 12 or 13
 
 ## Installation
 
