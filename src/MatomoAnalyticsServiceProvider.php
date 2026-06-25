@@ -135,7 +135,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     {
         $this->app->terminating(function (): void {
             if ($this->app->resolved(Tracker::class)) {
-                $this->app->make(Tracker::class)->flush();
+                /** @var Tracker $tracker */
+                $tracker = $this->app->make(Tracker::class);
+                $tracker->flush();
             }
         });
     }

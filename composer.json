@@ -25,17 +25,17 @@
     "require": {
         "php": "^8.4",
         "ext-json": "*",
-        "illuminate/bus": "^13.0",
-        "illuminate/contracts": "^13.0",
-        "illuminate/http": "^13.0",
-        "illuminate/queue": "^13.0",
-        "illuminate/support": "^13.0"
+        "illuminate/bus": "^12.0 || ^13.0",
+        "illuminate/contracts": "^12.0 || ^13.0",
+        "illuminate/http": "^12.0 || ^13.0",
+        "illuminate/queue": "^12.0 || ^13.0",
+        "illuminate/support": "^12.0 || ^13.0"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
-        "orchestra/testbench": "^11.0",
+        "orchestra/testbench": "^10.0 || ^11.0",
         "pestphp/pest": "^4.0",
         "pestphp/pest-plugin-browser": "^4.3",
         "pestphp/pest-plugin-laravel": "^4.0",
@@ -44,6 +44,7 @@
         "spaze/phpstan-disallowed-calls": "^4.12"
     },
     "suggest": {
+        "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
         "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
     },
     "autoload": {
@@ -91,10 +92,6 @@
                 "MatomoAnalytics\\MatomoAnalyticsServiceProvider"
             ]
         }
-    },
-    "suggest": {
-        "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
-        "matomo/device-detector": "Authoritative bot/crawler detection — wrap it in an invokable and set matomo-analytics.bots.detector"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

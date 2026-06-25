@@ -4,6 +4,15 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-25
+
+### Changed
+
+- The package now supports **Laravel 12** alongside Laravel 13 — the minimum was lowered from `^13.0`
+  to `^12.0 || ^13.0` (and `orchestra/testbench` to `^10.0 || ^11.0`). PHP stays at `^8.4`. Verified
+  against the newest Laravel 12.x on PHP 8.4 (full test suite, PHPStan max, Pint, Rector and 100% type
+  coverage all green); CI now runs the suite on Laravel 12 and 13 across PHP 8.4 and 8.5.
+
 ## [0.8.1] - 2026-06-25
 
 ### Changed
