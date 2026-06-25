@@ -236,6 +236,24 @@ php artisan migrate
 
 The queued worker must serve the `matomo` queue, e.g. `php artisan queue:work --queue=matomo,default`.
 
+### Scaling self-hosted Matomo (QueuedTracking)
+
+The modes above control delivery on **your app's** side. On a busy **self-hosted** Matomo,
+also install Matomo's [QueuedTracking](https://github.com/matomo-org/plugin-QueuedTracking)
+plugin, which queues incoming hits on the Matomo server (Redis or MySQL) and processes them
+with a background worker — so the tracking endpoint answers in milliseconds instead of writing
+to the database on the request path. (Matomo Cloud already does this for you.)
+
+The two layers compose and need no extra package configuration:
+
+- `batch` mode here sends fewer, larger **Bulk** requests; QueuedTracking accepts each instantly
+  and writes asynchronously — the most efficient combination at high volume.
+- Because hits leave your app fast and QueuedTracking absorbs spikes, you get end-to-end
+  backpressure without ever blocking a user response.
+
+On the Matomo host, enable it and run its processor (e.g. a `core:archive`-style worker or
+`./console queuedtracking:process` on a schedule) per the plugin's docs.
+
 ## Who gets tracked
 
 Tracking is governed by a single gate, configured under `tracking`:

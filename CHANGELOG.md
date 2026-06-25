@@ -4,6 +4,14 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-25
+
+### Added
+
+- Documentation: a "Scaling self-hosted Matomo (QueuedTracking)" guide — how Matomo's
+  server-side QueuedTracking plugin composes with the package's batch/queue delivery so a
+  busy self-hosted instance answers tracking requests in milliseconds and absorbs spikes.
+
 ## [0.5.0] - 2026-06-25
 
 ### Fixed
