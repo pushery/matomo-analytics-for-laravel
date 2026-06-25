@@ -4,6 +4,15 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-06-25
+
+### Changed
+
+- Refreshed the AI-crawler list with Cloudflare Radar's AI categories (AI_CRAWLER / AI_ASSISTANT /
+  AI_SEARCH) on top of ai.robots.txt — adds Browserbase, KimiBot, Brandwatch, Claude, Element451Bot,
+  AwarioSmartBot and more (150 tokens). The sync filters Radar to the AI categories client-side and
+  drops substring-unsafe / non-AI entries.
+
 ## [0.8.0] - 2026-06-25
 
 ### Added
