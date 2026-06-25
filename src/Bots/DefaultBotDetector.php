@@ -23,6 +23,8 @@ final class DefaultBotDetector implements BotDetector
         'curl/', 'wget', 'go-http-client', 'java/', 'headlesschrome', 'facebookexternalhit',
         'googlebot', 'bingbot', 'yandexbot', 'duckduckbot', 'baiduspider', 'semrushbot',
         'ahrefsbot', 'mj12bot', 'dotbot',
+        // Social/link-preview fetchers that carry none of the generic signals above.
+        'whatsapp', 'skypeuripreview', 'vkshare',
     ];
 
     public function isBot(string $userAgent): bool

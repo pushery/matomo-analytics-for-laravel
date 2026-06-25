@@ -314,10 +314,31 @@ Tracking is governed by a single gate, configured under `tracking`:
 
 ## Bots & AI crawlers
 
-Bots and AI/LLM crawlers (GPTBot, ClaudeBot, CCBot, PerplexityBot, Bytespider, …)
-are detected and **excluded by default**. Configure under `bots` — add an `allow`
-or `deny` list, plug in a custom `detector` (e.g. a `matomo/device-detector`
-wrapper), or set `track` to `true` to record them.
+Bots and AI/LLM crawlers (GPTBot, ClaudeBot, PerplexityBot, Bytespider, …) are
+detected and **excluded by default**. Detection is layered: an explicit `allow`/`deny`
+list, a curated **AI-crawler list** (130+ tokens), generic crawler signals
+(`bot`/`crawler`/`spider`/`+http`/… plus social link-preview agents), and an optional
+custom `detector`. Set `bots.track` to `true` to record them instead.
+
+The AI-crawler list moves fast, so it is **kept current automatically**: a scheduled
+workflow regenerates it from the canonical [`ai.robots.txt`](https://github.com/ai-robots-txt/ai.robots.txt)
+catalogue (and Cloudflare Radar when a token is configured) and opens a PR for review.
+
+For exhaustive, always-current coverage of *every* category (search, social,
+SEO/marketing, monitoring, …) without bloating the package, opt into the
+[`matomo/device-detector`](https://github.com/matomo-org/device-detector) backstop —
+the same catalogue Matomo uses server-side:
+
+```bash
+composer require matomo/device-detector
+```
+
+```php
+// config/matomo-analytics.php
+'bots' => [
+    'detector' => \MatomoAnalytics\Bots\DeviceDetectorBotDetector::class,
+],
+```
 
 ## Privacy
 
