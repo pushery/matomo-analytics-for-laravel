@@ -14,12 +14,14 @@ use MatomoAnalytics\Buffer\BufferManager;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Buffer\DeadLetterStore;
 use MatomoAnalytics\Console\FlushCommand;
+use MatomoAnalytics\Console\ForgetCommand;
 use MatomoAnalytics\Console\InstallCommand;
 use MatomoAnalytics\Console\ReplayCommand;
 use MatomoAnalytics\Console\ReportCommand;
 use MatomoAnalytics\Console\TestConnectionCommand;
 use MatomoAnalytics\Console\WorkCommand;
 use MatomoAnalytics\Contracts\BotDetector;
+use MatomoAnalytics\Contracts\GdprClient;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Contracts\Sender;
@@ -29,6 +31,7 @@ use MatomoAnalytics\Contracts\VisitorIdResolver;
 use MatomoAnalytics\Gates\DefaultTrackingGate;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
 use MatomoAnalytics\Identity\CookielessVisitorId;
+use MatomoAnalytics\Privacy\GdprManager;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Reporting\MatomoReports;
 use MatomoAnalytics\Reporting\ReportCache;
@@ -72,6 +75,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
 
         $this->app->singleton(ReportCache::class);
         $this->app->scoped(ReportClient::class, MatomoReports::class);
+        $this->app->scoped(GdprClient::class, GdprManager::class);
     }
 
     public function boot(): void
@@ -84,7 +88,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
 
-        $this->commands([FlushCommand::class, InstallCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
+        $this->commands([FlushCommand::class, ForgetCommand::class, InstallCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
         $this->registerMiddleware();
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();
