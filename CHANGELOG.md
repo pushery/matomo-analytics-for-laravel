@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-25
+
+### Added
+
+- SPA / soft-navigation tracking (opt-in `spa.enabled`): the tracker snippet records a
+  virtual page view on every client-side navigation that would otherwise be missed.
+  Adapters — `livewire` (Livewire/WireKit `wire:navigate`), `inertia` (Inertia.js, covering
+  Vue & React), and `generic` (History `pushState` + `popstate`). A `window.matomoTrackPageView()`
+  helper is always exposed for manual/custom triggers. Tag Manager is left to handle SPA itself.
+
 ## [0.3.0] - 2026-06-25
 
 ### Added

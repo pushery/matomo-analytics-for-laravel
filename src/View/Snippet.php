@@ -110,7 +110,56 @@ final readonly class Snippet
         $commands[] = "var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];";
         $commands[] = 'g.async=true;g.src='.$this->js($this->jsUrl()).';s.parentNode.insertBefore(g,s);';
 
+        $spa = $this->spaListeners();
+        if ($spa !== '') {
+            $commands[] = $spa;
+        }
+
         return $this->wrap(implode("\n", $commands), $nonce);
+    }
+
+    /**
+     * Records a virtual page view on each client-side (soft) navigation. Returns an
+     * empty string unless spa.enabled. Always exposes window.matomoTrackPageView().
+     */
+    private function spaListeners(): string
+    {
+        if (! Config::bool('matomo-analytics.spa.enabled', false)) {
+            return '';
+        }
+
+        $adapters = Config::stringList('matomo-analytics.spa.adapters');
+
+        $lines = [
+            '(function(){',
+            '  var track=function(){',
+            '    if(!window._paq){return;}',
+            '    _paq.push(['.$this->js('setReferrerUrl').', window.__matomoSpaRef||'.$this->js('').']);',
+            '    _paq.push(['.$this->js('setCustomUrl').', window.location.href]);',
+            '    _paq.push(['.$this->js('setDocumentTitle').', document.title]);',
+            '    _paq.push(['.$this->js('trackPageView').']);',
+            '    _paq.push(['.$this->js('enableLinkTracking').']);',
+            '    window.__matomoSpaRef=window.location.href;',
+            '  };',
+            '  window.matomoTrackPageView=track;',
+        ];
+
+        if (in_array('livewire', $adapters, true)) {
+            $lines[] = '  document.addEventListener('.$this->js('livewire:navigated').', track);';
+        }
+
+        if (in_array('inertia', $adapters, true)) {
+            $lines[] = '  document.addEventListener('.$this->js('inertia:navigate').', track);';
+        }
+
+        if (in_array('generic', $adapters, true)) {
+            $lines[] = '  var _p=history.pushState;history.pushState=function(){_p.apply(this,arguments);setTimeout(track,0);};';
+            $lines[] = '  window.addEventListener('.$this->js('popstate').', function(){setTimeout(track,0);});';
+        }
+
+        $lines[] = '})();';
+
+        return implode("\n", $lines);
     }
 
     private function tagManager(?string $nonce): string

@@ -234,6 +234,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | SPA / soft-navigation tracking (opt-in)
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the tracker snippet also records a virtual page view on each
+    | client-side navigation (which never reloads the page, so the normal page
+    | view would be missed). Pick the adapters your app uses:
+    |   - "livewire" : Livewire / WireKit wire:navigate  (fires livewire:navigated)
+    |   - "inertia"  : Inertia.js (Vue & React)          (fires inertia:navigate)
+    |   - "generic"  : any client router via History pushState + popstate
+    | A window.matomoTrackPageView() helper is always exposed for manual triggers.
+    | Only applies to the direct matomo.js tracker (Tag Manager handles SPA itself).
+    */
+
+    'spa' => [
+        'enabled' => env('MATOMO_SPA', false),
+        'adapters' => ['livewire', 'inertia'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Core Web Vitals (opt-in)
     |--------------------------------------------------------------------------
     |
