@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Bots;
 
 /**
- * Maintained list of well-known AI / LLM crawler User-Agent tokens, matched
- * case-insensitively as substrings. Keep current as the landscape moves.
+ * Well-known AI / LLM crawler User-Agent tokens, matched case-insensitively as
+ * substrings. Generated from upstream catalogues (ai.robots.txt + optionally
+ * Cloudflare Radar) by the bot-sync tooling — regenerate rather than editing by hand.
  */
 final class AiCrawlers
 {
@@ -14,30 +15,33 @@ final class AiCrawlers
      * @var list<string>
      */
     public const array TOKENS = [
-        // OpenAI
-        'GPTBot', 'OAI-SearchBot', 'ChatGPT-User',
-        // Anthropic
-        'ClaudeBot', 'anthropic-ai', 'Claude-Web', 'Claude-User', 'Claude-SearchBot',
-        // Google
-        'Google-Extended', 'GoogleOther', 'Google-CloudVertexBot', 'Gemini-Deep-Research', 'NotebookLM',
-        // Apple
-        'Applebot-Extended',
-        // Meta
-        'Meta-ExternalAgent', 'Meta-ExternalFetcher', 'FacebookBot',
-        // Amazon
-        'Amazonbot', 'Amzn-SearchBot',
-        // Perplexity
-        'PerplexityBot', 'Perplexity-User',
-        // Common Crawl
-        'CCBot',
-        // ByteDance / TikTok
-        'Bytespider', 'TikTokSpider',
-        // Cohere
-        'cohere-ai', 'cohere-training-data-crawler',
-        // Others
-        'MistralAI-User', 'DeepSeek', 'Diffbot', 'ImagesiftBot', 'Omgilibot', 'omgili',
-        'YouBot', 'PetalBot', 'DuckAssistBot', 'Timpibot', 'Webzio-Extended', 'Kimi-User',
-        'kagi-fetcher', 'TavilyBot', 'FirecrawlAgent', 'AI2Bot', 'SemrushBot-OCOB', 'QuillBot',
-        'Manus-User',
+        'AddSearchBot', 'AgentTimes', 'AI2Bot', 'AI2Bot-DeepResearchEval', 'Ai2Bot-Dolma',
+        'aiHitBot', 'amazon-kendra', 'Amazonbot', 'AmazonBuyForMe', 'Amzn-SearchBot',
+        'Amzn-User', 'Andibot', 'Anomura', 'anthropic-ai', 'ApifyBot',
+        'ApifyWebsiteContentCrawler', 'Applebot', 'Applebot-Extended', 'Aranet-SearchBot', 'atlassian-bot',
+        'Awario', 'AzureAI-SearchBot', 'bedrockbot', 'bigsur.ai', 'Bravebot',
+        'Brightbot', 'BuddyBot', 'Bytespider', 'CCBot', 'Channel3Bot',
+        'ChatGLM-Spider', 'ChatGPT-User', 'Claude-Code', 'Claude-SearchBot', 'Claude-User',
+        'Claude-Web', 'ClaudeBot', 'Cloudflare-AutoRAG', 'CloudVertexBot', 'cohere-ai',
+        'cohere-training-data-crawler', 'Cotoyogi', 'CragCrawler', 'Crawl4AI', 'Crawlspace',
+        'DeepSeek', 'DeepSeekBot', 'Devin', 'Diffbot', 'DuckAssistBot',
+        'EchoboxBot', 'ExaBot', 'FacebookBot', 'facebookexternalhit', 'Factset_spyderbot',
+        'FirecrawlAgent', 'FriendlyCrawler', 'GeistHaus-PageFetcher', 'Gemini-Deep-Research', 'Google-Agent',
+        'Google-CloudVertexBot', 'Google-Extended', 'Google-Firebase', 'Google-Gemini-CLI', 'Google-NotebookLM',
+        'GoogleAgent-Mariner', 'GoogleAgent-URLContext', 'GoogleOther', 'GoogleOther-Image', 'GoogleOther-Video',
+        'GPTBot', 'HenkBot', 'iAskBot', 'iaskspider', 'IbouBot',
+        'ICC-Crawler', 'ImagesiftBot', 'imageSpider', 'img2dataset', 'ISSCyberRiskCrawler',
+        'kagi-fetcher', 'Kimi-User', 'KlaviyoAIBot', 'KunatoCrawler', 'laion-huggingface-processor',
+        'LAIONDownloader', 'LinerBot', 'LinkupBot', 'Manus-User', 'Meta-ExternalAgent',
+        'Meta-ExternalFetcher', 'meta-webindexer', 'MistralAI-User', 'MyCentralAIScraperBot', 'NagetBot',
+        'newsai', 'NotebookLM', 'NovaAct', 'OAI-SearchBot', 'omgili',
+        'Omgilibot', 'opencode', 'PanguBot', 'Panscient', 'panscient.com',
+        'Perplexity-User', 'PerplexityBot', 'PetalBot', 'PhindBot', 'Poggio-Citations',
+        'QualifiedBot', 'Querit-SearchBot', 'QueritBot', 'QuillBot', 'quillbot.com',
+        'SBIntuitionsBot', 'Scrapy', 'SemrushBot-OCOB', 'SemrushBot-SWA', 'Shap-User',
+        'ShapBot', 'TavilyBot', 'TerraCotta', 'Thinkbot', 'TikTokSpider',
+        'Timpibot', 'Trae', 'TwinAgent', 'UseAI', 'VelenPublicWebCrawler',
+        'WARDBot', 'Webzio-Extended', 'wpbot', 'WRTNBot', 'YandexAdditional',
+        'YandexAdditionalBot', 'YouBot', 'ZanistaBot',
     ];
 }

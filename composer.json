@@ -34,6 +34,7 @@
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.0",
+        "matomo/device-detector": "^6.4",
         "orchestra/testbench": "^11.0",
         "pestphp/pest": "^4.0",
         "pestphp/pest-plugin-browser": "^4.3",
@@ -41,6 +42,9 @@
         "pestphp/pest-plugin-type-coverage": "^4.0",
         "rector/rector": "^2.0",
         "spaze/phpstan-disallowed-calls": "^4.12"
+    },
+    "suggest": {
+        "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
     },
     "autoload": {
         "psr-4": {
@@ -60,6 +64,7 @@
         "test:coverage": "pest --coverage --min=100",
         "test:type-coverage": "pest --type-coverage --min=100",
         "test:browser": "pest tests/Browser",
+        "test:integration": "pest tests/Integration",
         "analyse": "phpstan analyse",
         "format": "pint",
         "format:test": "pint --test",

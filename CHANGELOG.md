@@ -4,6 +4,21 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-25
+
+### Added
+
+- Optional `matomo/device-detector` backstop: `DeviceDetectorBotDetector` wired through the
+  `bots.detector` hook gives exhaustive, upstream-maintained bot detection across every category
+  (search, social, SEO/marketing, monitoring, AI, …). Opt in with `composer require matomo/device-detector`.
+
+### Changed
+
+- Expanded the bundled AI-crawler list to 130+ tokens, regenerated from the canonical
+  [ai.robots.txt](https://github.com/ai-robots-txt/ai.robots.txt) catalogue (substring-unsafe
+  entries filtered out) and kept current by a scheduled sync workflow that opens a review PR.
+- Generic bot detection now also catches social link-preview agents (WhatsApp, SkypeUriPreview, vkShare).
+
 ## [0.7.0] - 2026-06-25
 
 ### Added
