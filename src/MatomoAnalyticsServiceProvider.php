@@ -67,10 +67,13 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->app->singleton(BotDetector::class, DefaultBotDetector::class);
         $this->app->singleton(TrackingGate::class, DefaultTrackingGate::class);
         $this->app->singleton(Sender::class, HttpSender::class);
-        $this->app->singleton(ArrayHitBuffer::class);
+        // Scoped, not singleton: the array driver holds hits in memory, so under Octane it must
+        // reset between requests (a long-lived worker would otherwise carry hits across requests).
+        // Scoped behaves exactly like a singleton within a classic request lifecycle.
+        $this->app->scoped(ArrayHitBuffer::class);
         $this->app->singleton(DeadLetterStore::class);
         $this->app->singleton(ConsecutiveFailures::class);
-        $this->app->singleton(HitBuffer::class, static fn (): HitBuffer => app(BufferManager::class)->driver());
+        $this->app->scoped(HitBuffer::class, static fn (): HitBuffer => app(BufferManager::class)->driver());
         $this->app->scoped(Tracker::class, TrackManager::class);
 
         $this->app->singleton(ReportCache::class);

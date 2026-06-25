@@ -4,6 +4,15 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-25
+
+### Fixed
+
+- Laravel Octane: the in-memory `array` batch buffer and the resolved `HitBuffer` are now
+  request-scoped, so a long-lived Octane worker no longer carries buffered hits from one
+  request into the next. All request-stateful services (tracker, reporting, GDPR, buffer)
+  reset between requests; stateless ones stay shared. No change for classic FPM requests.
+
 ## [0.4.0] - 2026-06-25
 
 ### Added
