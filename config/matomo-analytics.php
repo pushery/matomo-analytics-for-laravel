@@ -224,6 +224,7 @@ return [
 
     'js' => [
         'enabled' => true,
+        'host' => env('MATOMO_JS_HOST'),  // optional separate host for matomo.js, e.g. a Matomo Cloud CDN: https://cdn.matomo.cloud/your-instance.matomo.cloud (tracking still goes to MATOMO_HOST)
         'tag_manager' => null,        // full MTM container URL; when set, mtm.js renders instead of matomo.js
         'enable_link_tracking' => true,
         'heartbeat' => 15,            // enableHeartBeatTimer seconds; 0 to disable
