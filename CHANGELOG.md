@@ -1,0 +1,72 @@
+# Changelog
+
+All notable changes to `pushery/matomo-analytics-for-laravel` are documented here.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
+the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-06-25
+
+First public release.
+
+### Added
+
+#### Tracking (server- and client-side)
+
+- Server-side tracking via the `Matomo` facade: page views, events, site search,
+  goals, downloads, outlinks, and pings.
+- Cookieless visitor identification (a daily-rotating salted hash), with the real
+  client IP and exact hit time forwarded when a token is configured.
+- Three transmission modes — `sync`, `queue` (one bulk request per request), and
+  `batch` (a cross-request buffer flushed in bulk) — switchable via `MATOMO_MODE`.
+- Batch buffer drivers: `database`, `redis`, `file`, and `array`, drained by the
+  scheduled `matomo:flush` or the `matomo:work` daemon.
+- Automatic page-view middleware (`matomo.track`), with optional registration on the
+  `web` group.
+- Client-side `@matomoScript` and `@matomoOptOut` Blade directives: cookieless,
+  consent modes, Do-Not-Track, heartbeat, a `<noscript>` pixel, a CSP nonce, and an
+  optional Matomo Tag Manager container.
+- Core Web Vitals (opt-in): a `@matomoWebVitals` directive beacons LCP/CLS/INP (and
+  FCP/TTFB) to a server-side ingest route that records each as a Matomo event through
+  the normal gate. Uses Google's `web-vitals` library (app-bundled or a configurable
+  self-hosted URL); no third-party CDN is loaded by default.
+
+#### Reporting (read side)
+
+- Read-side Reporting API client via the `MatomoReports` facade: `get()` for a single
+  method and `bulk()` for `API.getBulkRequest` batching, plus curated helpers
+  (`visitsSummary`, `liveCounters`, `lastVisits`, `topPageUrls`, `topPageTitles`,
+  `siteSearchKeywords`, `topReferrers`, `referrerTypes`, `countries`, `deviceTypes`,
+  `browsers`, `goals`, `eventCategories`).
+- Token-safe transport (form-encoded POST with `token_auth` in the body, forced
+  HTTP/1.1, `{result: error}` envelope detection via `lastError()`), date-aware caching
+  with a store-agnostic versioned `flushCache()` that never caches failures, the
+  `matomo:report` command, and a `MatomoReports::fake()` test double.
+
+#### Privacy & GDPR
+
+- Configurable tracking gates (environment, authenticated state, Gate abilities,
+  IP/CIDR ranges, route patterns, and a custom callable).
+- Bot and AI-crawler detection (a maintained token list, generic signals, allow/deny
+  lists, and a pluggable detector); bots are excluded by default.
+- URL redaction: secrets and PII are stripped from tracked URLs before they reach
+  Matomo (on by default, configurable query parameters and regex patterns).
+- Server-side opt-out: the gate honours a first-party opt-out cookie
+  (`MatomoAnalytics\Privacy\OptOut::enable()`/`disable()`).
+
+#### Resilience
+
+- Fail-safe delivery: never blocks the response, never throws into the app, with
+  durable retries/backoff and throttled alerting that reports only after a configurable
+  number of attempts.
+- Dead-letter queue: a poison batch (HTTP 4xx) is parked at once and persistently
+  failing batches are dead-lettered after `batch.max_attempts`, so one bad batch never
+  blocks the queue; `matomo:replay` (`--list`, `--limit`, `--prune`) re-queues them,
+  and a `HitsDeadLettered` event is emitted.
+- Laravel events: `TrackingQueued`, `TrackingSent`, `TrackingFailed`, and
+  `VisitorExcluded`.
+
+#### Compatibility
+
+- Support for both self-hosted Matomo and Matomo Cloud.
+- Console commands: `matomo:install`, `matomo:test`, `matomo:flush`, `matomo:work`,
+  `matomo:report`, `matomo:replay`.

@@ -1,0 +1,87 @@
+{
+    "name": "pushery/matomo-analytics-for-laravel",
+    "description": "Integrate the Matomo analytics platform with your Laravel application.",
+    "keywords": [
+        "laravel",
+        "matomo",
+        "analytics",
+        "tracking",
+        "privacy",
+        "gdpr",
+        "piwik",
+        "web-analytics"
+    ],
+    "license": "MIT",
+    "type": "library",
+    "homepage": "https://github.com/pushery/matomo-analytics-for-laravel",
+    "support": {
+        "issues": "https://github.com/pushery/matomo-analytics-for-laravel/issues",
+        "source": "https://github.com/pushery/matomo-analytics-for-laravel"
+    },
+    "require": {
+        "php": "^8.4",
+        "ext-json": "*",
+        "illuminate/bus": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/queue": "^13.0",
+        "illuminate/support": "^13.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "pestphp/pest-plugin-type-coverage": "^4.0",
+        "rector/rector": "^2.0",
+        "spaze/phpstan-disallowed-calls": "^4.12"
+    },
+    "autoload": {
+        "psr-4": {
+            "MatomoAnalytics\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MatomoAnalytics\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "test:coverage": "pest --coverage --min=100",
+        "test:type-coverage": "pest --type-coverage --min=100",
+        "analyse": "phpstan analyse",
+        "format": "pint",
+        "format:test": "pint --test",
+        "rector": "rector process",
+        "rector:test": "rector process --dry-run",
+        "mutate": "pest --mutate --everything --covered-only --parallel --min=85",
+        "qa": [
+            "@format:test",
+            "@rector:test",
+            "@analyse",
+            "@test:type-coverage",
+            "@test:coverage"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MatomoAnalytics\\MatomoAnalyticsServiceProvider"
+            ]
+        }
+    },
+    "suggest": {
+        "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
+        "matomo/device-detector": "Authoritative bot/crawler detection — wrap it in an invokable and set matomo-analytics.bots.detector"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
