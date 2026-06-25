@@ -328,6 +328,14 @@ moved to a **dead-letter** table at once, and a batch that keeps failing transie
 is dead-lettered after `batch.max_attempts` — so one bad batch never blocks the queue.
 Inspect and re-queue the dead-letter with `matomo:replay --list` and `matomo:replay`.
 
+## Laravel Octane
+
+Octane-safe. Every request-stateful service (tracker, reporting, GDPR, the in-memory
+buffer) is bound `scoped`, so a long-lived Octane worker resets them between requests and
+never leaks one request's state into the next; only stateless services stay shared. This is
+covered by tests that exercise Octane's between-request reset directly — no extra setup
+needed on your side.
+
 ## Events
 
 Listen for `TrackingQueued`, `TrackingSent`, `TrackingFailed`,
