@@ -4,6 +4,13 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-01
+
+### Changed
+
+- The security policy now documents how dependencies are kept current — automated update pull requests
+  paired with advisory alerts, each reviewed before it is merged.
+
 ## [0.9.0] - 2026-06-25
 
 ### Changed
