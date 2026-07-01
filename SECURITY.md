@@ -21,3 +21,7 @@ Report them privately through GitHub's [private vulnerability reporting](https:/
 - and, if possible, a suggested fix.
 
 You can expect an acknowledgment within **3 business days** and an assessment of the report, including a remediation timeline, within **10 business days**. We will keep you informed throughout and credit you in the release notes once a fix ships, unless you prefer to remain anonymous.
+
+## Dependency updates
+
+Dependencies are kept current automatically: [Renovate](https://docs.renovatebot.com) opens the update pull requests, and GitHub's Dependabot **alerts** flag known advisories — which Renovate turns into prioritized security updates. Every update is reviewed before it is merged.
