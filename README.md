@@ -582,8 +582,19 @@ php artisan matomo:annotate --release   # "<prefix> <version>"
 
 `matomo:annotate --release` is a **no-op unless you opt in** with `annotations.release`
 (`MATOMO_ANNOTATE_RELEASES=true`), so it's safe to run unconditionally on every deploy.
-The version comes from `--app-version`, otherwise `config('app.version')`, and the note
-is `"<annotations.release_prefix> <version>"`.
+It also needs a `token_auth` (`MATOMO_TOKEN`) for a non-anonymous user.
+
+The version comes from `--app-version`; without it the command falls back to
+`config('app.version')` — which stock Laravel does **not** define. So either pass it:
+
+```bash
+php artisan matomo:annotate --release --app-version=1.4.0   # posts "Deployed 1.4.0"
+```
+
+or expose an app version once (`'version' => env('APP_VERSION')` in `config/app.php`,
+plus `APP_VERSION=1.4.0` in `.env`) and plain `--release` picks it up. The note is
+`"<annotations.release_prefix> <version>"`; if no version resolves it is just the
+prefix (`Deployed`). Star release annotations with `annotations.starred`.
 
 ## Fail-safe by design
 
