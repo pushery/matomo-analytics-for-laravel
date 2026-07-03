@@ -66,6 +66,7 @@
         "test:type-coverage": "pest --type-coverage --min=100",
         "test:browser": "pest tests/Browser",
         "test:integration": "pest tests/Integration",
+        "test:performance": "pest tests/Performance",
         "analyse": "phpstan analyse",
         "format": "pint",
         "format:test": "pint --test",

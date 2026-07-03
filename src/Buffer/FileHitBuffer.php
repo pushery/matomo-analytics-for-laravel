@@ -4,16 +4,24 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Buffer;
 
+use Generator;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Support\Config;
+use SplFileObject;
 
 /**
  * Framework-agnostic file spool (the pushery pattern). Writers append one JSON
  * line under a lock; a claim atomically renames the queue aside so writers never
- * block, takes up to the limit, and writes the remainder back. Orphaned claim
+ * block, takes up to the limit, and streams the remainder back. Orphaned claim
  * files (from a crashed flush) are reclaimed by age. The path must be absolute
  * and shared between the app and the flusher, outside any per-release directory.
+ *
+ * Reads stream line by line, so counting or claiming never loads the whole spool
+ * into memory — only the claimed batch (bounded by the flush limit) is held. Note
+ * that a claim still rewrites the remaining queue, so draining a very large spool
+ * is O(n) per claim; the file driver targets modest volume, and the database or
+ * redis driver is the right choice at scale.
  */
 final class FileHitBuffer implements HitBuffer
 {
@@ -29,7 +37,7 @@ final class FileHitBuffer implements HitBuffer
 
     public function size(): int
     {
-        return count($this->readLines($this->queue()));
+        return iterator_count($this->readLines($this->queue()));
     }
 
     public function claim(int $limit): BufferBatch
@@ -45,18 +53,29 @@ final class FileHitBuffer implements HitBuffer
             return BufferBatch::empty();
         }
 
-        // If a concurrent claim already renamed the queue, this rename is a no-op
-        // and the claim file will be absent, so the empty-batch path below applies.
+        // Atomically rename the queue aside. If a concurrent claim already took it,
+        // the rename is a no-op and the claim file is absent — readLines() then
+        // streams nothing and the empty-batch path below applies.
         $claim = $this->dir().'/processing.'.Str::uuid()->toString().'.jsonl';
         @rename($queue, $claim);
 
-        $lines = $this->readLines($claim);
-        $taken = array_slice($lines, 0, $limit);
-        $remainder = array_slice($lines, count($taken));
+        // Stream the claim file: hold only the taken batch in memory and append the
+        // untouched remainder straight back onto the queue.
+        $taken = [];
+        $remainder = null;
 
-        if ($remainder !== []) {
-            file_put_contents($queue, implode("\n", $remainder)."\n", FILE_APPEND | LOCK_EX);
+        foreach ($this->readLines($claim) as $line) {
+            if (count($taken) < $limit) {
+                $taken[] = $line;
+
+                continue;
+            }
+
+            $remainder ??= $this->appendHandle($queue);
+            $remainder->fwrite($line."\n");
         }
+
+        $remainder?->flock(LOCK_UN);
 
         if ($taken === []) {
             @unlink($claim);
@@ -105,16 +124,33 @@ final class FileHitBuffer implements HitBuffer
     }
 
     /**
-     * @return list<string>
+     * Stream the non-empty lines of a spool file, one at a time. Yields nothing
+     * for a missing file, so a lost rename race degrades to an empty claim.
+     *
+     * @return Generator<int, string>
      */
-    private function readLines(string $file): array
+    private function readLines(string $file): Generator
     {
-        $contents = is_file($file) ? @file_get_contents($file) : false;
-        if (! is_string($contents)) {
-            return [];
+        if (! is_file($file)) {
+            return;
         }
 
-        return array_values(array_filter(explode("\n", $contents), static fn (string $line): bool => trim($line) !== ''));
+        $reader = new SplFileObject($file, 'rb');
+        $reader->setFlags(SplFileObject::READ_AHEAD | SplFileObject::DROP_NEW_LINE);
+
+        foreach ($reader as $line) {
+            if (is_string($line) && trim($line) !== '') {
+                yield $line;
+            }
+        }
+    }
+
+    private function appendHandle(string $file): SplFileObject
+    {
+        $handle = new SplFileObject($file, 'ab');
+        $handle->flock(LOCK_EX);
+
+        return $handle;
     }
 
     private function queue(): string

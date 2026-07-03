@@ -18,6 +18,7 @@ use MatomoAnalytics\Console\AnnotateCommand;
 use MatomoAnalytics\Console\FlushCommand;
 use MatomoAnalytics\Console\ForgetCommand;
 use MatomoAnalytics\Console\InstallCommand;
+use MatomoAnalytics\Console\LoadSimCommand;
 use MatomoAnalytics\Console\ReplayCommand;
 use MatomoAnalytics\Console\ReportCommand;
 use MatomoAnalytics\Console\TestConnectionCommand;
@@ -97,7 +98,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
 
-        $this->commands([AnnotateCommand::class, FlushCommand::class, ForgetCommand::class, InstallCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
+        $this->commands([AnnotateCommand::class, FlushCommand::class, ForgetCommand::class, InstallCommand::class, LoadSimCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
         $this->registerMiddleware();
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();

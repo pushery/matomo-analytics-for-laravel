@@ -4,6 +4,28 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-03
+
+### Added
+
+- **Load simulator.** `matomo:load-sim` fires N synthetic hits through the real build → buffer →
+  flush pipeline and reports enqueue/flush throughput, the exact Bulk POST count and peak memory —
+  an operator tool for sizing a deployment. Defaults to a fake sink (`NullSender`, nothing reaches
+  Matomo); `--against=real` exercises the configured instance. `--hits`, `--driver`, `--batch`.
+- **Worker recycling.** `matomo:work` gained `--max-time` and `--memory` (MB) so a supervisor can
+  recycle a long-running drainer before it grows unbounded, mirroring `queue:work`.
+
+### Changed
+
+- **Bounded-memory file spool.** The `file` buffer driver now streams reads line by line, so
+  counting or claiming never loads the whole spool into memory — only the claimed batch is held.
+
+### Performance
+
+- New gated `tests/Performance` budget suite (run with `composer test:performance`; excluded from
+  the default gate) asserts a large spool drains fully, coalesces into exactly `ceil(N/size)` bulk
+  POSTs, and stays within a memory budget.
+
 ## [0.13.0] - 2026-07-03
 
 ### Added
