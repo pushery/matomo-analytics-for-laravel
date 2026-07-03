@@ -71,6 +71,43 @@ final readonly class PayloadBuilder
     }
 
     /**
+     * Builds an AI-chatbot telemetry hit (recMode) — a bot-only Tracking API request
+     * that Matomo records as telemetry WITHOUT creating a visitor or session. It
+     * deliberately omits the visit parameters (_id / urlref / uid / cip); no
+     * token_auth is required. Returns an empty array unless AI-chatbot tracking is
+     * enabled and the instance is configured.
+     *
+     * @return array<string, scalar>
+     */
+    public function buildAiChatbot(Request $request): array
+    {
+        if (
+            ! Config::bool('matomo-analytics.enabled', true)
+            || ! Config::bool('matomo-analytics.ai_chatbots.track', false)
+            || ! $this->connection->isConfigured()
+        ) {
+            return [];
+        }
+
+        $payload = [
+            'idsite' => $this->connection->siteId,
+            'rec' => 1,
+            'recMode' => Config::int('matomo-analytics.ai_chatbots.rec_mode', 1),
+            'send_image' => 0,
+            'url' => $this->redactor->redact($request->fullUrl()),
+            'cdt' => gmdate('Y-m-d H:i:s'),
+            'source' => Config::string('matomo-analytics.ai_chatbots.source', 'Laravel'),
+        ];
+
+        $userAgent = $request->userAgent();
+        if ($userAgent !== null && $userAgent !== '') {
+            $payload['ua'] = $userAgent;
+        }
+
+        return $payload;
+    }
+
+    /**
      * @param  array<string, scalar>  $payload
      * @return array<string, scalar>
      */

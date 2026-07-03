@@ -59,6 +59,13 @@ final class DefaultBotDetector implements BotDetector
             && $this->matchesAny($userAgent, AiCrawlers::TOKENS);
     }
 
+    public function isAiChatbot(string $userAgent): bool
+    {
+        $tokens = Config::stringList('matomo-analytics.ai_chatbots.user_agents');
+
+        return $this->matchesAny($userAgent, $tokens === [] ? AiChatbots::USER_AGENTS : $tokens);
+    }
+
     /**
      * @param  list<string>  $tokens
      */

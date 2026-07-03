@@ -29,6 +29,7 @@ use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Contracts\TrackingGate;
 use MatomoAnalytics\Contracts\VisitorIdResolver;
 use MatomoAnalytics\Gates\DefaultTrackingGate;
+use MatomoAnalytics\Http\Middleware\TrackAiChatbots;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
 use MatomoAnalytics\Http\Middleware\TrackSiteSearch;
 use MatomoAnalytics\Identity\CookielessVisitorId;
@@ -107,9 +108,14 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     {
         Route::aliasMiddleware('matomo.track', TrackPageViews::class);
         Route::aliasMiddleware('matomo.search', TrackSiteSearch::class);
+        Route::aliasMiddleware('matomo.chatbots', TrackAiChatbots::class);
 
         if (Config::bool('matomo-analytics.middleware.auto', false)) {
             Route::pushMiddlewareToGroup('web', TrackPageViews::class);
+        }
+
+        if (Config::bool('matomo-analytics.ai_chatbots.auto', false)) {
+            Route::pushMiddlewareToGroup('web', TrackAiChatbots::class);
         }
     }
 

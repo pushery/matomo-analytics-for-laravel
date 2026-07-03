@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Tracking\PageView;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -31,10 +32,33 @@ final readonly class TrackPageViews
         $response = $next($request);
 
         if (! $this->skips($request, $response)) {
-            $this->tracker->pageView($this->title($request, $response), $this->url($request));
+            $this->tracker->track(new PageView(
+                $this->title($request, $response),
+                $this->url($request),
+                $this->serverTime($request),
+            ));
         }
 
         return $response;
+    }
+
+    /**
+     * Server generation time (pf_srv) in milliseconds derived from the Laravel
+     * request duration, or null unless middleware.performance is enabled.
+     */
+    private function serverTime(Request $request): ?int
+    {
+        if (! Config::bool('matomo-analytics.middleware.performance', false)) {
+            return null;
+        }
+
+        $start = $request->server('REQUEST_TIME_FLOAT');
+
+        if (! is_numeric($start)) {
+            return null;
+        }
+
+        return max(0, (int) round((microtime(true) - (float) $start) * 1000));
     }
 
     private function skips(Request $request, Response $response): bool

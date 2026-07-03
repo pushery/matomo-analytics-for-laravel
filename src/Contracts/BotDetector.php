@@ -9,4 +9,6 @@ interface BotDetector
     public function isBot(string $userAgent): bool;
 
     public function isAiCrawler(string $userAgent): bool;
+
+    public function isAiChatbot(string $userAgent): bool;
 }

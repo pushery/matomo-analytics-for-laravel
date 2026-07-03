@@ -32,11 +32,25 @@ final class MatomoFake implements Tracker
      */
     public array $hits = [];
 
+    /**
+     * User agents recorded via aiChatbot() (bot telemetry is not a Hit).
+     *
+     * @var list<string>
+     */
+    public array $chatbots = [];
+
     public int $flushed = 0;
 
     public function track(Hit $hit): static
     {
         $this->hits[] = $hit;
+
+        return $this;
+    }
+
+    public function aiChatbot(?Request $request = null): static
+    {
+        $this->chatbots[] = ($request ?? request())->userAgent() ?? '';
 
         return $this;
     }
@@ -126,6 +140,24 @@ final class MatomoFake implements Tracker
     public function assertNothingTracked(): void
     {
         Assert::assertSame([], $this->hits);
+    }
+
+    /**
+     * @param  (Closure(string): bool)|null  $callback
+     */
+    public function assertAiChatbotTracked(?Closure $callback = null): void
+    {
+        $matches = array_filter(
+            $this->chatbots,
+            static fn (string $userAgent): bool => ! $callback instanceof Closure || $callback($userAgent),
+        );
+
+        Assert::assertNotEmpty($matches, 'Expected an AI-chatbot telemetry hit, none recorded.');
+    }
+
+    public function assertNoAiChatbotTracked(): void
+    {
+        Assert::assertSame([], $this->chatbots);
     }
 
     public function assertTrackedCount(int $count): void

@@ -12,6 +12,8 @@ interface Tracker
 {
     public function track(Hit $hit): static;
 
+    public function aiChatbot(?Request $request = null): static;
+
     public function pageView(string $title, ?string $url = null): static;
 
     public function event(string $category, string $action, ?string $name = null, int|float|null $value = null): static;
