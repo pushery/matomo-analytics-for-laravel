@@ -4,6 +4,24 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-03
+
+### Added
+
+- **Custom Dimensions.** Attach Matomo Custom Dimensions to any hit. Client-side, map
+  `js.custom_dimensions` (dimension id => value) to emit `setCustomDimension` on every
+  page view (re-applied on SPA soft navigations). Server-side, decorate any hit with the
+  new `CustomParameters` helper: `CustomParameters::for($hit)->dimension(1, 'plan:pro')`.
+- **Raw parameter escape hatch.** `CustomParameters::param($key, $value)` sets any raw
+  Tracking-API parameter the typed hits don't model (e.g. campaign `_rcn`/`_rck`), so you
+  never have to drop down to a manual request.
+- **Content Tracking.** Record content impressions and interactions. Client-side,
+  `js.content_tracking` (`'all'` or `'visible'`) turns on automatic impression tracking
+  (also re-scanned on SPA navigations). Server-side, `Matomo::contentImpression()` and
+  `Matomo::contentInteraction()` record them explicitly.
+- **Reporting helpers** for the new reports: `MatomoReports::customDimension($idDimension)`,
+  `contentNames()` and `contentPieces()`.
+
 ## [0.10.0] - 2026-07-03
 
 ### Added

@@ -16,6 +16,8 @@ use MatomoAnalytics\Tracking\Hit;
  * @method static Tracker aiChatbot(?Request $request = null)
  * @method static Tracker pageView(string $title, ?string $url = null)
  * @method static Tracker event(string $category, string $action, ?string $name = null, int|float|null $value = null)
+ * @method static Tracker contentImpression(string $name, ?string $piece = null, ?string $target = null)
+ * @method static Tracker contentInteraction(string $interaction, string $name, ?string $piece = null, ?string $target = null)
  * @method static Tracker siteSearch(string $keyword, ?string $category = null, ?int $count = null)
  * @method static Tracker searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null)
  * @method static Tracker goal(int $id, ?float $revenue = null)

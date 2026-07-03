@@ -140,4 +140,37 @@ trait ResolvesCommonReports
     {
         return $this->get('Events.getCategory', $params);
     }
+
+    /**
+     * A single Custom Dimension report by its Matomo dimension id.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function customDimension(int $idDimension, array $params = []): ?array
+    {
+        return $this->get('CustomDimensions.getCustomDimension', array_merge(['idDimension' => $idDimension], $params));
+    }
+
+    /**
+     * Content Tracking impression/interaction counts grouped by content name.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function contentNames(array $params = []): ?array
+    {
+        return $this->get('Contents.getContentNames', $params);
+    }
+
+    /**
+     * Content Tracking impression/interaction counts grouped by content piece.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function contentPieces(array $params = []): ?array
+    {
+        return $this->get('Contents.getContentPieces', $params);
+    }
 }

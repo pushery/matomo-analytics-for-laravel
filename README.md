@@ -254,6 +254,50 @@ Or auto-track every search on a route with the middleware (result count isn't kn
 Route::get('/search', SearchController::class)->middleware('matomo.search:q,category');
 ```
 
+## Custom dimensions & content tracking
+
+**Custom Dimensions** (free, built into Matomo) attach extra fields to a hit. Set them
+per request client-side — the map mirrors the server-side `dimension{N}`:
+
+```php
+'js' => [
+    'custom_dimensions' => [1 => 'member', 3 => env('APP_ENV')], // setCustomDimension on every page view
+],
+```
+
+Server-side, decorate any hit with the `CustomParameters` helper. It adds Custom
+Dimensions and is also the escape hatch for any raw Tracking-API parameter the typed
+hits don't model (campaign `_rcn`/`_rck`, …):
+
+```php
+use MatomoAnalytics\Facades\Matomo;
+use MatomoAnalytics\Tracking\CustomParameters;
+use MatomoAnalytics\Tracking\PageView;
+
+Matomo::track(
+    CustomParameters::for(new PageView('Dashboard'))
+        ->dimension(1, 'plan:pro')    // dimension1=plan:pro
+        ->param('_rcn', 'newsletter') // any raw Tracking-API parameter
+);
+```
+
+**Content Tracking** (impressions and interactions on content blocks) works both ways.
+Turn on automatic client-side impression tracking (blocks marked up with
+`data-track-content`):
+
+```php
+'js' => [
+    'content_tracking' => 'visible', // false | 'all' | 'visible' (only blocks in the viewport)
+],
+```
+
+…or record impressions and interactions server-side:
+
+```php
+Matomo::contentImpression('Promo banner', piece: 'summer.jpg', target: 'https://example.com/sale');
+Matomo::contentInteraction('click', 'Promo banner', piece: 'summer.jpg');
+```
+
 ## Reporting (read side)
 
 Pull statistics back out of Matomo with the `MatomoReports` facade. It reuses your
@@ -283,7 +327,8 @@ if ($summary === null) {
 
 Curated helpers: `visitsSummary`, `liveCounters`, `lastVisits`, `topPageUrls`,
 `topPageTitles`, `siteSearchKeywords`, `topReferrers`, `referrerTypes`, `countries`,
-`deviceTypes`, `browsers`, `goals`, `eventCategories`. A failed call returns `null`
+`deviceTypes`, `browsers`, `goals`, `eventCategories`, `customDimension`, `contentNames`,
+`contentPieces`. A failed call returns `null`
 (never cached, so it retries next time) and is reported through the same throttled
 alerting as tracking. Invalidate everything with `MatomoReports::flushCache()`.
 

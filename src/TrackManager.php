@@ -18,6 +18,8 @@ use MatomoAnalytics\Exceptions\TrackingSendException;
 use MatomoAnalytics\Jobs\SendHitsJob;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
+use MatomoAnalytics\Tracking\ContentImpression;
+use MatomoAnalytics\Tracking\ContentInteraction;
 use MatomoAnalytics\Tracking\Download;
 use MatomoAnalytics\Tracking\EcommerceCartUpdate;
 use MatomoAnalytics\Tracking\EcommerceItem;
@@ -142,6 +144,16 @@ final class TrackManager implements Tracker
     public function event(string $category, string $action, ?string $name = null, int|float|null $value = null): static
     {
         return $this->track(new Event($category, $action, $name, $value));
+    }
+
+    public function contentImpression(string $name, ?string $piece = null, ?string $target = null): static
+    {
+        return $this->track(new ContentImpression($name, $piece, $target));
+    }
+
+    public function contentInteraction(string $interaction, string $name, ?string $piece = null, ?string $target = null): static
+    {
+        return $this->track(new ContentInteraction($interaction, $name, $piece, $target));
     }
 
     public function siteSearch(string $keyword, ?string $category = null, ?int $count = null): static
