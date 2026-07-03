@@ -7,6 +7,9 @@ namespace MatomoAnalytics\Testing;
 use Closure;
 use Illuminate\Http\Request;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\Tracking\ContentImpression;
+use MatomoAnalytics\Tracking\ContentInteraction;
+use MatomoAnalytics\Tracking\CustomParameters;
 use MatomoAnalytics\Tracking\Download;
 use MatomoAnalytics\Tracking\EcommerceCartUpdate;
 use MatomoAnalytics\Tracking\EcommerceItem;
@@ -70,6 +73,16 @@ final class MatomoFake implements Tracker
         return $this->track(new Event($category, $action, $name, $value));
     }
 
+    public function contentImpression(string $name, ?string $piece = null, ?string $target = null): static
+    {
+        return $this->track(new ContentImpression($name, $piece, $target));
+    }
+
+    public function contentInteraction(string $interaction, string $name, ?string $piece = null, ?string $target = null): static
+    {
+        return $this->track(new ContentInteraction($interaction, $name, $piece, $target));
+    }
+
     public function siteSearch(string $keyword, ?string $category = null, ?int $count = null): static
     {
         return $this->track(new SiteSearch($keyword, $category, $count));
@@ -124,6 +137,10 @@ final class MatomoFake implements Tracker
     }
 
     /**
+     * Asserts a hit of the given type was tracked. A hit decorated with
+     * CustomParameters matches its inner type too, so wrapping a hit never breaks
+     * an assertion; the callback still receives the recorded (outer) hit.
+     *
      * @param  class-string<Hit>  $type
      * @param  (Closure(Hit): bool)|null  $callback
      */
@@ -131,10 +148,28 @@ final class MatomoFake implements Tracker
     {
         $matches = array_filter(
             $this->hits,
-            static fn (Hit $hit): bool => $hit instanceof $type && (! $callback instanceof Closure || $callback($hit)),
+            fn (Hit $hit): bool => $this->isType($hit, $type) && (! $callback instanceof Closure || $callback($hit)),
         );
 
         Assert::assertNotEmpty($matches, "Expected a tracked [{$type}], none recorded.");
+    }
+
+    /**
+     * @param  class-string<Hit>  $type
+     */
+    private function isType(Hit $hit, string $type): bool
+    {
+        $current = $hit;
+
+        while ($current instanceof Hit) {
+            if ($current instanceof $type) {
+                return true;
+            }
+
+            $current = $current instanceof CustomParameters ? $current->hit : null;
+        }
+
+        return false;
     }
 
     public function assertNothingTracked(): void

@@ -64,4 +64,29 @@ final class Config
 
         return $list;
     }
+
+    /**
+     * A map of scalar values keyed as configured. Non-scalar entries are dropped
+     * so call sites stay typed (used for e.g. the custom-dimension id => value map).
+     *
+     * @return array<int|string, scalar>
+     */
+    public static function scalarMap(string $key): array
+    {
+        $value = config($key);
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach ($value as $mapKey => $item) {
+            if (is_scalar($item)) {
+                $map[$mapKey] = $item;
+            }
+        }
+
+        return $map;
+    }
 }

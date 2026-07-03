@@ -18,6 +18,10 @@ interface Tracker
 
     public function event(string $category, string $action, ?string $name = null, int|float|null $value = null): static;
 
+    public function contentImpression(string $name, ?string $piece = null, ?string $target = null): static;
+
+    public function contentInteraction(string $interaction, string $name, ?string $piece = null, ?string $target = null): static;
+
     public function siteSearch(string $keyword, ?string $category = null, ?int $count = null): static;
 
     public function searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): static;

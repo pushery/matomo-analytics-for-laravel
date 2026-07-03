@@ -262,6 +262,16 @@ return [
         // the snippet pushes disablePerformanceTracking before trackPageView.
         'performance' => true,
 
+        // Custom Dimensions set on every page view, as a map of dimension id => value
+        // (the client-side mirror of the server-side dimension{N}). Values are static per
+        // request; for dynamic per-hit dimensions use the server-side CustomParameters helper.
+        'custom_dimensions' => [], // e.g. [1 => 'member', 3 => env('APP_ENV')]
+
+        // Automatic Content Tracking impressions: false (off), 'all' (track every content
+        // block on the page) or 'visible' (only blocks scrolled into the viewport). Requires
+        // content blocks marked up with data-track-content. See Matomo's Content Tracking.
+        'content_tracking' => false,
+
         'heartbeat' => 15,            // enableHeartBeatTimer seconds; 0 to disable
         'noscript' => true,           // render a <noscript> tracking pixel
         'dns_prefetch' => true,       // emit a dns-prefetch link for the Matomo origin

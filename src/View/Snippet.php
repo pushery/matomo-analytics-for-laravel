@@ -94,6 +94,12 @@ final readonly class Snippet
             $commands[] = "_paq.push(['setDoNotTrack', true]);";
         }
 
+        // Statically-configured Custom Dimensions, set before the page view so
+        // action-scoped dimensions attach to it.
+        foreach ($this->customDimensionCommands() as $command) {
+            $commands[] = $command;
+        }
+
         // Native page-performance tracking is on by default in matomo.js; there is no enable
         // command, only a disable. Push it before trackPageView so nothing is collected.
         if (! Config::bool('matomo-analytics.js.performance', true)) {
@@ -101,6 +107,12 @@ final readonly class Snippet
         }
 
         $commands[] = "_paq.push(['trackPageView']);";
+
+        // Automatic Content Tracking impressions (all / visible), after the page view.
+        $content = $this->contentTrackingCommand();
+        if ($content !== null) {
+            $commands[] = $content;
+        }
 
         if (Config::bool('matomo-analytics.js.enable_link_tracking', true)) {
             $commands[] = "_paq.push(['enableLinkTracking']);";
@@ -145,6 +157,12 @@ final readonly class Snippet
             '    _paq.push(['.$this->js('setDocumentTitle').', document.title]);',
         ];
 
+        // Re-apply the configured Custom Dimensions on each virtual page view so
+        // action-scoped dimensions attach to it too.
+        foreach ($this->customDimensionCommands() as $command) {
+            $lines[] = '    '.$command;
+        }
+
         // A soft navigation has no native Navigation Timing, so forward an app-measured
         // window.__matomoPerf via setPagePerformanceTiming (then clear it) before this virtual
         // page view. No-op until the app populates it; never re-emits the hard-load timings.
@@ -153,6 +171,13 @@ final readonly class Snippet
         }
 
         $lines[] = '    _paq.push(['.$this->js('trackPageView').']);';
+
+        // Re-scan for Content Tracking impressions surfaced by the soft navigation.
+        $content = $this->contentTrackingCommand();
+        if ($content !== null) {
+            $lines[] = '    '.$content;
+        }
+
         $lines[] = '    _paq.push(['.$this->js('enableLinkTracking').']);';
         $lines[] = '    window.__matomoSpaRef=window.location.href;';
         $lines[] = '  };';
@@ -231,6 +256,38 @@ final readonly class Snippet
         $host = Config::nullableString('matomo-analytics.js.host');
 
         return $host !== null ? rtrim($host, '/') : $this->connection->host;
+    }
+
+    /**
+     * setCustomDimension pushes for the configured js.custom_dimensions map
+     * (dimension id => value). Non-positive or non-integer ids are skipped.
+     *
+     * @return list<string>
+     */
+    private function customDimensionCommands(): array
+    {
+        $commands = [];
+
+        foreach (Config::scalarMap('matomo-analytics.js.custom_dimensions') as $id => $value) {
+            if (is_int($id) && $id > 0) {
+                $commands[] = '_paq.push(['.$this->js('setCustomDimension').', '.$id.', '.$this->js((string) $value).']);';
+            }
+        }
+
+        return $commands;
+    }
+
+    /**
+     * The Content Tracking impression push for js.content_tracking ('all' scans
+     * every content block, 'visible' only those in the viewport), or null when off.
+     */
+    private function contentTrackingCommand(): ?string
+    {
+        return match (Config::nullableString('matomo-analytics.js.content_tracking')) {
+            'all' => '_paq.push(['.$this->js('trackAllContentImpressions').']);',
+            'visible' => '_paq.push(['.$this->js('trackVisibleContentImpressions').']);',
+            default => null,
+        };
     }
 
     private function js(string $value): string

@@ -26,6 +26,9 @@ use MatomoAnalytics\Testing\MatomoReportsFake;
  * @method static array<array-key, mixed>|null browsers(array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null goals(array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null eventCategories(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null customDimension(int $idDimension, array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null contentNames(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null contentPieces(array<string, scalar> $params = [])
  *
  * @see ReportClient
  */
