@@ -415,6 +415,26 @@ The two layers compose and need no extra package configuration:
 On the Matomo host, enable it and run its processor (e.g. a `core:archive`-style worker or
 `./console queuedtracking:process` on a schedule) per the plugin's docs.
 
+### Where the ceiling really is
+
+At high volume the bottleneck is the **Matomo server** (QueuedTracking does roughly a few
+hundred hits/second per worker), not this client. The package's job is only to be
+**non-blocking, loss-free, bulk-coalesced and bounded-memory** — and to let you prove it. Buffer
+reads stream line by line, so draining a large spool never loads it all into memory; and the
+Bulk API coalesces a whole batch into one request. Size a deployment with the built-in simulator:
+
+```bash
+php artisan matomo:load-sim --hits=100000 --driver=redis   # discards the sends, measures the client
+php artisan matomo:load-sim --hits=10000 --against=real     # end-to-end against your Matomo
+```
+
+It reports enqueue/flush throughput, the exact Bulk POST count and peak memory. For a long-running
+drainer under a supervisor, recycle the worker on time or memory so a process never grows unbounded:
+
+```bash
+php artisan matomo:work --max-time=3600 --memory=256
+```
+
 ## Who gets tracked
 
 Tracking is governed by a single gate, configured under `tracking`:
@@ -638,7 +658,8 @@ $gdpr->assertForgotten('userId==alice@example.com');
 | `matomo:install` | Publish the config and print setup hints. |
 | `matomo:test` | Send a test hit and report connectivity. |
 | `matomo:flush` | Drain the batch buffer (scheduled automatically in batch mode). |
-| `matomo:work` | Long-running daemon that continuously drains the batch buffer. |
+| `matomo:work` | Long-running daemon that drains the batch buffer (`--max-time`, `--memory` for supervisor recycling). |
+| `matomo:load-sim` | Simulate load through the buffer + flush pipeline and report throughput (`--hits`, `--driver`, `--batch`, `--against`). |
 | `matomo:replay` | Re-queue dead-lettered hits into the buffer (`--list`, `--limit`, `--prune`). |
 | `matomo:report` | Fetch a Reporting API method and print the JSON result. |
 | `matomo:forget` | Erase or export a data subject's data for GDPR requests (`--force`, `--export`, `--site`). |
