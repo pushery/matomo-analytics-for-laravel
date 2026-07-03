@@ -4,6 +4,20 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-03
+
+### Added
+
+- **Release annotations.** Post notes to Matomo's free Annotations plugin — most usefully a
+  deploy marker on your reports timeline. `MatomoAnnotations::add()` / `annotateRelease()`, the
+  `matomo:annotate` command (with `--release`, gated by the `annotations.release` config so it's
+  safe to run on every deploy), a `MatomoAnnotations::fake()` test double, and an `annotations`
+  config block. Routed through the resilience reporter, so a failed annotation never breaks a deploy.
+
+### Config
+
+- New env key `MATOMO_ANNOTATE_RELEASES` (default `false`) enables `matomo:annotate --release`.
+
 ## [0.12.0] - 2026-07-03
 
 ### Added

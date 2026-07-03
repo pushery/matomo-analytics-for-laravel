@@ -8,11 +8,13 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use MatomoAnalytics\Annotations\AnnotationsManager;
 use MatomoAnalytics\Bots\DefaultBotDetector;
 use MatomoAnalytics\Buffer\ArrayHitBuffer;
 use MatomoAnalytics\Buffer\BufferManager;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Buffer\DeadLetterStore;
+use MatomoAnalytics\Console\AnnotateCommand;
 use MatomoAnalytics\Console\FlushCommand;
 use MatomoAnalytics\Console\ForgetCommand;
 use MatomoAnalytics\Console\InstallCommand;
@@ -20,6 +22,7 @@ use MatomoAnalytics\Console\ReplayCommand;
 use MatomoAnalytics\Console\ReportCommand;
 use MatomoAnalytics\Console\TestConnectionCommand;
 use MatomoAnalytics\Console\WorkCommand;
+use MatomoAnalytics\Contracts\AnnotationsClient;
 use MatomoAnalytics\Contracts\BotDetector;
 use MatomoAnalytics\Contracts\GdprClient;
 use MatomoAnalytics\Contracts\HitBuffer;
@@ -81,6 +84,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->app->singleton(ReportCache::class);
         $this->app->scoped(ReportClient::class, MatomoReports::class);
         $this->app->scoped(GdprClient::class, GdprManager::class);
+        $this->app->scoped(AnnotationsClient::class, AnnotationsManager::class);
     }
 
     public function boot(): void
@@ -93,7 +97,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
 
-        $this->commands([FlushCommand::class, ForgetCommand::class, InstallCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
+        $this->commands([AnnotateCommand::class, FlushCommand::class, ForgetCommand::class, InstallCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
         $this->registerMiddleware();
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();
