@@ -110,6 +110,15 @@ return [
         'timeout' => env('MATOMO_REPORTING_TIMEOUT', 10),
         'default_period' => env('MATOMO_REPORTING_PERIOD', 'day'),
         'default_date' => env('MATOMO_REPORTING_DATE', 'today'),
+
+        // Named segment registry: reference a saved segment by key in
+        // MatomoReports::query(...)->segment('mobile'), or pass a raw definition /
+        // a Segment builder. Values are Matomo segment definitions.
+        'segments' => [
+            // 'mobile' => 'deviceType==smartphone',
+            // 'engaged' => 'visitCount>1;actions>=3',
+        ],
+
         'cache' => [
             'enabled' => true,
             'store' => env('MATOMO_REPORTING_CACHE_STORE'), // null = default cache store

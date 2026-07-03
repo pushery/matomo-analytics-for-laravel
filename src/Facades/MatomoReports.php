@@ -6,10 +6,12 @@ namespace MatomoAnalytics\Facades;
 
 use Illuminate\Support\Facades\Facade;
 use MatomoAnalytics\Contracts\ReportClient;
+use MatomoAnalytics\Reporting\ReportQuery;
 use MatomoAnalytics\Testing\MatomoReportsFake;
 
 /**
  * @method static array<array-key, mixed>|null get(string $method, array<string, scalar> $params = [])
+ * @method static ReportQuery query(string $method)
  * @method static list<array<array-key, mixed>|null> bulk(list<string|array<string, scalar>> $requests)
  * @method static void flushCache()
  * @method static string|null lastError()
@@ -29,6 +31,12 @@ use MatomoAnalytics\Testing\MatomoReportsFake;
  * @method static array<array-key, mixed>|null customDimension(int $idDimension, array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null contentNames(array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null contentPieces(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null abTests(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null funnelFlow(int $idFunnel, array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null forms(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null media(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null cohorts(array<string, scalar> $params = [])
+ * @method static array<array-key, mixed>|null usersFlow(array<string, scalar> $params = [])
  *
  * @see ReportClient
  */

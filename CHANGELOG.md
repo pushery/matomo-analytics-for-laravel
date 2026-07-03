@@ -4,6 +4,22 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-03
+
+### Added
+
+- **Fluent report queries.** `MatomoReports::query('Module.method')` returns a builder for
+  segments and the standard Matomo report filters — `->segment()`, `->sortBy()`, `->limit()`,
+  `->offset()`, `->search()`, `->truncate()`, `->flat()`, `->expanded()`, `->showColumns()`,
+  `->hideColumns()`, `->params()` — then `->get()` runs it through the same cache and resilience
+  path as `get()`.
+- **Segments.** A `Segment` builder composes Matomo segment definitions
+  (`Segment::where('deviceType', '==', 'smartphone')->andWhere('visitCount', '>', 1)`), and a
+  named-segment registry (`reporting.segments`) lets you reference saved segments by key.
+- **Premium-plugin report adapters.** Thin, gracefully-degrading read helpers for licensed
+  Matomo plugins: `abTests`, `funnelFlow`, `forms`, `media`, `cohorts`, `usersFlow` (each
+  returns `null` when the plugin isn't installed).
+
 ## [0.11.0] - 2026-07-03
 
 ### Added

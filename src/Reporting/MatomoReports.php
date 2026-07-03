@@ -46,6 +46,11 @@ final class MatomoReports implements ReportClient
         );
     }
 
+    public function query(string $method): ReportQuery
+    {
+        return new ReportQuery($this, $method);
+    }
+
     public function bulk(array $requests): array
     {
         if (! $this->isReady()) {
