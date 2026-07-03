@@ -173,4 +173,80 @@ trait ResolvesCommonReports
     {
         return $this->get('Contents.getContentPieces', $params);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Optional premium-plugin reports
+    |--------------------------------------------------------------------------
+    | Thin read adapters for Matomo's licensed premium plugins. They degrade
+    | gracefully: if the plugin is not installed, Matomo returns an error
+    | envelope and the call yields null (surfaced via lastError()), exactly like
+    | any other failed report. Each requires its plugin licensed on the instance.
+    */
+
+    /**
+     * A/B Testing — requires the licensed AbTesting plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function abTests(array $params = []): ?array
+    {
+        return $this->get('AbTesting.getMetricsOverview', $params);
+    }
+
+    /**
+     * Funnel flow for a funnel id — requires the licensed Funnels plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function funnelFlow(int $idFunnel, array $params = []): ?array
+    {
+        return $this->get('Funnels.getFunnelFlow', array_merge(['idFunnel' => $idFunnel], $params));
+    }
+
+    /**
+     * Form Analytics overview — requires the licensed FormAnalytics plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function forms(array $params = []): ?array
+    {
+        return $this->get('FormAnalytics.get', $params);
+    }
+
+    /**
+     * Media Analytics overview — requires the licensed MediaAnalytics plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function media(array $params = []): ?array
+    {
+        return $this->get('MediaAnalytics.get', $params);
+    }
+
+    /**
+     * Cohort retention — requires the licensed Cohorts plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function cohorts(array $params = []): ?array
+    {
+        return $this->get('Cohorts.getCohorts', $params);
+    }
+
+    /**
+     * Users Flow — requires the licensed UsersFlow plugin.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function usersFlow(array $params = []): ?array
+    {
+        return $this->get('UsersFlow.getUsersFlow', $params);
+    }
 }

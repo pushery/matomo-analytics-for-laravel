@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Contracts;
 
+use MatomoAnalytics\Reporting\ReportQuery;
+
 /**
  * Read side of the package: a thin, cached client over the Matomo Reporting API.
  * Calls POST form-encoded with token_auth in the body (never the query string),
@@ -18,6 +20,12 @@ interface ReportClient
      * @return array<array-key, mixed>|null the decoded report, or null on a failed/unconfigured call
      */
     public function get(string $method, array $params = []): ?array;
+
+    /**
+     * Start a fluent query for a method — layer on a segment and report filters,
+     * then call get() to run it through the same cache + resilience path.
+     */
+    public function query(string $method): ReportQuery;
 
     /**
      * Fetch several methods in one HTTP round-trip via API.getBulkRequest.

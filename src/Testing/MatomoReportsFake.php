@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Testing;
 use Closure;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Reporting\Concerns\ResolvesCommonReports;
+use MatomoAnalytics\Reporting\ReportQuery;
 use PHPUnit\Framework\Assert;
 
 /**
@@ -51,6 +52,11 @@ final class MatomoReportsFake implements ReportClient
         $this->requests[] = ['method' => $method, 'params' => $params];
 
         return $this->stubs[$method] ?? null;
+    }
+
+    public function query(string $method): ReportQuery
+    {
+        return new ReportQuery($this, $method);
     }
 
     public function bulk(array $requests): array

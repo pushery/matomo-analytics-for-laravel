@@ -332,6 +332,50 @@ Curated helpers: `visitsSummary`, `liveCounters`, `lastVisits`, `topPageUrls`,
 (never cached, so it retries next time) and is reported through the same throttled
 alerting as tracking. Invalidate everything with `MatomoReports::flushCache()`.
 
+### Fluent queries, segments & filters
+
+Build a filtered, segmented query fluently — it runs through the same cache and
+resilience path as `get()`:
+
+```php
+use MatomoAnalytics\Facades\MatomoReports;
+use MatomoAnalytics\Reporting\Segment;
+
+$pages = MatomoReports::query('Actions.getPageUrls')
+    ->period('month')->date('2026-01')
+    ->segment('deviceType==smartphone')   // a raw definition, a named segment, or a Segment builder
+    ->sortBy('nb_visits')->limit(10)
+    ->flat()
+    ->get();
+```
+
+Register named segments in config and reference them by key, or compose one inline
+with the `Segment` builder:
+
+```php
+// config/matomo-analytics.php
+'reporting' => [
+    'segments' => ['engaged' => 'visitCount>1;actions>=3'],
+],
+
+// reference the named segment …
+MatomoReports::query('VisitsSummary.get')->segment('engaged')->get();
+
+// … or build one fluently
+$segment = Segment::where('deviceType', '==', 'smartphone')->andWhere('visitCount', '>', 1);
+MatomoReports::query('VisitsSummary.get')->segment($segment)->get();
+```
+
+Filters map to Matomo's report parameters: `limit`, `offset`, `sortBy`, `search`,
+`truncate`, `flat`, `expanded`, `showColumns`, `hideColumns`, plus `params()` for
+anything else.
+
+### Premium plugin reports
+
+If you license Matomo's premium plugins, thin read adapters are provided and degrade
+gracefully — they return `null` (surfaced via `lastError()`) when the plugin isn't
+installed: `abTests`, `funnelFlow`, `forms`, `media`, `cohorts`, `usersFlow`.
+
 ## Transmission modes
 
 Switch with `MATOMO_MODE` — no code changes:
