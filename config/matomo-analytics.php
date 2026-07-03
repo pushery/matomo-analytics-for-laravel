@@ -188,7 +188,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Bots / AI crawlers (detector arrives in a later phase)
+    | Bots / AI crawlers
     |--------------------------------------------------------------------------
     */
 
@@ -204,6 +204,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | AI chatbot telemetry (opt-in) — the DIY alternative to a Cloudflare Worker
+    |--------------------------------------------------------------------------
+    | When an AI assistant fetches a page on a user's behalf (the on-demand
+    | fetchers), it never runs JavaScript, so Matomo can only see it server-side.
+    | Matomo's own edge collector for this is a Cloudflare Worker; the primitive it
+    | sends is a plain Tracking-API hit with recMode set — which this package can
+    | emit itself, at zero edge cost. These hits are recorded as bot telemetry only
+    | (recMode) and never create a visitor/session in your normal analytics.
+    | Requires Matomo 5.8+ for the AI Chatbots report. Enable the `matomo.chatbots`
+    | middleware (or set `auto`) so incoming fetches are captured.
+    */
+
+    'ai_chatbots' => [
+        'track' => false,             // master switch for AI-chatbot telemetry
+        'auto' => false,              // auto-register the matomo.chatbots middleware on the 'web' group
+        'rec_mode' => 1,              // 1 = bot only (non-bots discarded), 2 = auto (Matomo decides)
+        'source' => 'Laravel',        // label sent with each hit to identify the collector
+        'user_agents' => null,        // null = the built-in on-demand-fetcher list (Bots\AiChatbots::USER_AGENTS)
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Page-view middleware (opt-in)
     |--------------------------------------------------------------------------
     */
@@ -214,6 +236,12 @@ return [
         'only_successful' => true,  // only 2xx responses
         'skip_livewire' => true,    // skip Livewire update requests
         'strip_query' => false,     // drop the query string from the tracked URL
+
+        // Stamp the server generation time (pf_srv = "Serverzeit") onto the tracked page view
+        // from the Laravel request duration. The one page-performance sub-timing the server
+        // legitimately knows — useful when tracking purely server-side (no JS snippet). Off by
+        // default; the client tracker already reports full-fidelity timings on real page loads.
+        'performance' => false,
     ],
 
     /*
@@ -227,6 +255,13 @@ return [
         'host' => env('MATOMO_JS_HOST'),  // optional separate host for matomo.js, e.g. a Matomo Cloud CDN: https://cdn.matomo.cloud/your-instance.matomo.cloud (tracking still goes to MATOMO_HOST)
         'tag_manager' => null,        // full MTM container URL; when set, mtm.js renders instead of matomo.js
         'enable_link_tracking' => true,
+
+        // Native Matomo page-performance metrics (the "Leistung" report: network/server/
+        // transfer/DOM/on-load times) are collected AUTOMATICALLY by matomo.js on the first
+        // full page load — no extra call. This flag only lets you turn them OFF: when false,
+        // the snippet pushes disablePerformanceTracking before trackPageView.
+        'performance' => true,
+
         'heartbeat' => 15,            // enableHeartBeatTimer seconds; 0 to disable
         'noscript' => true,           // render a <noscript> tracking pixel
         'dns_prefetch' => true,       // emit a dns-prefetch link for the Matomo origin
@@ -250,6 +285,14 @@ return [
     'spa' => [
         'enabled' => env('MATOMO_SPA', false),
         'adapters' => ['livewire', 'inertia'],
+
+        // Soft (client-side) navigations produce no new browser Navigation Timing, so Matomo
+        // records zero page-performance for them. When true, the SPA track() closure forwards
+        // an optional app-provided `window.__matomoPerf` object
+        // ({net,srv,tfr,dm1,dm2,onl} in ms) via setPagePerformanceTiming before each virtual
+        // page view, then clears it. Harmless no-op until your app sets that object (needs
+        // Matomo 4.5+). Never re-emits the hard-load timings.
+        'performance' => true,
     ],
 
     /*

@@ -68,30 +68,54 @@ final class TrackManager implements Tracker
                 return;
             }
 
-            $payload = $this->builder->build($hit, $request);
-
-            $mode = Config::string('matomo-analytics.mode', 'queue');
-
-            if ($mode === 'sync') {
-                $this->sendNow([$payload]);
-
-                return;
-            }
-
-            if ($mode === 'batch') {
-                $this->buffer->push($payload);
-
-                if (Config::bool('matomo-analytics.events', true)) {
-                    event(new TrackingQueued([$payload]));
-                }
-
-                return;
-            }
-
-            $this->pending[] = $payload;
+            $this->queueOrSend($this->builder->build($hit, $request));
         });
 
         return $this;
+    }
+
+    /**
+     * Records an AI-chatbot fetch as Matomo bot telemetry (recMode) without creating
+     * a visit. Bypasses the visitor gate — these are bots by design — but remains
+     * subject to `ai_chatbots.track` (checked while building) and never throws.
+     */
+    public function aiChatbot(?Request $request = null): static
+    {
+        $this->safe(function () use ($request): void {
+            $payload = $this->builder->buildAiChatbot($request ?? request());
+
+            if ($payload !== []) {
+                $this->queueOrSend($payload);
+            }
+        });
+
+        return $this;
+    }
+
+    /**
+     * @param  array<string, scalar>  $payload
+     */
+    private function queueOrSend(array $payload): void
+    {
+        $mode = Config::string('matomo-analytics.mode', 'queue');
+
+        if ($mode === 'sync') {
+            $this->sendNow([$payload]);
+
+            return;
+        }
+
+        if ($mode === 'batch') {
+            $this->buffer->push($payload);
+
+            if (Config::bool('matomo-analytics.events', true)) {
+                event(new TrackingQueued([$payload]));
+            }
+
+            return;
+        }
+
+        $this->pending[] = $payload;
     }
 
     public function flush(): void

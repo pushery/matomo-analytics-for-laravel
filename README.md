@@ -167,6 +167,35 @@ client-side navigation. Choose the adapters your app uses:
 A `window.matomoTrackPageView()` helper is always exposed for manual or custom triggers.
 (Matomo Tag Manager handles SPA navigation itself, so this only applies to the direct tracker.)
 
+## Page performance
+
+Matomo's **Page Performance** report (network, server, transfer, DOM-processing, DOM-completion
+and on-load times — free, built into Matomo) is filled **automatically** by the tracker on real
+page loads; you don't need to do anything. Three options give you control:
+
+```php
+'js' => [
+    'performance' => true,   // false => stop collecting page performance (disablePerformanceTracking)
+],
+'spa' => [
+    'performance' => true,   // forward app-measured timings on soft navigations (see below)
+],
+'middleware' => [
+    'performance' => false,  // stamp the server generation time (pf_srv) from the request duration
+],
+```
+
+Soft (single-page) navigations report no browser timings, so those rows stay empty. If your app
+measures them, expose the object below **before** the navigation and the SPA tracker forwards it
+once (requires Matomo 4.5+):
+
+```js
+window.__matomoPerf = { net: 12, srv: 40, tfr: 8, dm1: 60, dm2: 30, onl: 15 }; // milliseconds
+```
+
+> This is Matomo's native page-timing report — distinct from **Web Vitals** below, which captures
+> Google's Core Web Vitals (LCP/CLS/INP) as Matomo events.
+
 ## Web Vitals
 
 Opt in (`web_vitals.enabled`) to capture Core Web Vitals. Drop the directive into your
@@ -339,6 +368,30 @@ composer require matomo/device-detector
     'detector' => \MatomoAnalytics\Bots\DeviceDetectorBotDetector::class,
 ],
 ```
+
+## AI assistants
+
+Matomo splits AI traffic three ways — this package covers all three:
+
+- **AI Assistants (acquisition)** — human visitors *referred from* an AI assistant (Matomo 5.5+). Matomo
+  derives this acquisition channel from the visit referrer, which the package already forwards, so the
+  report populates **with no configuration**.
+- **AI crawlers** — training/indexing bots hitting your site (see above); excluded by default.
+- **AI chatbots** — the on-demand fetchers an assistant fires to read a page for a user. They run no
+  JavaScript, so Matomo can only see them server-side. Matomo's own collector for this is a Cloudflare
+  Worker; this package sends the same telemetry itself, at no edge cost:
+
+```php
+'ai_chatbots' => [
+    'track' => true,   // off by default
+    'auto' => true,    // auto-register the matomo.chatbots middleware on the 'web' group
+],
+```
+
+Or attach the middleware to specific routes with `->middleware('matomo.chatbots')`, or record a fetch
+yourself with `Matomo::aiChatbot($request)`. Each recognised fetch is recorded as Matomo bot telemetry
+(`recMode`) — kept separate from your human analytics and never creating a visit. The recognised User-Agents default to the narrow on-demand set Matomo surfaces
+(override them, or `rec_mode`/`source`, via config). Requires Matomo 5.8+ for the AI Chatbots report.
 
 ## Privacy
 

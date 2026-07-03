@@ -13,6 +13,7 @@ use MatomoAnalytics\Tracking\Hit;
 
 /**
  * @method static Tracker track(Hit $hit)
+ * @method static Tracker aiChatbot(?Request $request = null)
  * @method static Tracker pageView(string $title, ?string $url = null)
  * @method static Tracker event(string $category, string $action, ?string $name = null, int|float|null $value = null)
  * @method static Tracker siteSearch(string $keyword, ?string $category = null, ?int $count = null)

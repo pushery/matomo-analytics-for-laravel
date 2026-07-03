@@ -4,6 +4,36 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-03
+
+### Added
+
+- **Page-performance control (Matomo's "Page Performance" report).** Matomo's page-performance metrics
+  (network, server, transfer, DOM-processing, DOM-completion and on-load times) are collected
+  automatically by the tracker on real page loads. Three new options give you control over them:
+  - `js.performance` (default `true`) — set to `false` to stop the tracker from collecting page
+    performance (emits `disablePerformanceTracking`).
+  - `spa.performance` (default `true`) — on single-page/soft navigations the browser reports no new
+    timings, so those rows stay empty. When your app measures them, expose them as
+    `window.__matomoPerf = { net, srv, tfr, dm1, dm2, onl }` (milliseconds) and the SPA tracker forwards
+    them for the next virtual page view. Harmless no-op until you populate that object (needs Matomo 4.5+).
+  - `middleware.performance` (default `false`) — the page-view middleware stamps the server generation
+    time (`pf_srv`) from the Laravel request duration, useful when tracking purely server-side.
+- **AI-chatbot telemetry — self-hosted, without a Cloudflare Worker.** When an AI assistant fetches a
+  page on a user's behalf it runs no JavaScript, so Matomo can only capture it server-side; Matomo's own
+  integration for this is a Cloudflare Worker. This package can now send the same telemetry itself, at no
+  edge cost:
+  - `ai_chatbots.track` (default `false`) turns it on. Enable the `matomo.chatbots` middleware (or set
+    `ai_chatbots.auto`) and incoming AI-assistant fetches are recorded as Matomo bot telemetry (`recMode`)
+    — kept out of your human analytics and never creating a visit.
+  - The recognised fetchers default to the narrow on-demand set Matomo surfaces (override via
+    `ai_chatbots.user_agents`); `rec_mode` and `source` are configurable. Requires Matomo 5.8+.
+  - `Matomo::aiChatbot($request)` records a fetch manually.
+- **AI Assistants acquisition report.** Matomo's "AI Assistants" acquisition channel (human visits
+  referred from AI assistants, Matomo 5.5+) is derived from the visit referrer, which the package already
+  forwards — so it populates with no configuration. A guard now locks in that URL redaction never strips
+  the referrer host this attribution depends on.
+
 ## [0.9.1] - 2026-07-01
 
 ### Changed

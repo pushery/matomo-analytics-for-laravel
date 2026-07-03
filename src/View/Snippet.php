@@ -94,6 +94,12 @@ final readonly class Snippet
             $commands[] = "_paq.push(['setDoNotTrack', true]);";
         }
 
+        // Native page-performance tracking is on by default in matomo.js; there is no enable
+        // command, only a disable. Push it before trackPageView so nothing is collected.
+        if (! Config::bool('matomo-analytics.js.performance', true)) {
+            $commands[] = "_paq.push(['disablePerformanceTracking']);";
+        }
+
         $commands[] = "_paq.push(['trackPageView']);";
 
         if (Config::bool('matomo-analytics.js.enable_link_tracking', true)) {
@@ -137,12 +143,20 @@ final readonly class Snippet
             '    _paq.push(['.$this->js('setReferrerUrl').', window.__matomoSpaRef||'.$this->js('').']);',
             '    _paq.push(['.$this->js('setCustomUrl').', window.location.href]);',
             '    _paq.push(['.$this->js('setDocumentTitle').', document.title]);',
-            '    _paq.push(['.$this->js('trackPageView').']);',
-            '    _paq.push(['.$this->js('enableLinkTracking').']);',
-            '    window.__matomoSpaRef=window.location.href;',
-            '  };',
-            '  window.matomoTrackPageView=track;',
         ];
+
+        // A soft navigation has no native Navigation Timing, so forward an app-measured
+        // window.__matomoPerf via setPagePerformanceTiming (then clear it) before this virtual
+        // page view. No-op until the app populates it; never re-emits the hard-load timings.
+        if (Config::bool('matomo-analytics.spa.performance', true)) {
+            $lines[] = '    var p=window.__matomoPerf; if(p){_paq.push(['.$this->js('setPagePerformanceTiming').', p.net,p.srv,p.tfr,p.dm1,p.dm2,p.onl]); window.__matomoPerf=undefined;}';
+        }
+
+        $lines[] = '    _paq.push(['.$this->js('trackPageView').']);';
+        $lines[] = '    _paq.push(['.$this->js('enableLinkTracking').']);';
+        $lines[] = '    window.__matomoSpaRef=window.location.href;';
+        $lines[] = '  };';
+        $lines[] = '  window.matomoTrackPageView=track;';
 
         if (in_array('livewire', $adapters, true)) {
             $lines[] = '  document.addEventListener('.$this->js('livewire:navigated').', track);';
