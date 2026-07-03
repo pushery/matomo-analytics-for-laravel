@@ -539,6 +539,32 @@ php artisan matomo:forget "userId==alice@example.com" --site=all
 A `DataSubjectForgotten` event (visit count + per-area deletion counts) fires on every
 erasure, so you can keep an audit trail.
 
+## Release annotations
+
+Mark deployments (or anything else) on your Matomo reports timeline with the free
+Annotations plugin — it needs a `token_auth` for a non-anonymous user, and every call
+is routed through the same resilience layer as the rest of the package, so a failed
+annotation never breaks a deploy:
+
+```php
+use MatomoAnalytics\Facades\MatomoAnnotations;
+
+MatomoAnnotations::add('Migrated to Postgres 16', date: '2026-07-03', starred: true);
+MatomoAnnotations::annotateRelease('1.4.0'); // "Deployed 1.4.0"
+```
+
+From the CLI — drop this straight into your deploy pipeline:
+
+```bash
+php artisan matomo:annotate "Maintenance window"
+php artisan matomo:annotate --release   # "<prefix> <version>"
+```
+
+`matomo:annotate --release` is a **no-op unless you opt in** with `annotations.release`
+(`MATOMO_ANNOTATE_RELEASES=true`), so it's safe to run unconditionally on every deploy.
+The version comes from `--app-version`, otherwise `config('app.version')`, and the note
+is `"<annotations.release_prefix> <version>"`.
+
 ## Fail-safe by design
 
 Tracking never blocks a response and a tracking error never surfaces in your app.
@@ -616,6 +642,7 @@ $gdpr->assertForgotten('userId==alice@example.com');
 | `matomo:replay` | Re-queue dead-lettered hits into the buffer (`--list`, `--limit`, `--prune`). |
 | `matomo:report` | Fetch a Reporting API method and print the JSON result. |
 | `matomo:forget` | Erase or export a data subject's data for GDPR requests (`--force`, `--export`, `--site`). |
+| `matomo:annotate` | Add an annotation, or a deploy marker with `--release`, to the reports timeline. |
 
 ## Security
 

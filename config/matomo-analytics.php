@@ -337,6 +337,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Release annotations (opt-in)
+    |--------------------------------------------------------------------------
+    | Post notes to Matomo's free Annotations plugin — most usefully a deploy
+    | marker on your reports timeline. Requires a token_auth for a non-anonymous
+    | user. `matomo:annotate --release` is a no-op unless `release` is true, so it
+    | is safe to drop unconditionally into a deploy pipeline. The release note is
+    | "<release_prefix> <version>", where version defaults to config('app.version').
+    */
+
+    'annotations' => [
+        'release' => env('MATOMO_ANNOTATE_RELEASES', false), // enable `matomo:annotate --release`
+        'starred' => false,                                  // star release annotations
+        'release_prefix' => 'Deployed',                      // release note = "<prefix> <version>"
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Laravel events
     |--------------------------------------------------------------------------
     */
