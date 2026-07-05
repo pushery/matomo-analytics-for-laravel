@@ -4,6 +4,14 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-07-05
+
+### Changed
+
+- The database batch buffer is now verified against real MySQL 8.4 and PostgreSQL — the engines
+  Laravel Cloud runs — in addition to SQLite, so buffered hit delivery is proven on the database
+  you deploy to.
+
 ## [0.14.1] - 2026-07-04
 
 ### Documentation

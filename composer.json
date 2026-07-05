@@ -67,6 +67,7 @@
         "test:browser": "pest tests/Browser",
         "test:integration": "pest tests/Integration",
         "test:performance": "pest tests/Performance",
+        "test:database": "pest --testsuite=Postgres,MySql",
         "analyse": "phpstan analyse",
         "format": "pint",
         "format:test": "pint --test",
