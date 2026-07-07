@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.3] - 2026-07-07
+
+### Fixed
+
+- `SendHitsJob::retryUntil()` no longer fatals host applications that run
+  `Date::use(CarbonImmutable::class)`: the return type is now
+  `DateTimeInterface` (the queue contract's shape) instead of the concrete
+  `Illuminate\Support\Carbon`, which rejected the `CarbonImmutable` that
+  `now()` returns there and failed every dispatched hit with a `TypeError`.
+
 ## [0.14.2] - 2026-07-05
 
 ### Changed
