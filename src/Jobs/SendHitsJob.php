@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Jobs;
 
+use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Events\TrackingFailed;
 use MatomoAnalytics\Events\TrackingSent;
@@ -66,7 +66,13 @@ final class SendHitsJob implements ShouldQueue
         return $backoff === [] ? [30] : $backoff;
     }
 
-    public function retryUntil(): Carbon
+    /**
+     * \DateTimeInterface, not a concrete Carbon: a host app may run
+     * Date::use(CarbonImmutable::class), and now() then returns
+     * CarbonImmutable — a concrete Illuminate\Support\Carbon return type
+     * fatals the queue worker with a TypeError.
+     */
+    public function retryUntil(): DateTimeInterface
     {
         return now()->addMinutes(Config::int('matomo-analytics.queue.retry_until_minutes', 1440));
     }
