@@ -155,20 +155,35 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
 
     private function registerPublishing(): void
     {
+        // Resolve publish targets through the Application contract's path methods
+        // (available via illuminate/contracts), NOT the config_path()/database_path()/
+        // resource_path()/lang_path() global helpers. Those are Foundation helpers,
+        // shipped ONLY with laravel/framework — which this lean package does not
+        // require — so the helper form would freeze a wrong dependency contract and
+        // fatal in a non-Foundation host. The method form is behavior-identical.
+        //
+        // Each group carries the bare 'matomo-analytics' umbrella tag on top of its
+        // specific one, so `vendor:publish --tag=matomo-analytics` publishes every
+        // resource at once — the tag convention Laravel's official package skeleton
+        // establishes.
         $this->publishes([
-            __DIR__.'/../config/matomo-analytics.php' => config_path('matomo-analytics.php'),
-        ], 'matomo-analytics-config');
+            __DIR__.'/../config/matomo-analytics.php' => $this->app->configPath('matomo-analytics.php'),
+        ], ['matomo-analytics', 'matomo-analytics-config']);
+
+        // publishesMigrations(), not publishes(): it rewrites the bundled
+        // 0001_01_01_000000 ordering prefix to the publish date, so a published
+        // migration sorts AFTER the host app's own migrations instead of before all
+        // of them — which is what the bundled prefix would otherwise force.
+        $this->publishesMigrations([
+            __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
+        ], ['matomo-analytics', 'matomo-analytics-migrations']);
 
         $this->publishes([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
-        ], 'matomo-analytics-migrations');
+            __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/matomo-analytics'),
+        ], ['matomo-analytics', 'matomo-analytics-views']);
 
         $this->publishes([
-            __DIR__.'/../resources/views' => resource_path('views/vendor/matomo-analytics'),
-        ], 'matomo-analytics-views');
-
-        $this->publishes([
-            __DIR__.'/../lang' => lang_path('vendor/matomo-analytics'),
-        ], 'matomo-analytics-lang');
+            __DIR__.'/../lang' => $this->app->langPath('vendor/matomo-analytics'),
+        ], ['matomo-analytics', 'matomo-analytics-lang']);
     }
 }

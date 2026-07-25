@@ -1,4 +1,5 @@
 {
+    "$schema": "https://getcomposer.org/schema.json",
     "name": "pushery/matomo-analytics-for-laravel",
     "description": "Privacy-first Matomo analytics for Laravel with cookieless tracking, reports, Web Vitals, batching and bot filtering.",
     "keywords": [
@@ -33,6 +34,7 @@
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
+        "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
         "orchestra/testbench": "^10.0 || ^11.0",
@@ -73,7 +75,8 @@
         "format:test": "pint --test",
         "rector": "rector process",
         "rector:test": "rector process --dry-run",
-        "mutate": "pest --mutate --everything --covered-only --parallel --processes=4 --min=85",
+        "mutate": "pest --mutate --everything --covered-only --min=85",
+        "mutate:detect": "pest --mutate --everything --covered-only --parallel --processes=4 --min=85",
         "qa": [
             "@format:test",
             "@rector:test",
@@ -84,6 +87,7 @@
     },
     "config": {
         "sort-packages": true,
+        "process-timeout": 0,
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
