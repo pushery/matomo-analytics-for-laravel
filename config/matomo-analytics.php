@@ -37,8 +37,8 @@ return [
     | 'sync'  — send immediately (CLI/tests/low volume).
     | 'queue' — collect a request's hits and flush them as one Bulk request via
     |           a queued job on terminate (default; never blocks the response).
-    | 'batch' — cross-request buffer flushed in large Bulk batches (arrives in a
-    |           later release; currently behaves as 'queue').
+    | 'batch' — cross-request buffer flushed in large Bulk batches by
+    |           `matomo:flush` / `matomo:work`. Driver and limits below.
     */
 
     'mode' => env('MATOMO_MODE', 'queue'),
@@ -208,7 +208,6 @@ return [
         'allow' => [],                  // UA tokens always treated as human
         'deny' => [],                   // UA tokens always treated as bots
         'detector' => null,             // extra invokable class-string/closure: fn(string $ua): bool (e.g. a device-detector wrapper)
-        'record_ai_dimension' => null,
     ],
 
     /*

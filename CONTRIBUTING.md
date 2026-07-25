@@ -1,41 +1,24 @@
 # Contributing
 
-Thanks for considering a contribution. This package holds itself to a strict quality
-bar, and every change is expected to keep all of the gates green.
+Thanks for considering a contribution — issues and pull requests are both welcome.
 
-## Getting started
+## Reporting an issue
 
-```bash
-git clone git@github.com:pushery/matomo-analytics-for-laravel.git
-cd matomo-analytics-for-laravel
-composer install
-```
+Use the GitHub issue templates (bug report / feature request). Include the package
+version and a minimal reproduction, and never paste secrets or credentials.
 
-## Quality gates
+## Pull requests
 
-All of the following must pass. The aggregate static + test gate is:
+- Keep the public API stable, or call out the break explicitly.
+- Add tests for any behavior change.
+- Update `README.md` and the `CHANGELOG.md` `## [Unreleased]` section.
+- Keep each commit focused.
 
-```bash
-composer qa
-```
+## Quality bar
 
-which runs, and each can be run on its own:
-
-| Command | Gate |
-|---|---|
-| `composer format:test` | Code style — Laravel Pint, zero diffs (`composer format` to fix). |
-| `composer rector:test` | Refactoring — Rector with the PHP rule set, dry-run clean (`composer rector` to apply). |
-| `composer analyse` | Static analysis — Larastan at `max` level, no errors. |
-| `composer test:type-coverage` | 100% type coverage of `src/`. |
-| `composer test:coverage` | 100% line coverage of `src/`. |
-
-The suite uses [Pest](https://pestphp.com) and Orchestra Testbench. Once the package
-carries real logic, enable mutation testing (`composer mutate`) in CI as well.
-
-## Pull request expectations
-
-- Keep `composer qa` green.
-- Add tests for behavior changes.
-- Update `README.md` and `CHANGELOG.md` (`## [Unreleased]`) when behavior or
-  configuration changes.
-- Keep commits focused and the public API stable, or call out the break explicitly.
+This package holds itself to a strict quality bar — Laravel Pint, Larastan at `max`,
+Rector, and Pest with 100% line and type coverage, plus mutation testing, a
+real-browser end-to-end suite, and cross-engine tests against real PostgreSQL and
+MySQL 8.4 (the engines it runs on in production). The maintainers run the full gate
+locally before every release, so a pull request that keeps the public API stable and
+ships tests for its change is easy to accept.

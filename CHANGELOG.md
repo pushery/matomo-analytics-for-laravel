@@ -4,6 +4,60 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-07-26
+
+### Added
+
+- **An umbrella publish tag.** `php artisan vendor:publish --tag=matomo-analytics` now
+  publishes every resource group at once — config, migrations, views and translations —
+  instead of requiring four separate invocations. Each group keeps its specific tag
+  (`matomo-analytics-config`, `-migrations`, `-views`, `-lang`), so nothing that worked
+  before changes.
+- **A bundled Laravel Boost skill** at `resources/boost/skills/matomo-analytics-for-laravel/SKILL.md`.
+  Boost surfaces it inside applications that install this package, so an assistant
+  working in a consuming app gets the package's real integration guidance — the facade
+  entry points, the transmission modes, the testing fakes and the anti-patterns —
+  instead of inferring an API.
+- Translations are prepared for seven locales (de, en, es, fr, it, nl, pt). The files
+  are in place and published under the `matomo-analytics-lang` tag; the package's one
+  translatable string (the privacy-policy partial) is not extracted yet.
+- A Laravel-versions badge in the README, derived from the package's own constraint
+  rather than hand-maintained.
+- The release now generates a lean-dist public `.gitattributes` that `export-ignore`s
+  the repo meta (`art/`, the CHANGELOG, CONTRIBUTING, and `.github`). The installed
+  Composer package is therefore byte-for-byte as lean as before while those files
+  remain visible in the public repository. Previously this package generated no public
+  `.gitattributes`, so the dist carried them.
+
+### Removed
+
+- The `bots.record_ai_dimension` configuration key. It was published in the config file
+  but never read anywhere in the package, so setting it had no effect. Removing it changes
+  no behavior; if your published `config/matomo-analytics.php` still carries the line, it
+  can be deleted.
+
+### Changed
+
+- **Published migrations now sort after your own.** They are published through
+  `publishesMigrations()`, which rewrites the bundled `0001_01_01_00000N` ordering
+  prefix to the publish date. Previously the bundled prefix was copied verbatim, so a
+  published migration sorted before every migration the application already had. If
+  you published the migrations before, the existing files are untouched — this affects
+  only migrations published from now on.
+- The configuration file no longer describes `batch` mode as unfinished. It said the
+  mode "arrives in a later release; currently behaves as 'queue'", which stopped being
+  true when the cross-request buffer shipped: `batch` has working `database`, `redis`,
+  `file` and `array` drivers, flushed by `matomo:flush` / `matomo:work`.
+- `CONTRIBUTING.md` no longer tells readers of the published package to run gate
+  commands whose inputs are not part of it.
+- **Documentation moved to <https://docs.pushery.com/matomo-analytics-for-laravel/>.**
+  The README carried the entire manual; it is now a showcase that links to the
+  documentation site, where the same material is structured as a browsable,
+  searchable set of pages — installation, configuration, tracking, delivery, privacy
+  and gating, reporting, guides and a full reference for every config key, command,
+  event, contract and database table. Nothing was dropped: the pages cover more than
+  the README did, including several settings and extension points it never mentioned.
+
 ## [0.14.3] - 2026-07-07
 
 ### Fixed
