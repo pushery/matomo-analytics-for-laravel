@@ -1,13 +1,18 @@
 {{-- Publishable privacy-policy snippet for cookieless Matomo analytics.
      Publish with: php artisan vendor:publish --tag=matomo-analytics-views
-     Render with: @include('matomo-analytics::privacy-policy') --}}
+     Render with:  @include('matomo-analytics::privacy-policy')
+
+     The prose lives in lang/<locale>/messages.php and ships in seven locales, so
+     a non-English site does not publish an English privacy paragraph. Override a
+     single string by publishing the lang files, or pass $heading to change just
+     the heading.
+
+     The paragraph asserts a legal conclusion that holds for the SHIPPED
+     configuration — cookieless, anonymised IPs, no user id, nothing shared. If
+     you change those, change the text. --}}
 <section class="matomo-analytics-privacy">
-    <h2>{{ $heading ?? 'Web Analytics' }}</h2>
+    <h2>{{ $heading ?? __('matomo-analytics::messages.privacy_policy.heading') }}</h2>
     <p>
-        This website uses Matomo, a privacy-friendly open-source analytics platform,
-        to measure how the site is used. Matomo is configured to run without cookies,
-        anonymizes IP addresses before storing them, and never shares data with third
-        parties. Because no personal data is stored and no cookies are set, no consent
-        banner is required.
+        {{ __('matomo-analytics::messages.privacy_policy.body') }}
     </p>
 </section>

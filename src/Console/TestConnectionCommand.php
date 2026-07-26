@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Console;
 use Illuminate\Console\Command;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\Sender;
+use MatomoAnalytics\Support\Config;
 use Throwable;
 
 final class TestConnectionCommand extends Command
@@ -21,6 +22,15 @@ final class TestConnectionCommand extends Command
             $this->error('Matomo is not configured. Set MATOMO_HOST and MATOMO_SITE_ID.');
 
             return self::FAILURE;
+        }
+
+        // Connectivity and activity are different questions, and this command is
+        // asked precisely when someone is wondering why nothing arrives. Reaching
+        // Matomo while the master switch is off would answer "OK" to a package that
+        // is tracking nobody — so say it, and keep probing anyway: knowing the
+        // credentials work is exactly what you want before you flip the switch.
+        if (! Config::bool('matomo-analytics.enabled', false)) {
+            $this->warn('Tracking is DISABLED (matomo-analytics.enabled = false) — nothing is being tracked. Set MATOMO_ENABLED=true to turn it on. Probing the connection anyway:');
         }
 
         try {
