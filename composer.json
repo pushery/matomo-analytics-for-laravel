@@ -75,8 +75,8 @@
         "format:test": "pint --test",
         "rector": "rector process",
         "rector:test": "rector process --dry-run",
-        "mutate": "pest --mutate --everything --covered-only --min=85",
-        "mutate:detect": "pest --mutate --everything --covered-only --parallel --processes=4 --min=85",
+        "mutate": "pest --mutate --everything --covered-only --min=92",
+        "mutate:detect": "pest --mutate --everything --covered-only --parallel --processes=4 --min=92",
         "qa": [
             "@format:test",
             "@rector:test",

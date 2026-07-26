@@ -6,24 +6,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Master switch
+    | Master switch — OFF until you turn it on
     |--------------------------------------------------------------------------
-    | Tracking is additionally a no-op whenever `host` or `site_id` is missing.
+    | Installing this package must never start tracking anyone. The default is
+    | therefore false: dormancy is a property of the package, not an accident of
+    | an unset host. Set MATOMO_ENABLED=true when you mean to track.
+    |
+    | (Tracking additionally stays a no-op whenever `host` or `site_id` is
+    | missing — but that is a second belt, not the switch.)
     */
 
-    'enabled' => env('MATOMO_ENABLED', true),
+    'enabled' => env('MATOMO_ENABLED', false),
 
     /*
     |--------------------------------------------------------------------------
     | Connection (Matomo Cloud or self-hosted — same code path)
     |--------------------------------------------------------------------------
     | `host` is the base URL, e.g. https://analytics.example.com or
-    | https://your-instance.matomo.cloud. MATOMO_URL is accepted as an alias.
+    | https://your-instance.matomo.cloud.
     | `token` (token_auth) is server-side only; it is required for the real
     | client IP (cip), an accurate hit time (cdt) and bulk authorisation.
+    |
+    | Only MATOMO_HOST is read. MATOMO_URL used to be accepted as a fallback and
+    | is not any more: it is not this package's key, so applications that already
+    | had their own Matomo integration reading MATOMO_URL were activating THIS
+    | package by configuring THAT one. Setting MATOMO_HOST means this package.
     */
 
-    'host' => env('MATOMO_HOST', env('MATOMO_URL')),
+    'host' => env('MATOMO_HOST'),
     'site_id' => env('MATOMO_SITE_ID'),
     'token' => env('MATOMO_TOKEN'),
     'tracker_path' => env('MATOMO_TRACKER_PATH', 'matomo.php'),
@@ -140,10 +150,16 @@ return [
 
     'visitor' => [
         'rotate' => 'daily', // daily|weekly|never (cookieless salt rotation)
-        'user_id' => 'auth', // 'auth' to attach the authenticated user id, or null
+        // null by default: attaching the authenticated user id links every hit to a
+        // known person, which is a deliberate step, not a starting point. Set 'auth'
+        // when you have a lawful basis for it.
+        'user_id' => null,   // 'auth' to attach the authenticated user id, or null
     ],
 
-    'anonymize_ip' => false,
+    // On by default. Matomo truncates the last octet(s) server-side, which is what
+    // most EU deployments need; turn it off deliberately if you have a basis to
+    // store full addresses.
+    'anonymize_ip' => true,
     'ip_header' => env('MATOMO_IP_HEADER'), // e.g. CF-Connecting-IP behind Cloudflare
 
     /*
@@ -158,7 +174,17 @@ return [
         'except_abilities' => [],        // skip users passing any of these Gate abilities, e.g. ['admin']
         'except_ips' => [],              // skip these client IPs / CIDR ranges
         'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*'],
-        'gate' => null,                  // invokable class-string (config-cache safe) or closure: fn(Request, $hit): ?bool
+
+        // THE CONSENT SEAM. Consulted before EVERY hit, server- and client-side, and
+        // it wins: return false to refuse tracking, true to force it, null to fall
+        // through to the rules above. If your application already has its own consent
+        // layer, wire it here — that is how this package defers to it rather than
+        // tracking around it.
+        //
+        //     'gate' => \App\Analytics\ConsentGate::class,   // __invoke(Request, $hit): ?bool
+        //
+        // An invokable class-string survives `config:cache`; a closure does not.
+        'gate' => null,
     ],
 
     /*

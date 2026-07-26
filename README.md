@@ -24,12 +24,15 @@ php artisan matomo:install
 ```
 
 ```dotenv
+MATOMO_ENABLED=true
 MATOMO_HOST=https://your-instance.matomo.cloud   # or https://analytics.example.com
 MATOMO_SITE_ID=1
 ```
 
-Tracking is a no-op until both are set, so the package stays inert in local and CI
-environments. Verify any time with `php artisan matomo:test`.
+Nothing is tracked until you set `MATOMO_ENABLED=true` — installing the package
+starts no tracking at all. It also stays a no-op while either variable above is
+missing, so it is inert in local and CI environments. Verify with
+`php artisan matomo:test`.
 
 Requires PHP 8.4+ and Laravel 12 or 13.
 

@@ -4,6 +4,67 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-07-26
+
+**This release changes three shipped defaults.** Each change makes the quiet option the safe
+one, and each can break an existing setup in exactly one direction: tracking stops. Nothing
+starts collecting more than it did before. If you published `config/matomo-analytics.php`,
+your file's values win and none of it reaches you — see
+<https://docs.pushery.com/matomo-analytics-for-laravel/guides/upgrading>.
+
+### Changed
+
+- **BREAKING — the package now ships dormant.** `enabled` defaults to `false`, so installing
+  it tracks nobody until you set `MATOMO_ENABLED=true`. Previously the default was `true` and
+  dormancy depended on `host`/`site_id` happening to be unset, which is not the same promise:
+  it made tracking start as a side effect of configuration rather than as a decision. If you
+  are upgrading and want tracking to continue, set `MATOMO_ENABLED=true`.
+- **BREAKING — `MATOMO_URL` is no longer read.** `host` was `env('MATOMO_HOST', env('MATOMO_URL'))`,
+  falling back to a key this package does not own. An application that already had its own
+  Matomo integration reading `MATOMO_URL` was therefore activating this package by configuring
+  that one — and, together with the default above, could start tracking every visitor
+  (including those who had refused consent in the application's own gate) after a routine
+  `.env` edit. Only `MATOMO_HOST` is read now. Reported from a real consumer integration.
+- **BREAKING — safer privacy defaults.** `anonymize_ip` now defaults to `true`, and
+  `visitor.user_id` to `null` instead of `'auth'`. Both are still fully configurable; what
+  changed is which one you have to ask for. Attaching an authenticated user id to every hit,
+  and storing full IP addresses, are deliberate choices rather than starting points.
+- `matomo:install` now names `MATOMO_ENABLED` first — following its old hint configured a
+  package that then stayed silent, with nothing explaining why. `matomo:test` warns when
+  tracking is disabled and probes the connection anyway, since knowing the credentials work is
+  exactly what you want before flipping the switch.
+
+### Added
+
+- **The privacy-policy partial is translated into all seven shipped locales** (de, en, es, fr,
+  it, nl, pt). It was hardcoded English, so a non-English site published an English privacy
+  paragraph onto a public page — the one piece of user-facing prose this package renders. The
+  text now lives in `lang/<locale>/messages.php` and is published with the
+  `matomo-analytics-lang` tag; `$heading` still overrides just the heading.
+
+### Fixed
+
+- The mutation floor is raised from 85% to **92%**. The first honest (serial) run measured
+  89.9%; after the coverage work below it is 92.31%, so the floor now holds that gain instead
+  of leaving room for it to erode. Headroom is deliberately thin — about seven mutants — which
+  is the point: the next change brings its own tests.
+- Real test coverage for four of the worst-covered files. The first honest (serial) mutation
+  run exposed 243 surviving mutants behind 100% line coverage — the console commands in
+  particular were proven to RUN without being proven to decide or print anything correctly.
+  `matomo:replay` is now free of survivors; `matomo:load-sim`, the dead-letter store and the
+  client snippet are substantially better. No behaviour changed; the tests did.
+
+### Notes
+
+- The paragraph asserts that no consent banner is required. That holds for the SHIPPED
+  configuration — cookieless, anonymised IPs, no user id, nothing shared with third parties.
+  Once you publish the lang files the text is yours: if you relax one of those settings, change
+  the sentence that depends on it.
+- The **consent seam asked for in the same report already existed** and still does:
+  `tracking.gate` takes an invokable class-string or closure `fn(Request, $hit): ?bool`, is
+  consulted before every hit, and overrides the built-in rules. It was missed in a careful
+  review, so it is now documented as the seam it is rather than as one gate among several.
+
 ## [0.15.0] - 2026-07-26
 
 ### Added
