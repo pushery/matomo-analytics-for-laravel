@@ -4,6 +4,41 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-07-27
+
+**This release changes the page-view numbers a tracked site reports — they go down.** It adds
+no feature and removes no option, and it reaches you only if you set `spa.enabled` to `true`
+(off by default). What it corrects is a miscount: soft-navigation tracking recorded a second
+page view on every *full* page load of a Livewire application. The counts you were seeing were
+inflated; the lower ones after this upgrade are the correct ones. Visits, visitors and every
+unique-based metric are unaffected. It is a minor rather than a patch for exactly that reason —
+the numbers move, so someone should read this before it lands. Details, including the one case
+that genuinely loses a page view, are in
+<https://docs.pushery.com/matomo-analytics-for-laravel/guides/upgrading>.
+
+### Fixed
+
+- **SPA tracking counted every full page load twice in a Livewire application.** Livewire's
+  navigation plugin ends its start-up by firing its `navigated` event once unconditionally,
+  and that reaches the page as `livewire:navigated` — on every **hard** load, at the URL the
+  snippet has just recorded a page view for, and whether or not the application uses
+  `wire:navigate` anywhere. The `livewire` adapter listened for that event and recorded a
+  second, virtual page view for it. Adapters now record only when the URL actually changes.
+  **Expect the page-view count of an affected site to fall**: the numbers it was reporting
+  were inflated, and this is the correction, not a loss of data. `window.matomoTrackPageView()`
+  is deliberately unaffected and still records at an unchanged URL, which is what its
+  documented uses (a tab switch, a modal route) need. The same rule makes `livewire` and
+  `generic` safe to enable together — one navigation is no longer recorded by both.
+- **The first virtual page view of a visit reported no referrer.** It was sent empty, so
+  Matomo read the first soft navigation as a direct entry and every flow report started one
+  step late. It now carries the URL the browser loaded normally.
+
+### Changed
+
+- The shipped configuration no longer describes `wire:navigate` as WireKit's directive. It is
+  Livewire's; WireKit is a component library that requires Livewire, which is the actual —
+  and checkable — reason the `livewire` adapter covers a WireKit application.
+
 ## [0.16.0] - 2026-07-26
 
 **This release changes three shipped defaults.** Each change makes the quiet option the safe
@@ -42,28 +77,17 @@ your file's values win and none of it reaches you — see
   text now lives in `lang/<locale>/messages.php` and is published with the
   `matomo-analytics-lang` tag; `$heading` still overrides just the heading.
 
-### Fixed
-
-- The mutation floor is raised from 85% to **92%**. The first honest (serial) run measured
-  89.9%; after the coverage work below it is 92.31%, so the floor now holds that gain instead
-  of leaving room for it to erode. Headroom is deliberately thin — about seven mutants — which
-  is the point: the next change brings its own tests.
-- Real test coverage for four of the worst-covered files. The first honest (serial) mutation
-  run exposed 243 surviving mutants behind 100% line coverage — the console commands in
-  particular were proven to RUN without being proven to decide or print anything correctly.
-  `matomo:replay` is now free of survivors; `matomo:load-sim`, the dead-letter store and the
-  client snippet are substantially better. No behaviour changed; the tests did.
-
 ### Notes
 
-- The paragraph asserts that no consent banner is required. That holds for the SHIPPED
-  configuration — cookieless, anonymised IPs, no user id, nothing shared with third parties.
-  Once you publish the lang files the text is yours: if you relax one of those settings, change
-  the sentence that depends on it.
-- The **consent seam asked for in the same report already existed** and still does:
-  `tracking.gate` takes an invokable class-string or closure `fn(Request, $hit): ?bool`, is
-  consulted before every hit, and overrides the built-in rules. It was missed in a careful
-  review, so it is now documented as the seam it is rather than as one gate among several.
+- The privacy-policy partial asserts that no consent banner is required. That holds for the
+  SHIPPED configuration — cookieless, anonymised IPs, no user id, nothing shared with third
+  parties. Once you publish the lang files the text is yours: if you relax one of those
+  settings, change the sentence that depends on it.
+- **If your application has its own consent layer, wire it into `tracking.gate`** rather than
+  gating this package from outside. It takes an invokable class-string or a closure
+  `fn(Request, $hit): ?bool`, is consulted before every hit, and overrides the built-in rules.
+  It is not new — it is now documented as the seam it is rather than as one setting among
+  several.
 
 ## [0.15.0] - 2026-07-26
 
@@ -257,9 +281,9 @@ your file's values win and none of it reaches you — see
 ### Changed
 
 - The package now supports **Laravel 12** alongside Laravel 13 — the minimum was lowered from `^13.0`
-  to `^12.0 || ^13.0` (and `orchestra/testbench` to `^10.0 || ^11.0`). PHP stays at `^8.4`. Verified
-  against the newest Laravel 12.x on PHP 8.4 (full test suite, PHPStan max, Pint, Rector and 100% type
-  coverage all green); CI now runs the suite on Laravel 12 and 13 across PHP 8.4 and 8.5.
+  to `^12.0 || ^13.0` (and `orchestra/testbench` to `^10.0 || ^11.0`). PHP stays at `^8.4`. Both
+  Laravel lines are verified on PHP 8.4 and 8.5, so the support claim covers the whole matrix
+  rather than only the newest combination.
 
 ## [0.8.1] - 2026-06-25
 

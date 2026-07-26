@@ -42,6 +42,7 @@
         "pestphp/pest-plugin-browser": "^4.3",
         "pestphp/pest-plugin-laravel": "^4.0",
         "pestphp/pest-plugin-type-coverage": "^4.0",
+        "phpstan/phpstan": "^2.2.2 <2.2.6",
         "rector/rector": "^2.0",
         "spaze/phpstan-disallowed-calls": "^4.12"
     },

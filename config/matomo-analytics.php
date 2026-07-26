@@ -319,10 +319,14 @@ return [
     | When enabled, the tracker snippet also records a virtual page view on each
     | client-side navigation (which never reloads the page, so the normal page
     | view would be missed). Pick the adapters your app uses:
-    |   - "livewire" : Livewire / WireKit wire:navigate  (fires livewire:navigated)
+    |   - "livewire" : Livewire wire:navigate            (fires livewire:navigated)
     |   - "inertia"  : Inertia.js (Vue & React)          (fires inertia:navigate)
     |   - "generic"  : any client router via History pushState + popstate
-    | A window.matomoTrackPageView() helper is always exposed for manual triggers.
+    | An adapter records a page view only when the URL actually CHANGES: these events
+    | are not proof of a navigation on their own (Livewire emits livewire:navigated
+    | once on every hard load, too), and firing on them counted such a load twice.
+    | A window.matomoTrackPageView() helper is always exposed for manual triggers;
+    | it is not guarded, so it still records at an unchanged URL.
     | Only applies to the direct matomo.js tracker (Tag Manager handles SPA itself).
     */
 

@@ -137,8 +137,9 @@ final readonly class Snippet
     }
 
     /**
-     * Records a virtual page view on each client-side (soft) navigation. Returns an
-     * empty string unless spa.enabled. Always exposes window.matomoTrackPageView().
+     * Records a virtual page view on each client-side (soft) navigation that actually
+     * changes the URL. Returns an empty string unless spa.enabled. Always exposes
+     * window.matomoTrackPageView(), which tracks unconditionally.
      */
     private function spaListeners(): string
     {
@@ -150,6 +151,11 @@ final readonly class Snippet
 
         $lines = [
             '(function(){',
+            // Seed the referrer with the hard-load URL. It is what the first soft navigation
+            // navigated away FROM, and leaving it empty made that first virtual page view look
+            // like a direct entry — breaking exactly the flow reports the referrer chain exists
+            // for. It also gives the listener guard below a value to compare against.
+            '  window.__matomoSpaRef=window.location.href;',
             '  var track=function(){',
             '    if(!window._paq){return;}',
             '    _paq.push(['.$this->js('setReferrerUrl').', window.__matomoSpaRef||'.$this->js('').']);',
@@ -183,17 +189,27 @@ final readonly class Snippet
         $lines[] = '  };';
         $lines[] = '  window.matomoTrackPageView=track;';
 
+        // A framework navigation event is not by itself proof that a navigation happened.
+        // Livewire's navigate plugin ends with an unconditional `setTimeout(() =>
+        // fireEventForOtherLibrariesToHookInto('alpine:navigated'))`, and Livewire forwards
+        // that to `livewire:navigated` — so every hard load of a Livewire app emits the event
+        // once, at the URL the page already tracked. Firing on it counted every hard load
+        // twice. The URL is the only honest signal that a soft navigation occurred, so the
+        // adapters track on a CHANGE of it; window.matomoTrackPageView() stays unguarded for
+        // the screens a URL cannot express.
+        $lines[] = '  var onNav=function(){if(window.location.href===window.__matomoSpaRef){return;}track();};';
+
         if (in_array('livewire', $adapters, true)) {
-            $lines[] = '  document.addEventListener('.$this->js('livewire:navigated').', track);';
+            $lines[] = '  document.addEventListener('.$this->js('livewire:navigated').', onNav);';
         }
 
         if (in_array('inertia', $adapters, true)) {
-            $lines[] = '  document.addEventListener('.$this->js('inertia:navigate').', track);';
+            $lines[] = '  document.addEventListener('.$this->js('inertia:navigate').', onNav);';
         }
 
         if (in_array('generic', $adapters, true)) {
-            $lines[] = '  var _p=history.pushState;history.pushState=function(){_p.apply(this,arguments);setTimeout(track,0);};';
-            $lines[] = '  window.addEventListener('.$this->js('popstate').', function(){setTimeout(track,0);});';
+            $lines[] = '  var _p=history.pushState;history.pushState=function(){_p.apply(this,arguments);setTimeout(onNav,0);};';
+            $lines[] = '  window.addEventListener('.$this->js('popstate').', function(){setTimeout(onNav,0);});';
         }
 
         $lines[] = '})();';
