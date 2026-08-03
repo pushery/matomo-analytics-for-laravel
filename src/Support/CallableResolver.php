@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Support;
 
+use Illuminate\Support\Facades\App;
+
 /**
  * Resolves a config-supplied extension point into a callable: a closure, an
  * already-callable value, or an invokable class-string resolved from the
@@ -18,7 +20,7 @@ final class CallableResolver
         }
 
         if (is_string($value) && $value !== '' && class_exists($value)) {
-            $instance = app($value);
+            $instance = App::make($value);
 
             return is_callable($instance) ? $instance : null;
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Buffer;
 
+use Illuminate\Support\Facades\App;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Support\Config;
 
@@ -16,10 +17,10 @@ final class BufferManager
     public function driver(?string $name = null): HitBuffer
     {
         return match ($name ?? Config::string('matomo-analytics.batch.driver', 'database')) {
-            'array' => app(ArrayHitBuffer::class),
-            'file' => app(FileHitBuffer::class),
-            'redis' => app(RedisHitBuffer::class),
-            default => app(DatabaseHitBuffer::class),
+            'array' => App::make(ArrayHitBuffer::class),
+            'file' => App::make(FileHitBuffer::class),
+            'redis' => App::make(RedisHitBuffer::class),
+            default => App::make(DatabaseHitBuffer::class),
         };
     }
 }

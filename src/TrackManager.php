@@ -7,6 +7,8 @@ namespace MatomoAnalytics;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Event as EventFacade;
+use Illuminate\Support\Facades\Request as RequestFacade;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Contracts\Tracker;
@@ -59,12 +61,12 @@ final class TrackManager implements Tracker
     public function track(Hit $hit): static
     {
         $this->safe(function () use ($hit): void {
-            $request = request();
+            $request = RequestFacade::instance();
 
             $decision = $this->gate->decide($request, $hit);
             if (! $decision->allowed) {
                 if ($decision->reason !== null && Config::bool('matomo-analytics.events', true)) {
-                    event(new VisitorExcluded($decision->reason));
+                    EventFacade::dispatch(new VisitorExcluded($decision->reason));
                 }
 
                 return;
@@ -84,7 +86,7 @@ final class TrackManager implements Tracker
     public function aiChatbot(?Request $request = null): static
     {
         $this->safe(function () use ($request): void {
-            $payload = $this->builder->buildAiChatbot($request ?? request());
+            $payload = $this->builder->buildAiChatbot($request ?? RequestFacade::instance());
 
             if ($payload !== []) {
                 $this->queueOrSend($payload);
@@ -111,7 +113,7 @@ final class TrackManager implements Tracker
             $this->buffer->push($payload);
 
             if (Config::bool('matomo-analytics.events', true)) {
-                event(new TrackingQueued([$payload]));
+                EventFacade::dispatch(new TrackingQueued([$payload]));
             }
 
             return;
@@ -130,7 +132,7 @@ final class TrackManager implements Tracker
         $this->pending = [];
 
         if (Config::bool('matomo-analytics.events', true)) {
-            event(new TrackingQueued($payloads));
+            EventFacade::dispatch(new TrackingQueued($payloads));
         }
 
         Bus::dispatch(new SendHitsJob($payloads));
@@ -183,7 +185,7 @@ final class TrackManager implements Tracker
 
     public function searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): static
     {
-        $search = SiteSearch::fromRequest($request ?? request(), $keywordKey, $categoryKey, $count);
+        $search = SiteSearch::fromRequest($request ?? RequestFacade::instance(), $keywordKey, $categoryKey, $count);
 
         return $search instanceof SiteSearch ? $this->track($search) : $this;
     }
@@ -223,7 +225,7 @@ final class TrackManager implements Tracker
         }
 
         if (Config::bool('matomo-analytics.events', true)) {
-            event(new TrackingSent(count($payloads), $result->status));
+            EventFacade::dispatch(new TrackingSent(count($payloads), $result->status));
         }
     }
 

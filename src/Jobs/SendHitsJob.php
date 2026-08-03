@@ -9,6 +9,10 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Config as ConfigFacade;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Event as EventFacade;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Events\TrackingFailed;
 use MatomoAnalytics\Events\TrackingSent;
@@ -49,7 +53,7 @@ final class SendHitsJob implements ShouldQueue
      */
     public function backoff(): array
     {
-        $configured = config('matomo-analytics.queue.backoff');
+        $configured = ConfigFacade::get('matomo-analytics.queue.backoff');
         if (! is_array($configured)) {
             return [30, 120, 300, 900];
         }
@@ -68,13 +72,13 @@ final class SendHitsJob implements ShouldQueue
 
     /**
      * \DateTimeInterface, not a concrete Carbon: a host app may run
-     * Date::use(CarbonImmutable::class), and now() then returns
+     * Date::use(CarbonImmutable::class), and Date::now() then returns
      * CarbonImmutable — a concrete Illuminate\Support\Carbon return type
      * fatals the queue worker with a TypeError.
      */
     public function retryUntil(): DateTimeInterface
     {
-        return now()->addMinutes(Config::int('matomo-analytics.queue.retry_until_minutes', 1440));
+        return Date::now()->addMinutes(Config::int('matomo-analytics.queue.retry_until_minutes', 1440));
     }
 
     public function handle(Sender $sender, Reporter $reporter): void
@@ -95,17 +99,17 @@ final class SendHitsJob implements ShouldQueue
         }
 
         if (Config::bool('matomo-analytics.events', true)) {
-            event(new TrackingSent(count($this->payloads), $result->status));
+            EventFacade::dispatch(new TrackingSent(count($this->payloads), $result->status));
         }
     }
 
     public function failed(Throwable $exception): void
     {
         if (Config::bool('matomo-analytics.events', true)) {
-            event(new TrackingFailed($exception));
+            EventFacade::dispatch(new TrackingFailed($exception));
         }
 
-        app(Reporter::class)->report($exception, ['final' => 1]);
+        App::make(Reporter::class)->report($exception, ['final' => 1]);
     }
 
     private function escalate(Reporter $reporter, Throwable $e): void

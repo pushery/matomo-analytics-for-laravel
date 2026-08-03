@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Tracking;
 
 /**
- * A single line item in an ecommerce order or cart, serialised to Matomo's
+ * A single line item in an ecommerce order or cart, serialized to Matomo's
  * positional ec_items shape: [sku, name, category, price, quantity].
  */
 final readonly class EcommerceItem

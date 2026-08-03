@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Support;
 
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -42,7 +45,10 @@ final class Reporter
         );
 
         if ($channel === 'report') {
-            report($e);
+            // NOT the report() helper: that one is Foundation-only, and this package
+            // requires illuminate components rather than laravel/framework. The helper
+            // does exactly this — resolve the handler and call report on it.
+            App::make(ExceptionHandler::class)->report($e);
         }
     }
 
@@ -63,6 +69,6 @@ final class Reporter
 
         $key = 'matomo-analytics:report:'.md5($e::class.'|'.$e->getMessage());
 
-        return Cache::add($key, true, now()->addMinutes($minutes));
+        return Cache::add($key, true, Date::now()->addMinutes($minutes));
     }
 }

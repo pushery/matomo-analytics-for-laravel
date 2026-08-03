@@ -8,7 +8,7 @@
      the heading.
 
      The paragraph asserts a legal conclusion that holds for the SHIPPED
-     configuration — cookieless, anonymised IPs, no user id, nothing shared. If
+     configuration — cookieless, anonymized IPs, no user id, nothing shared. If
      you change those, change the text. --}}
 <section class="matomo-analytics-privacy">
     <h2>{{ $heading ?? __('matomo-analytics::messages.privacy_policy.heading') }}</h2>

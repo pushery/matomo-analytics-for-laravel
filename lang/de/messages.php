@@ -12,7 +12,7 @@ return [
     | `vendor:publish --tag=matomo-analytics-lang` and, once published, it is
     | YOURS: the paragraph states a legal conclusion ("no consent banner is
     | required") that holds for the SHIPPED configuration — cookieless,
-    | anonymised IPs, no user id, no third-party sharing. Change any of those
+    | anonymized IPs, no user id, no third-party sharing. Change any of those
     | and the sentence stops being true; change the sentence with it.
     */
 

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace MatomoAnalytics;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Foundation\CachesConfiguration;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -63,7 +66,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     #[Override]
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/matomo-analytics.php', 'matomo-analytics');
+        $this->mergeConfigRecursivelyFrom(__DIR__.'/../config/matomo-analytics.php', 'matomo-analytics');
 
         $this->app->singleton(Connection::class, static fn (): Connection => Connection::fromConfig());
         $this->app->singleton(Reporter::class);
@@ -79,7 +82,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->app->scoped(ArrayHitBuffer::class);
         $this->app->singleton(DeadLetterStore::class);
         $this->app->singleton(ConsecutiveFailures::class);
-        $this->app->scoped(HitBuffer::class, static fn (): HitBuffer => app(BufferManager::class)->driver());
+        $this->app->scoped(HitBuffer::class, static fn (): HitBuffer => App::make(BufferManager::class)->driver());
         $this->app->scoped(Tracker::class, TrackManager::class);
 
         $this->app->singleton(ReportCache::class);
@@ -126,9 +129,26 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
 
     private function registerBladeDirectives(): void
     {
-        Blade::directive('matomoScript', static fn (string $expression): string => "<?php echo app(\\MatomoAnalytics\\View\\Snippet::class)->script({$expression}); ?>");
-        Blade::directive('matomoOptOut', static fn (): string => '<?php echo app(\\MatomoAnalytics\\View\\Snippet::class)->optOut(); ?>');
-        Blade::directive('matomoWebVitals', static fn (string $expression): string => "<?php echo app(\\MatomoAnalytics\\View\\Snippet::class)->webVitals({$expression}); ?>");
+        // EVERY class in the emitted PHP is fully qualified, `App` included, and that
+        // is not style. A directive's return value is written into the host
+        // application's compiled view — a plain PHP file in the GLOBAL namespace, where
+        // this file's `use` statements do not reach. A bare `App` there resolves only
+        // through the `App` class alias, which an application is free not to register;
+        // the Snippet class was already written out in full, so the two halves of the
+        // same string disagreed about whether that could be relied on.
+        //
+        // It arrived with the move off Foundation helpers: `app()` is a global function
+        // and needs no alias, `App::make()` does. Trading one for the other inside
+        // GENERATED code moves the dependency from the package into the consumer's
+        // configuration, where this package cannot see it fail.
+        $resolve = '\\Illuminate\\Support\\Facades\\App::make(\\MatomoAnalytics\\View\\Snippet::class)';
+
+        Blade::directive('matomoScript', static fn (string $expression): string => "<?php echo {$resolve}->script({$expression}); ?>");
+        // For placing the no-JS pixel inside <body>, where an <img> is legal — see
+        // Snippet::noscript(). Opt-in: script() still emits it by default.
+        Blade::directive('matomoNoscript', static fn (): string => "<?php echo {$resolve}->noscript(); ?>");
+        Blade::directive('matomoOptOut', static fn (): string => "<?php echo {$resolve}->optOut(); ?>");
+        Blade::directive('matomoWebVitals', static fn (string $expression): string => "<?php echo {$resolve}->webVitals({$expression}); ?>");
     }
 
     private function registerScheduledFlush(): void
@@ -138,7 +158,10 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         }
 
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
-            $schedule->command('matomo:flush')->everyMinute()->withoutOverlapping();
+            // Bound the overlap lock to the run cadence: a hard-killed (SIGKILL/OOM)
+            // flush must not hold the mutex for the framework default of 1440 minutes
+            // (24h), which would silently stall the every-minute drain for a full day.
+            $schedule->command('matomo:flush')->everyMinute()->withoutOverlapping(10);
         });
     }
 
@@ -185,5 +208,85 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../lang' => $this->app->langPath('vendor/matomo-analytics'),
         ], ['matomo-analytics', 'matomo-analytics-lang']);
+    }
+
+    /**
+     * Merge the shipped config into the app's, recursing into nested sections.
+     *
+     * The framework's own `mergeConfigFrom` is a flat `array_merge`, which replaces a
+     * top-level key WHOLESALE. This config is nested three levels deep and is read that
+     * way everywhere, so for anyone who published `config/matomo-analytics.php` the flat
+     * merge froze every section at the shape it had on publication day. A subkey added by
+     * a later release did not fall back to its default — it was simply ABSENT, and the
+     * readers that hurt most take no default at all: `Config::stringList()` answers `[]`.
+     *
+     * What that meant in practice, and why this is not cosmetic:
+     *
+     *   - `privacy.redact.query_params` / `.keys` — URL redaction silently off, entirely
+     *   - `spa.adapters` — a config older than the `spa` block got NO adapter
+     *   - `bots.allow` / `bots.deny`, `web_vitals.metrics` — empty rather than defaulted
+     *
+     * The obvious framework alternative is a trap: `replaceConfigRecursivelyFrom` uses
+     * `array_replace_recursive`, which merges LISTS BY INDEX. That would resurrect
+     * entries an operator deliberately deleted from `bots.deny` or from the redaction
+     * list — turning a privacy setting back on behind their back. So the recursion here
+     * is list-aware, and the rule it encodes is:
+     *
+     *   a map is a namespace, and gets merged · a list is a value, and is taken whole
+     *
+     * The app always wins on a scalar; recursion only ever ADDS what the app's file never
+     * mentioned. Pattern adopted from WireKit's `mergeConfigRecursivelyFrom`, which fixed
+     * the identical defect in its v2.18.0 for the identical reason.
+     *
+     * NOTE the early return, because it bounds what this can rescue: a CACHED config is
+     * never merged at all, by the framework's design. For those installations the
+     * published file is the whole truth, and the only thing standing between them and a
+     * missing key is the read-site fallback — which is why those fallbacks have to agree
+     * with the shipped defaults (`ConfigFallbackParityTest`). The two fixes are halves of
+     * one guarantee.
+     */
+    private function mergeConfigRecursivelyFrom(string $path, string $key): void
+    {
+        if ($this->app instanceof CachesConfiguration && $this->app->configurationIsCached()) {
+            return;
+        }
+
+        $shipped = require $path;
+
+        $repository = $this->app->make(Repository::class);
+        $existing = $repository->get($key);
+
+        // Both sides are read off disk / out of the container, so neither is provably
+        // string-keyed here — a config array is just an array. The recursion below is
+        // written for exactly that: it asks whether a value is a list, never whether a
+        // key is a string.
+        $repository->set($key, $this->mergeConfigSections(
+            is_array($shipped) ? $shipped : [],
+            is_array($existing) ? $existing : [],
+        ));
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $shipped
+     * @param  array<array-key, mixed>  $published
+     * @return array<array-key, mixed>
+     */
+    private function mergeConfigSections(array $shipped, array $published): array
+    {
+        foreach ($shipped as $key => $value) {
+            if (! array_key_exists($key, $published)) {
+                $published[$key] = $value;
+
+                continue;
+            }
+
+            // Recurse only where BOTH sides are maps. If either is a list, the published
+            // one stands as written — see the list-aware rule above.
+            if (is_array($value) && is_array($published[$key]) && ! array_is_list($value) && ! array_is_list($published[$key])) {
+                $published[$key] = $this->mergeConfigSections($value, $published[$key]);
+            }
+        }
+
+        return $published;
     }
 }

@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 /**
  * Server-side opt-out. Matomo's own opt-out widget sets a cookie on the Matomo
  * domain, which the server-side tracker cannot see — so this offers a first-party
- * cookie the tracking gate honours. Attach the returned cookie to a response
+ * cookie the tracking gate honors. Attach the returned cookie to a response
  * (e.g. return back()->withCookie(OptOut::enable())) from your own opt-out control.
  */
 final class OptOut

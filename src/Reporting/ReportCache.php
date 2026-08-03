@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Reporting;
 use Closure;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Date;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -68,7 +69,7 @@ final class ReportCache
             ? (string) $params['date']
             : Config::string('matomo-analytics.reporting.default_date', 'today');
 
-        if ($date === '' || str_contains($date, 'today') || $date === now()->toDateString()) {
+        if ($date === '' || str_contains($date, 'today') || $date === Date::now()->toDateString()) {
             return Config::int($base.'today', 300);
         }
 
