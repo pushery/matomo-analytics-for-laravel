@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/pushery/matomo-analytics-for-laravel">
-    <img src="art/header.png" alt="Matomo Analytics for Laravel" width="100%">
+    <img src="https://raw.githubusercontent.com/pushery/matomo-analytics-for-laravel/main/art/header.png" alt="Matomo Analytics for Laravel" width="100%">
   </a>
 </p>
 

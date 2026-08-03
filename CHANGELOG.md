@@ -4,6 +4,281 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-08-03
+
+**Upgrading from 0.17.0 or earlier? Read the 0.18.0 entry below as well.** That version was
+prepared but never published as its own release, so its changes ship here — including the ones
+that move reported figures in three directions. 0.18.0 was never installable and never will be;
+this release is the first one that carries it.
+
+**If you have a published `config/matomo-analytics.php` *and* you run `config:cache`, read
+this before upgrading — there is a case where tracking stops.** Everything below is a fix,
+and every one of them is about the same thing: what this package does when a config key is
+*missing* from your file. Two answers were the opposite of the documented default, and
+nested keys had no answer at all.
+
+- **Nested defaults now reach you.** A section you published froze at that day's shape, so a
+  key added later was absent rather than defaulted — `privacy.redact` meant redaction doing
+  nothing, `spa.adapters` meant no adapter at all. This is the change that reaches the most
+  installations, and it needs nothing from you.
+- **Tracking stops** if your published file is missing `enabled` **and** your config is
+  cached. The shipped file has said `false` since 0.16.0 — "installing this package must
+  never start tracking anyone" — while three of the four places that read it fell back to
+  `true`. Put the shipped line back — `'enabled' => env('MATOMO_ENABLED', false)` — and set
+  `MATOMO_ENABLED=true` in the environments you want tracked. The `false` is deliberate:
+  writing `true` into the file makes the *file* enable tracking, so every environment that
+  inherits it starts tracking without anyone deciding to.
+- **IP anonymization switches on** if your file is missing `anonymize_ip` and your config is
+  cached. It has shipped as `true` since 0.16.0 and the code fell back to `false`, so hits
+  carried full addresses. Reported visitor counts may shift slightly, because a truncated
+  address is a different input to visitor identification.
+- **The heartbeat timer switches on** under the same conditions. `js.heartbeat` ships as
+  `15` and fell back to `0`, which means off, so a published `js` section without the key
+  had no heartbeat at all. Time-on-page figures rise for those installations — the earlier
+  numbers were the ones that were wrong.
+
+**Why both keys need the cache to bite:** `enabled` and `anonymize_ip` are top-level and
+have shipped in every published version, so a file you published simply *has* them.
+Laravel's merge also fills a missing top-level key back in from the shipped file. It takes
+a file you trimmed by hand *and* a `config:cache` that froze it that way for the fallback
+to be reached at all. If either is untrue for you, nothing changes.
+
+**If you cache your config, rebuild the cache after upgrading** — `php artisan config:cache`.
+That one command re-runs the merge and picks up everything added since. Re-publishing the
+file does nothing on its own while a stale cache is in place.
+
+It is a minor and not a patch for the reason 0.17.0 and 0.18.0 give: every item is a fix, and
+a patch tells every auto-merge policy there is that nothing needs reading. This one has a
+sentence someone should read first. The full walkthrough, including what to check if
+redaction or SPA tracking looks inert afterwards, is in
+<https://docs.pushery.com/matomo-analytics-for-laravel/guides/upgrading>.
+
+### Added
+
+- **`@matomoNoscript` / `Snippet::noscript()`** — the no-JavaScript tracking pixel on its
+  own, for placement inside `<body>`. Inside `<head>`, where `@matomoScript` is documented
+  to go, the HTML spec allows a `<noscript>` to contain only `<link>`, `<style>` and
+  `<meta>`, so the pixel's `<img>` is a parse error there. Browsers recover from it, so
+  this is validator noise rather than breakage — which is exactly why **nothing changes by
+  default**: dropping the pixel from `@matomoScript` would cost every consumer their no-JS
+  tracking to quiet a validator, and most would never read this note. For a validator-clean
+  page, set `js.noscript` to `false` and place `@matomoNoscript` in the body instead.
+
+### Changed
+
+- **Seven more `illuminate/*` components are now required** — `auth`, `cache`, `config`,
+  `cookie`, `events`, `log` and `view`. They were always used; the manifest simply did not
+  say so, and inside a normal Laravel application they are present anyway. Nothing changes
+  for such an application. See the lean-install entry below for what this fixes.
+- **The bundled AI-crawler list is refreshed**, 150 tokens to 160. New entries include
+  `Cursor`, `Retool`, `TongyiBot`, `YiyanBot`, `HarkBot`, `HIFIBot`, `AIWebIndex`,
+  `amazon-QBusiness`, `Mozilla-Tabstack` and `Instapaper`; nothing was dropped. The shipped
+  default `bots.track => false` means these are now *excluded* from your reports rather than
+  counted as visits, so a site with meaningful AI-crawler traffic will see a small drop in
+  visits — the lower number is the correct one.
+
+### Fixed
+
+- **The consecutive-failure counter no longer loses increments under two drainers.** It
+  read the value and wrote it back, so a scheduled `matomo:flush` failing at the same
+  moment as a `matomo:work` daemon counted one failure instead of two. Nothing was ever
+  lost from the buffer — but a stuck batch reached `batch.max_attempts` later than
+  configured, which is the one thing that counter exists to time. It now uses the cache
+  store's own atomic increment, and initializes the key with an expiry — without one
+  Laravel's `add()` does not reach the store's atomic path, which would have left the same
+  race open for the first failure after every reset.
+- **`matomo:work` shuts down between runs instead of wherever the signal lands.** The
+  daemon now traps `SIGTERM`/`SIGINT` and finishes the current flush before exiting, the
+  same way `queue:work` does. Signal handling is skipped entirely on a host without
+  `ext-pcntl`, which this package does not require.
+- **The Blade directives emit fully-qualified class names.** Their output is compiled into
+  your application's view cache, a plain PHP file in the global namespace, where a bare
+  `App::make(...)` resolves only through the `App` class alias. An application that does not
+  register aliases got a fatal error on a rendered page.
+- **`js.heartbeat` falls back to the 15 seconds the shipped config declares**, not to `0`.
+  Zero means "no heartbeat timer", so a published `js` section that predated the key
+  measured no time on page at all while the file it came from said 15. An explicit `0`
+  still switches the timer off — that is the documented way to disable it.
+
+- **The lean, component-only install this package advertises now actually works.**
+  `composer.json` requires individual `illuminate/*` components rather than
+  `laravel/framework`, but the shipped code reached for 29 global helpers — `config()`,
+  `app()`, `event()`, `now()`, `request()`, `url()`, `report()`, `abort()`, `response()`
+  — that ship *only* with the framework's Foundation. In a normal Laravel application
+  they are always there, which is exactly why this stayed invisible; on the slim install
+  the manifest describes, they are a fatal.
+
+  Every one is now the equivalent from `Illuminate\Support\Facades` (or, for the two with
+  no facade, the thing the helper does internally). Behavior is unchanged — a facade is
+  a static proxy over the same container binding the helper resolves.
+
+  **And the binding has to be there.** A facade is a proxy: `Cache::get()` asks the
+  container for `cache`, registered by `illuminate/cache`. Seven such components were
+  reached at runtime and named in no `require`, so the swap moved the fatal rather than
+  removing it — from a missing function to a missing binding, in the same place, on the
+  same install. They are declared now (see *Changed*), and the guard resolves each facade
+  to the component that really provides it instead of to the namespace its class sits in.
+
+- **A published `config/matomo-analytics.php` is no longer a ceiling.** Laravel's
+  `mergeConfigFrom` is a flat `array_merge`, so a top-level key present in your published
+  file replaced the shipped one *whole*. With a config nested three levels deep, that meant
+  every section you published froze at the shape it had on publication day: a subkey added
+  by a later release did not fall back to its default, it was simply absent — and the
+  readers that hurt most take no default at all. `privacy.redact.query_params` answering
+  `[]` is URL redaction silently doing nothing; `spa.adapters` answering `[]` is no adapter
+  at all.
+
+  The merge now recurses into nested sections, so a key you never mentioned arrives with
+  its shipped default while everything you *did* set still wins.
+
+  **Lists are deliberately NOT merged.** If your file sets `bots.deny` or
+  `privacy.redact.query_params`, that list is taken exactly as written — including when you
+  emptied it. The obvious alternative (`array_replace_recursive`) merges lists by index and
+  would hand entries back that you deleted on purpose, which for a privacy list means
+  turning a setting back on behind your back. The rule is: **a map is a namespace and gets
+  merged, a list is a value and is taken whole.**
+
+  **This does not reach a cached config.** `config:cache` freezes the resolved config and
+  the framework skips merging entirely, by design. If you cache your config, re-publish it
+  (`--tag=matomo-analytics-config`) to pick up keys added since you last did.
+
+- **A published config that predates a key no longer flips that key's meaning.** Every
+  boolean this package reads carries a code-level fallback for the case where the key is
+  absent from your config — and two of those fallbacks contradicted the value the shipped
+  config file declares. They now agree, in the only direction that is safe:
+  - **IP anonymization defaults to ON.** `anonymize_ip` has shipped as `true` since
+    0.16.0, but the code fell back to `false`. If your published config still lacks the
+    key, hits carried full IP addresses despite the shipped default and despite what your
+    privacy policy most likely says.
+  - **The master switch defaults to OFF.** `enabled` has shipped as `false` since 0.16.0
+    — installing this package must never start tracking anyone — but three of the four
+    places that read it fell back to `true`. A published config without the key therefore
+    tracked, which is the exact opposite of the guarantee 0.16.0 introduced.
+
+  **Who this reaches, and what changes for them.** Only installations whose *published*
+  `config/matomo-analytics.php` is missing one of these keys — which means you trimmed the
+  file to the settings you tune, since both have shipped at the top level of every published
+  version. `mergeConfigFrom` fills a missing top-level key back in, so this only bites once
+  `config:cache` freezes the file as it stands. If your config carries both keys (the shipped
+  file does), or you do not cache, nothing changes.
+
+  If you are in that group and were tracking, **tracking now stops until the key is back**.
+  The package cannot tell "the key is missing" from "the operator wants it off", and for a
+  dormancy guarantee those have to resolve the same way. Put the shipped line back —
+  `'enabled' => env('MATOMO_ENABLED', false)` — and set `MATOMO_ENABLED=true` in the
+  environments you want tracked, then rebuild the config cache. Re-publishing the whole file
+  gives you the same line plus everything else added since, but it changes nothing at all
+  until `php artisan config:cache` runs again.
+
+## [0.18.0] - 2026-07-31
+
+> **Never published.** This version was prepared on the date above and the release was
+> deliberately not performed; no `v0.18.0` tag exists and it was never on Packagist. Everything
+> below ships in **0.19.0** instead. The section is kept because the changes are real and anyone
+> upgrading from 0.17.0 needs to read it — but do not go looking for the version itself.
+
+**This release changes the numbers a tracked site reports — in three directions, and the new
+ones are the correct ones.** Read this before upgrading if you run batch mode or sit behind a
+reverse proxy.
+
+- **Visitors go UP behind a proxy with `ip_header` set.** The cookieless visitor id now derives
+  from the same client IP the hit reports, so visitors that all collapsed into one because they
+  shared the edge IP are counted distinctly. If you do not set `ip_header`, nothing changes.
+- **Actions and visits go DOWN if you run two drainers.** The database buffer's claim is now
+  race-safe, so a scheduled `matomo:flush` running alongside a `matomo:work` daemon can no
+  longer both claim and send the same hits. Those were double counted; they are not any more.
+- **Hits that used to disappear now arrive.** A Redis-buffer flush that died after claiming but
+  before acknowledging stranded its hits forever; they are now reclaimed and sent. Expect a
+  one-off catch-up on the first flush after upgrading if that has ever happened to you.
+
+It is a minor rather than a patch for exactly that reason: every item above is a fix, and a
+patch signals "safe, nothing to think about" to every auto-merge policy there is. These move
+reported figures, so someone should read a sentence first.
+
+Two security hardenings ship with it, and one config key is gone. The package also now declares
+four `illuminate/*` components it has always imported — invisible in a full Laravel application,
+and the reason the package could not actually run on the lean, component-only installation it
+advertises.
+
+### Security
+
+- The client-side snippet now escapes `<`, `>`, `&` and quotes in every embedded
+  value (matching Laravel's `Js::from()` encoding). A tracked value containing
+  `</script>` — for example a client-side custom-dimension sourced from a user
+  attribute — can no longer close the tracker's `<script>` block and inject markup.
+- The Web Vitals ingest endpoint now accepts only the three standard ratings
+  (`good`, `needs-improvement`, `poor`); any other client-supplied `rating` is
+  dropped instead of being recorded verbatim as the Matomo event name.
+
+### Fixed
+
+- URL redaction now also covers array-style query parameters (`token[]=`, `token[0]=`),
+  which previously slipped through unredacted because of the bracket between the key and
+  the `=`.
+- `matomo:replay` now removes each dead-letter entry as soon as its hits are buffered,
+  rather than deleting them all at the end. An interruption mid-replay can no longer
+  re-push already-replayed entries on the next run.
+- The file buffer stamps a freshly claimed spool file with the claim time (rather than
+  inheriting the queue's older modification time), so a concurrent stale-reclaim cannot
+  treat an in-flight claim on an idle spool as abandoned and re-queue it.
+- The Redis buffer now reclaims in-flight hits from a crashed flush. Each claim's
+  processing list is registered in a sorted set keyed by claim time; a later claim
+  moves any list older than `stale_after_minutes` back onto the queue. Previously a
+  flush that died after claiming but before ack/release left those hits stranded in
+  the processing list forever — they are now recovered, matching the database and
+  file drivers' "a crashed flush loses nothing" guarantee.
+- The database buffer's claim is now race-safe against concurrent drainers. The claim
+  UPDATE re-asserts the unclaimed/stale predicate (not only the preceding SELECT), so
+  two flushers running at once — for example the scheduled `matomo:flush` alongside a
+  `matomo:work` daemon — can no longer both claim and send the same hits, which had
+  double-counted visits and actions. Portable across SQLite, PostgreSQL and MySQL.
+- Scheduled-flush observability hardening (batch mode):
+  - The `matomo:flush` schedule now bounds its overlap lock to 10 minutes instead of
+    the framework's 24-hour default, so a hard-killed (SIGKILL/OOM) flush can no longer
+    stall the every-minute drain for a full day.
+  - `matomo:flush` now exits non-zero once the drain has failed `report_after_attempts`
+    times in a row, so the scheduler's failure hooks and exit-code monitors detect a
+    stuck drain instead of seeing a green run.
+  - The batch flusher now honors `report_after_attempts` before alerting (matching the
+    queue path), so a single transient blip no longer pages monitoring on the first
+    failed flush.
+- The cookieless visitor id now derives from the same client IP as the tracked
+  `cip` (honoring the configured `ip_header`). Behind a reverse proxy with
+  `ip_header` set, every cookieless visitor previously hashed from the shared edge
+  IP and collapsed into a single visitor; they are now counted distinctly. The
+  default (no `ip_header`) is unchanged.
+- The batch flusher no longer dead-letters a batch on a back-pressure or timeout
+  status (`408`, `423`, `425`, `429`). These are transient and are now retried with
+  back-off like a `5xx`, so a rate-limited Matomo instance can no longer drain a whole
+  backlog into the dead-letter queue in a single flush. A genuine `4xx` poison (e.g.
+  `400`) is still dead-lettered immediately.
+- Documentation: the `batch` dispatch-mode config comment now describes the real
+  behavior (a cross-request buffer drained by `matomo:flush`/`matomo:work`) instead
+  of claiming it "behaves as queue".
+- **The package now requires the four `illuminate/*` components it has always imported.**
+  `illuminate/console`, `illuminate/database`, `illuminate/redis` and `illuminate/routing`
+  were used by shipped code — every Artisan command extends `Illuminate\Console\Command`,
+  the database and Redis buffers type-hint their connections, and the tracking middleware
+  type-hints `Illuminate\Routing\Route` — while `composer.json` required none of them.
+  In a full Laravel application this was invisible, because `laravel/framework` provides
+  every one. On the lean, component-only installation this package advertises by requiring
+  components rather than the framework, `illuminate/redis` and `illuminate/routing` were
+  not installed at all, so the buffer, the middleware and the package's own routes could
+  not load. If you install into a full Laravel application, nothing changes for you.
+
+### Changed
+
+- `CONTRIBUTING.md` now states the local PHP requirement. The package installs on 8.4.0,
+  but working **on** it needs 8.4.1 or newer, because the test toolchain pulls
+  `symfony/process`. On exactly 8.4.0 `composer install` fails with a message naming
+  `symfony/process`, which points away from the cause.
+
+### Removed
+
+- The unused `resilience.durability` config key. It was never read by any code path,
+  so setting `MATOMO_DURABILITY` had no effect.
+
+
 ## [0.17.0] - 2026-07-27
 
 **This release changes the page-view numbers a tracked site reports — they go down.** It adds
@@ -80,7 +355,7 @@ your file's values win and none of it reaches you — see
 ### Notes
 
 - The privacy-policy partial asserts that no consent banner is required. That holds for the
-  SHIPPED configuration — cookieless, anonymised IPs, no user id, nothing shared with third
+  SHIPPED configuration — cookieless, anonymized IPs, no user id, nothing shared with third
   parties. Once you publish the lang files the text is yours: if you relax one of those
   settings, change the sentence that depends on it.
 - **If your application has its own consent layer, wire it into `tracking.gate`** rather than
@@ -261,7 +536,7 @@ your file's values win and none of it reaches you — see
   - `ai_chatbots.track` (default `false`) turns it on. Enable the `matomo.chatbots` middleware (or set
     `ai_chatbots.auto`) and incoming AI-assistant fetches are recorded as Matomo bot telemetry (`recMode`)
     — kept out of your human analytics and never creating a visit.
-  - The recognised fetchers default to the narrow on-demand set Matomo surfaces (override via
+  - The recognized fetchers default to the narrow on-demand set Matomo surfaces (override via
     `ai_chatbots.user_agents`); `rec_mode` and `source` are configurable. Requires Matomo 5.8+.
   - `Matomo::aiChatbot($request)` records a fetch manually.
 - **AI Assistants acquisition report.** Matomo's "AI Assistants" acquisition channel (human visits
@@ -305,7 +580,7 @@ your file's values win and none of it reaches you — see
 ### Changed
 
 - Expanded the bundled AI-crawler list to 130+ tokens, regenerated from the canonical
-  [ai.robots.txt](https://github.com/ai-robots-txt/ai.robots.txt) catalogue (substring-unsafe
+  [ai.robots.txt](https://github.com/ai-robots-txt/ai.robots.txt) catalog (substring-unsafe
   entries filtered out) and kept current by a scheduled sync workflow that opens a review PR.
 - Generic bot detection now also catches social link-preview agents (WhatsApp, SkypeUriPreview, vkShare).
 

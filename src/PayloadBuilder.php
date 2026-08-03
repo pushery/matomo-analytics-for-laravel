@@ -15,7 +15,7 @@ use MatomoAnalytics\Tracking\Hit;
  * Turns a Hit plus the originating request into a flat Matomo Tracking API
  * parameter array: site id, visitor id, real request context (url/referrer/ua/
  * lang) and — only when a token is configured — the real client IP (cip) and the
- * exact hit time (cdt), which Matomo only honours with token_auth.
+ * exact hit time (cdt), which Matomo only honors with token_auth.
  */
 final readonly class PayloadBuilder
 {
@@ -82,7 +82,7 @@ final readonly class PayloadBuilder
     public function buildAiChatbot(Request $request): array
     {
         if (
-            ! Config::bool('matomo-analytics.enabled', true)
+            ! Config::bool('matomo-analytics.enabled', false)
             || ! Config::bool('matomo-analytics.ai_chatbots.track', false)
             || ! $this->connection->isConfigured()
         ) {
@@ -147,7 +147,7 @@ final readonly class PayloadBuilder
 
     private function maybeAnonymize(string $ip): string
     {
-        if (! Config::bool('matomo-analytics.anonymize_ip', false)) {
+        if (! Config::bool('matomo-analytics.anonymize_ip', true)) {
             return $ip;
         }
 

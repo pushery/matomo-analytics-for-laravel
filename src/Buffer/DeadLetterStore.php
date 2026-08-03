@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Buffer;
 
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use MatomoAnalytics\Support\Config;
 
@@ -28,7 +29,7 @@ final class DeadLetterStore
             'hits' => count($payloads),
             'attempts' => $attempts,
             'error' => $error,
-            'failed_at' => now(),
+            'failed_at' => Date::now(),
         ]);
     }
 

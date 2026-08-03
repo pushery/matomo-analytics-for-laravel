@@ -6,6 +6,8 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Config as ConfigFacade;
 use MatomoAnalytics\Buffer\BufferFlusher;
 use MatomoAnalytics\Buffer\BufferManager;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
@@ -39,14 +41,14 @@ final class LoadSimCommand extends Command
 
         $batch = $this->intOption('batch', 0);
         if ($batch > 0) {
-            config()->set('matomo-analytics.batch.size', $batch);
+            ConfigFacade::set('matomo-analytics.batch.size', $batch);
         }
 
         // A sim can enqueue a lot; don't flood the event bus while measuring.
-        config()->set('matomo-analytics.events', false);
+        ConfigFacade::set('matomo-analytics.events', false);
 
         $buffer = $buffers->driver($this->stringOption('driver'));
-        $sender = $this->stringOption('against') === 'real' ? app(Sender::class) : new NullSender;
+        $sender = $this->stringOption('against') === 'real' ? App::make(Sender::class) : new NullSender;
 
         $this->info(sprintf('Enqueuing %s synthetic hits…', number_format($hits)));
 

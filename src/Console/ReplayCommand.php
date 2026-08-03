@@ -38,24 +38,26 @@ final class ReplayCommand extends Command
             return self::SUCCESS;
         }
 
-        $ids = [];
+        $replayed = 0;
         $hits = 0;
         foreach ($entries as $entry) {
             foreach ($entry['payloads'] as $payload) {
                 $buffer->push($payload);
                 $hits++;
             }
-            $ids[] = $entry['id'];
+            // Delete each entry as soon as its payloads are buffered, not all at the end:
+            // a crash mid-run then leaves the already-replayed entries removed, so a
+            // re-run never double-pushes them into the buffer.
+            $store->delete([$entry['id']]);
+            $replayed++;
         }
-
-        $store->delete($ids);
 
         $this->info(sprintf(
             'Replayed %d %s from %d dead-letter %s back into the buffer.',
             $hits,
             $hits === 1 ? 'hit' : 'hits',
-            count($ids),
-            $this->plural(count($ids)),
+            $replayed,
+            $this->plural($replayed),
         ));
 
         return self::SUCCESS;

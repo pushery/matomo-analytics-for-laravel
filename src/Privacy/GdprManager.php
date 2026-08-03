@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Privacy;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Http;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\GdprClient;
@@ -72,7 +73,7 @@ final class GdprManager implements GdprClient
 
         $counts = $this->intCounts($result);
         if (Config::bool('matomo-analytics.events', true)) {
-            event(new DataSubjectForgotten(count($visits), $counts));
+            EventFacade::dispatch(new DataSubjectForgotten(count($visits), $counts));
         }
 
         return $counts;

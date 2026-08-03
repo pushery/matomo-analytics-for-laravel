@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Buffer;
 
 use Generator;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Support\Config;
@@ -59,6 +60,12 @@ final class FileHitBuffer implements HitBuffer
         $claim = $this->dir().'/processing.'.Str::uuid()->toString().'.jsonl';
         @rename($queue, $claim);
 
+        // rename(2) preserves the queue's mtime, so on an idle spool the fresh claim file
+        // inherits an already-stale timestamp. Stamp it with the claim time up front so a
+        // concurrent reclaimStale() cannot treat this in-flight claim as abandoned and
+        // re-queue it (double-send) while we are still streaming it below.
+        @touch($claim);
+
         // Stream the claim file: hold only the taken batch in memory and append the
         // untouched remainder straight back onto the queue.
         $taken = [];
@@ -111,7 +118,7 @@ final class FileHitBuffer implements HitBuffer
 
     private function reclaimStale(): void
     {
-        $cutoff = now()->subMinutes(Config::int('matomo-analytics.batch.stale_after_minutes', 15))->getTimestamp();
+        $cutoff = Date::now()->subMinutes(Config::int('matomo-analytics.batch.stale_after_minutes', 15))->getTimestamp();
 
         foreach (glob($this->dir().'/processing.*.jsonl') ?: [] as $file) {
             $modified = filemtime($file);

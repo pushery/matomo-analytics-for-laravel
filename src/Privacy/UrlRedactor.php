@@ -29,7 +29,9 @@ final class UrlRedactor
     private function redactQueryParams(string $url, string $replacement): string
     {
         foreach (Config::stringList('matomo-analytics.privacy.redact.query_params') as $param) {
-            $pattern = '/([?&]'.preg_quote($param, '/').'=)[^&#]*/i';
+            // Match `name=` and the array forms `name[]=` / `name[0]=`, so a bracketed
+            // key does not let the value slip through unredacted.
+            $pattern = '/([?&]'.preg_quote($param, '/').'(?:\[[^\]&#]*\])?=)[^&#]*/i';
 
             $result = preg_replace_callback(
                 $pattern,

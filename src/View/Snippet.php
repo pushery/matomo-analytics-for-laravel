@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\View;
 
+use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Support\Config;
 
@@ -32,11 +33,11 @@ final readonly class Snippet
 
     public function webVitals(?string $nonce = null): string
     {
-        if (! Config::bool('matomo-analytics.enabled', true) || ! Config::bool('matomo-analytics.web_vitals.enabled', false)) {
+        if (! Config::bool('matomo-analytics.enabled', false) || ! Config::bool('matomo-analytics.web_vitals.enabled', false)) {
             return '';
         }
 
-        $path = $this->js(url(Config::string('matomo-analytics.web_vitals.path', 'matomo-analytics/web-vitals')));
+        $path = $this->js(URL::to(Config::string('matomo-analytics.web_vitals.path', 'matomo-analytics/web-vitals')));
         $names = '['.implode(',', array_map($this->js(...), Config::stringList('matomo-analytics.web_vitals.metrics'))).']';
 
         $glue = implode("\n", [
@@ -57,6 +58,35 @@ final readonly class Snippet
         return $script;
     }
 
+    /**
+     * The `<noscript>` tracking pixel on its own, for placement inside `<body>`.
+     *
+     * `script()` already appends this pixel when `js.noscript` is on, so most integrations
+     * need nothing here. This method exists for one specific and legitimate complaint: the
+     * documented place for `script()` is `<head>`, and inside `<head>` the HTML spec allows
+     * a `noscript` to contain ONLY `link`, `style` and `meta`. An `img` there is a parse
+     * error that ends the head early.
+     *
+     * The measured impact is validator noise rather than breakage — a parser's "after head"
+     * rules push the following head-ish elements back where they belong, so browsers
+     * recover, and the case only arises with JavaScript disabled to begin with. That is why
+     * the default is unchanged and this is an ADDITION: silently dropping the pixel from
+     * `script()` would cost every consumer their no-JS tracking to fix validator output,
+     * and most of them will never read the release note that explains it.
+     *
+     * So the validator-clean integration is opt-in and takes two steps:
+     *
+     *     'js' => ['noscript' => false],   // stop script() from emitting it in <head>
+     *     …
+     *     <body>… @matomoNoscript </body>  // and place it where an img is legal
+     *
+     * Returns '' when tracking is inactive, exactly like the other parts.
+     */
+    public function noscript(): string
+    {
+        return $this->active() ? $this->noscriptPixel() : '';
+    }
+
     public function optOut(): string
     {
         if (! $this->connection->isConfigured()) {
@@ -68,9 +98,16 @@ final readonly class Snippet
         return '<iframe title="Matomo opt-out" style="border:0;height:200px;width:100%;" src="'.e($url).'"></iframe>';
     }
 
+    private function noscriptPixel(): string
+    {
+        $pixel = $this->connection->trackingUrl().'?idsite='.$this->connection->siteId.'&rec=1';
+
+        return '<noscript><img referrerpolicy="no-referrer-when-downgrade" src="'.e($pixel).'" style="border:0" alt=""></noscript>';
+    }
+
     private function active(): bool
     {
-        return Config::bool('matomo-analytics.enabled', true)
+        return Config::bool('matomo-analytics.enabled', false)
             && Config::bool('matomo-analytics.js.enabled', true)
             && $this->connection->isConfigured();
     }
@@ -118,7 +155,7 @@ final readonly class Snippet
             $commands[] = "_paq.push(['enableLinkTracking']);";
         }
 
-        $heartbeat = Config::int('matomo-analytics.js.heartbeat', 0);
+        $heartbeat = Config::int('matomo-analytics.js.heartbeat', 15);
         if ($heartbeat > 0) {
             $commands[] = "_paq.push(['enableHeartBeatTimer', {$heartbeat}]);";
         }
@@ -250,8 +287,7 @@ final readonly class Snippet
         }
 
         if (Config::bool('matomo-analytics.js.noscript', true)) {
-            $pixel = $this->connection->trackingUrl().'?idsite='.$this->connection->siteId.'&rec=1';
-            $html .= "\n".'<noscript><img referrerpolicy="no-referrer-when-downgrade" src="'.e($pixel).'" style="border:0" alt=""></noscript>';
+            $html .= "\n".$this->noscriptPixel();
         }
 
         return $html;
@@ -308,6 +344,15 @@ final readonly class Snippet
 
     private function js(string $value): string
     {
-        return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        // Mirror Laravel's Js::from() flag set: JSON_HEX_TAG escapes "<" and ">" to
+        // their \u00XX form so an embedded value can never close the <script> block,
+        // and HEX_AMP/APOS/QUOT keep it safe in an HTML-attribute context too.
+        // JSON_UNESCAPED_SLASHES only keeps URLs readable; it is HEX_TAG, not
+        // slash-escaping, that closes the "</script>" breakout.
+        return json_encode(
+            $value,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+            | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT,
+        );
     }
 }

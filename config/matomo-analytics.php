@@ -25,7 +25,10 @@ return [
     | `host` is the base URL, e.g. https://analytics.example.com or
     | https://your-instance.matomo.cloud.
     | `token` (token_auth) is server-side only; it is required for the real
-    | client IP (cip), an accurate hit time (cdt) and bulk authorisation.
+    | client IP (cip), an accurate hit time (cdt) and bulk authorization. In queue
+    | and batch mode a token is effectively required for correct timestamps: without
+    | it Matomo times each hit at receipt, which — especially after a queued retry or a
+    | dead-letter replay — can be minutes to hours after the event actually happened.
     |
     | Only MATOMO_HOST is read. MATOMO_URL used to be accepted as a fallback and
     | is not any more: it is not this package's key, so applications that already
@@ -47,8 +50,9 @@ return [
     | 'sync'  — send immediately (CLI/tests/low volume).
     | 'queue' — collect a request's hits and flush them as one Bulk request via
     |           a queued job on terminate (default; never blocks the response).
-    | 'batch' — cross-request buffer flushed in large Bulk batches by
-    |           `matomo:flush` / `matomo:work`. Driver and limits below.
+    | 'batch' — cross-request buffer flushed in large Bulk batches, drained by the
+    |           matomo:flush scheduler or the matomo:work daemon. Choose a durable
+    |           store via batch.driver (database|redis|file) or 'array' for tests.
     */
 
     'mode' => env('MATOMO_MODE', 'queue'),
@@ -74,6 +78,8 @@ return [
         // After this many consecutive failed flushes a stuck batch is moved to the
         // dead-letter queue (transient failures keep retrying until then; a poison
         // HTTP 4xx is dead-lettered at once). Nothing is lost — replay re-queues it.
+        // The consecutive-failure count lives in the cache, so batch mode needs a
+        // persistent (non-array) cache store for this escalation to survive across runs.
         'max_attempts' => env('MATOMO_BATCH_MAX_ATTEMPTS', 25),
         'dead_letter' => [
             'enabled' => true,
@@ -94,7 +100,6 @@ return [
     'resilience' => [
         'never_throw' => true,
         'connect_timeout' => 2,
-        'durability' => env('MATOMO_DURABILITY', 'durable'), // durable|best_effort
         'reporting' => [
             'report_after_attempts' => 3,
             'channel' => env('MATOMO_REPORT_CHANNEL', 'report'),
@@ -160,7 +165,13 @@ return [
     // most EU deployments need; turn it off deliberately if you have a basis to
     // store full addresses.
     'anonymize_ip' => true,
-    'ip_header' => env('MATOMO_IP_HEADER'), // e.g. CF-Connecting-IP behind Cloudflare
+
+    // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
+    // Cloudflare). SECURITY: the header value is trusted verbatim, so only set this when
+    // the origin is reachable EXCLUSIVELY through the trusted proxy. If the origin is
+    // directly reachable, a client can spoof it (poisoning cip / bypassing except_ips) —
+    // prefer leaving this null and configuring Laravel's TrustProxies + $request->ip().
+    'ip_header' => env('MATOMO_IP_HEADER'),
 
     /*
     |--------------------------------------------------------------------------
@@ -199,7 +210,9 @@ return [
         'consent' => 'none',   // none|cookie|full
 
         // Server-side opt-out: the gate skips tracking when this first-party cookie
-        // is present. Set/clear it with MatomoAnalytics\Privacy\OptOut::enable()/disable().
+        // is present. Set/clear it with MatomoAnalytics\Privacy\OptOut::enable()/disable()
+        // — a server-set, encrypted cookie. A plaintext cookie set from client-side JS is
+        // dropped by Laravel's EncryptCookies and will NOT be honored: opt out server-side.
         'opt_out' => [
             'respect' => true,
             'cookie' => 'matomo_opt_out',
@@ -307,7 +320,12 @@ return [
         'content_tracking' => false,
 
         'heartbeat' => 15,            // enableHeartBeatTimer seconds; 0 to disable
-        'noscript' => true,           // render a <noscript> tracking pixel
+        // Render a <noscript> tracking pixel as part of @matomoScript. Note where that
+        // lands: inside <head>, the HTML spec allows a <noscript> to hold only link,
+        // style and meta, so the <img> is a parse error there (recoverable — browsers
+        // push the following head elements back — but a validator will say so). For a
+        // validator-clean page, set this to false and place @matomoNoscript in <body>.
+        'noscript' => true,
         'dns_prefetch' => true,       // emit a dns-prefetch link for the Matomo origin
     ],
 

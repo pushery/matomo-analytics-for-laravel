@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Bots;
 
+use Illuminate\Support\Facades\Config as ConfigFacade;
 use MatomoAnalytics\Contracts\BotDetector;
 use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\Config;
@@ -78,7 +79,7 @@ final class DefaultBotDetector implements BotDetector
 
     private function viaCustomDetector(string $userAgent): bool
     {
-        $callable = CallableResolver::resolve(config('matomo-analytics.bots.detector'));
+        $callable = CallableResolver::resolve(ConfigFacade::get('matomo-analytics.bots.detector'));
 
         return $callable !== null && $callable($userAgent) === true;
     }

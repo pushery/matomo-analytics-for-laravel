@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Testing;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Request as RequestFacade;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Tracking\ContentImpression;
 use MatomoAnalytics\Tracking\ContentInteraction;
@@ -53,7 +54,7 @@ final class MatomoFake implements Tracker
 
     public function aiChatbot(?Request $request = null): static
     {
-        $this->chatbots[] = ($request ?? request())->userAgent() ?? '';
+        $this->chatbots[] = ($request ?? RequestFacade::instance())->userAgent() ?? '';
 
         return $this;
     }
@@ -90,7 +91,7 @@ final class MatomoFake implements Tracker
 
     public function searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): static
     {
-        $search = SiteSearch::fromRequest($request ?? request(), $keywordKey, $categoryKey, $count);
+        $search = SiteSearch::fromRequest($request ?? RequestFacade::instance(), $keywordKey, $categoryKey, $count);
 
         return $search instanceof SiteSearch ? $this->track($search) : $this;
     }

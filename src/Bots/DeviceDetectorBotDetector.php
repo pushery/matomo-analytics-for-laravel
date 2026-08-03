@@ -8,7 +8,7 @@ use DeviceDetector\DeviceDetector;
 
 /**
  * Optional bot detector backed by matomo/device-detector — the same exhaustively
- * maintained catalogue Matomo uses server-side, covering every category (search
+ * maintained catalog Matomo uses server-side, covering every category (search
  * engines, social, SEO/marketing, monitoring, libraries, AI, …) and refreshed via
  * `composer update`. Opt in without bloating the core: install the package and
  * point the detector hook at this class.

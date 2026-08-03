@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Gates;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Gate;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\BotDetector;
@@ -28,7 +30,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
 
     public function decide(Request $request, Hit $hit): GateDecision
     {
-        if (! Config::bool('matomo-analytics.enabled', true)) {
+        if (! Config::bool('matomo-analytics.enabled', false)) {
             return GateDecision::deny('disabled');
         }
 
@@ -37,7 +39,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
         }
 
         $environments = Config::stringList('matomo-analytics.tracking.environments');
-        if ($environments !== [] && ! app()->environment($environments)) {
+        if ($environments !== [] && ! App::environment($environments)) {
             return GateDecision::deny('environment');
         }
 
@@ -128,7 +130,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
 
     private function deniedByCustomGate(Request $request, Hit $hit): bool
     {
-        $callable = CallableResolver::resolve(config('matomo-analytics.tracking.gate'));
+        $callable = CallableResolver::resolve(ConfigFacade::get('matomo-analytics.tracking.gate'));
 
         return $callable !== null && $callable($request, $hit) === false;
     }
