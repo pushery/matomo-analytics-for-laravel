@@ -4,6 +4,18 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.2] - 2026-08-05
+
+**A metadata release: the published package is byte-identical to 0.19.1 apart from this
+entry.** Nothing this package ships changed — not the source, not the configuration, not the
+routes, views or translations, and not the manifest. If you are on 0.19.1 there is nothing to
+install and nothing further to read; this entry exists so that a version with no visible diff
+does not send anyone through the tag looking for what they missed.
+
+What moved is development infrastructure that never leaves the private repository: the CI
+lanes now route each job to its own agent pool. It is recorded here rather than nowhere,
+because a released version with a silent changelog is worse than an honest one.
+
 ## [0.19.1] - 2026-08-04
 
 **Housekeeping. Nothing you install changes.** The package's own requirements, its shipped
