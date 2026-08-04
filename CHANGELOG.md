@@ -4,6 +4,22 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-08-04
+
+**Housekeeping. Nothing you install changes.** The package's own requirements, its shipped
+code, its configuration and its documented behavior are all identical to 0.19.0.
+
+### Changed
+
+- **The published manifest no longer lists `cweagans/composer-patches` as a development
+  dependency.** Nothing you install changes — a library's `require-dev` is not installed by
+  the applications that require it, and the package's own `require` block is untouched. The
+  entry is gone because the thing it existed for is gone: this package carried one composer
+  patch, teaching the mutation runner to read the coverage report format that
+  `phpunit/php-code-coverage` 14 writes, and that fix has been released upstream in
+  `pest-plugin-mutate` 5.0.1. A patch manager with no patches left is a dependency that does
+  nothing, and a patch nobody removes is a fork nobody admits to.
+
 ## [0.19.0] - 2026-08-03
 
 **Upgrading from 0.17.0 or earlier? Read the 0.18.0 entry below as well.** That version was
