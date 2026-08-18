@@ -4,6 +4,103 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-08-19
+
+**This release is about what your error dashboard shows you.** A Matomo endpoint that
+times out is a normal event on a public network, not an incident — the hits are
+fire-and-forget telemetry and no visitor ever waits on one. Until now a timeout
+nevertheless filed an error in your application, on every retry, and nothing in this
+package's configuration could stop it.
+
+**Two behavior changes come with the fix, and they are why this is a minor rather than a
+patch.** A queued batch is now given up on after `queue.tries` attempts — around twenty
+minutes on the defaults — instead of after a day; and a batch that spends its budget goes
+to the dead-letter table rather than into `failed_jobs`, which is where `batch` mode
+already put one. If you watch `failed_jobs` for undelivered hits, watch
+`matomo:replay --list` instead.
+
+### Fixed
+
+- **A Matomo that times out no longer files an error in your application.** In `queue`
+  mode the delivery job rethrew whatever the transport raised. Laravel's queue worker
+  catches what a job throws and hands it to your application's own exception handler, so
+  a routine network timeout became an entry in your error tracker — past this package's
+  `report_after_attempts` threshold, past its per-signature throttle, and past
+  `resilience.reporting.channel = 'silent'`. None of those three settings could reach it.
+
+  It also meant `resilience.never_throw` was not true for queued delivery, while it held
+  for the synchronous path. The configuration says "a tracking error never surfaces in
+  your application"; for the mode most installations run, it did.
+
+  Two production applications were affected, with 51 and 14 recorded occurrences of the
+  same five-second timeout. Nobody was affected by the timeouts themselves — the hits are
+  fire-and-forget telemetry and no visitor waits on them — which is the point: the only
+  thing they produced was noise in the place you look when something is genuinely wrong.
+
+  The job now absorbs a delivery failure and releases itself for retry with the same
+  backoff the worker would have applied, so pacing and escalation are unchanged. Alerting
+  stays where it was designed to live, in the reporter, where the three settings apply.
+  Set `resilience.never_throw` to `false` to keep the old behavior.
+
+- **A list setting whose key is missing now answers with the values the package ships, not with
+  an empty list.** This matters in one situation, and it is a bad one to be in silently: an
+  application whose configuration cache was built before this package merged its configuration
+  recursively, and never rebuilt since. A fresh cache carries the shipped values; a stale one
+  does not, and a missing key then read as "the list is empty".
+
+  Empty is the wrong answer for five of the thirteen list settings, and two of them are privacy
+  settings. `privacy.redact.query_params` ships eighteen entries — and "redaction is running"
+  and "redaction does nothing" look exactly alike from the outside. On an affected installation
+  the redaction lists were inert.
+
+  A list you emptied **on purpose** stays empty. Clearing a list is a decision, and a fallback
+  that overrode it would quietly switch rules back on that you turned off; only an absent key
+  falls back.
+
+  Nothing to do on your side, and no configuration change is needed. If you were affected, the
+  narrower fix remains worth doing anyway: rebuild the configuration cache.
+
+### Changed
+
+- **A batch that exhausts its delivery attempts is dead-lettered instead of landing in
+  `failed_jobs`.** `queue` mode now ends a failed batch exactly the way `batch` mode
+  already did: the payloads go to the dead-letter table with their attempt count and last
+  error, a `TrackingFailed` event fires, and `matomo:replay` puts them back. Nothing is
+  lost, and the recovery path is the one the documentation already described.
+
+- **`queue.tries` now bounds the retry loop, which it previously did not.** Laravel skips
+  its own max-attempts check whenever a job defines `retryUntil()`, and this job always
+  does — so the documented, configurable, defaulted attempt budget governed nothing, and a
+  batch retried against an unreachable Matomo until the 24-hour deadline instead of five
+  times. With the backoff settling at 15 minutes and the report throttle set to the same
+  15 minutes, that also meant the throttle stopped almost nothing.
+
+  A batch aimed at an unreachable Matomo is now given up on after `queue.tries` attempts
+  — roughly twenty minutes on the defaults — rather than after a day. If you were relying
+  on the day-long window, raise `queue.tries`; `queue.retry_until_minutes` still bounds
+  the outside.
+
+- **The dead-letter table no longer carries an index on `failed_at`.** No query used it — the
+  recent list orders by `id`, the replay walks by `id`, the cleanup deletes by `id` — so every
+  insert paid for an index nothing read. A migration removes it from existing installations and
+  restores it on rollback, both conditionally, so it runs cleanly from zero as well as on the
+  old shape.
+
+  The drop matches the index by COLUMN rather than by a name built by hand. Laravel prefixes
+  index names when `prefix_indexes` is set, which is the shipped default for MySQL and
+  PostgreSQL; an installation with a table prefix would otherwise have kept the index while the
+  migration recorded itself as run, and a rollback would have added a second one beside it.
+
+- **Development-only: this package's own `composer` scripts changed.** `test:coverage` now
+  invokes the test runner with the coverage driver pointed at the project directory, the two
+  mutation-testing scripts name their target directory explicitly instead of inheriting it, and
+  `test:database` covers the Redis suite alongside the PostgreSQL and MySQL ones.
+
+  Nothing an application installs behaves differently: no class, configuration key, route, view
+  or translation moved, and the package's requirements are unchanged. The scripts are noted here
+  only because the manifest that carries them is part of the published package — running them is
+  something this repository does to itself.
+
 ## [0.19.2] - 2026-08-05
 
 **A metadata release: the published package is byte-identical to 0.19.1 apart from this
