@@ -98,7 +98,7 @@ This package is built and maintained by [Pushery](https://www.pushery.com) — a
 Berlin-based studio building Laravel applications, SaaS products, and open-source
 tools.
 
-Building a Laravel UI? [WireKit](https://wirekit.app), Pushery's open-source
+Building a Laravel UI? [WireKit](https://www.wirekit.app), Pushery's open-source
 Livewire component kit, gives you a polished component library out of the box.
 Browse the rest of our work at [pushery.com](https://www.pushery.com).
 

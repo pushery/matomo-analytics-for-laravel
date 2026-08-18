@@ -20,8 +20,12 @@ return new class extends Migration
             $table->unsignedInteger('hits');
             $table->unsignedInteger('attempts');
             $table->text('error')->nullable();
+            // Deliberately UNINDEXED. Every read of this table goes by id — the recent
+            // list orders by id, the replay walks by id, the cleanup deletes by id — so an
+            // index here would be paid for on every insert and used by nothing. It earns
+            // one the day something filters on age (a retention window); until then it is
+            // overhead with a plausible-looking name.
             $table->timestamp('failed_at')->nullable();
-            $table->index('failed_at');
         });
     }
 
