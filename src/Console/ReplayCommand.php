@@ -14,7 +14,8 @@ final class ReplayCommand extends Command
     protected $signature = 'matomo:replay
         {--list : Show the dead-letter queue without replaying}
         {--limit=0 : Maximum entries to replay (0 = all)}
-        {--prune : Discard the dead-letter queue without replaying}';
+        {--prune : Discard the dead-letter queue without replaying}
+        {--prune-older-than= : Delete dead letters that failed more than N days ago}';
 
     protected $description = 'Replay dead-lettered Matomo hits back into the buffer.';
 
@@ -27,6 +28,31 @@ final class ReplayCommand extends Command
         if ($this->option('prune') === true) {
             $purged = $store->purge();
             $this->info(sprintf('Discarded %d dead-letter %s.', $purged, $this->plural($purged)));
+
+            return self::SUCCESS;
+        }
+
+        $olderThan = $this->option('prune-older-than');
+        if ($olderThan !== null) {
+            // Rejected rather than coerced. `(int) 'soon'` is 0, and 0 days means "delete
+            // the entire queue" — the widest possible action arrived at by silently
+            // misreading a typo. A retention window is the one option here where a wrong
+            // value is unrecoverable.
+            if (! is_string($olderThan) || ! ctype_digit($olderThan) || (int) $olderThan < 1) {
+                $this->error('--prune-older-than needs a whole number of days, 1 or greater.');
+
+                return self::FAILURE;
+            }
+
+            $days = (int) $olderThan;
+            $deleted = $store->pruneOlderThan($days);
+            $this->info(sprintf(
+                'Deleted %d dead-letter %s older than %d %s.',
+                $deleted,
+                $this->plural($deleted),
+                $days,
+                $days === 1 ? 'day' : 'days',
+            ));
 
             return self::SUCCESS;
         }

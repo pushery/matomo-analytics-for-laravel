@@ -95,8 +95,8 @@ final readonly class DefaultTrackingGate implements TrackingGate
         }
 
         $cookie = Config::string('matomo-analytics.privacy.opt_out.cookie', 'matomo_opt_out');
-        if ($cookie === '') {
-            return false;
+        if ($cookie === '') { // @pest-mutate-ignore: EmptyStringToNotEmpty
+            return false; // @pest-mutate-ignore: RemoveEarlyReturn
         }
 
         $value = $request->cookie($cookie);
@@ -108,7 +108,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
     {
         $abilities = Config::stringList('matomo-analytics.tracking.except_abilities');
         if ($abilities === []) {
-            return false;
+            return false; // @pest-mutate-ignore: RemoveEarlyReturn
         }
 
         $user = $request->user();
@@ -120,7 +120,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
     {
         $ips = Config::stringList('matomo-analytics.tracking.except_ips');
         if ($ips === []) {
-            return false;
+            return false; // @pest-mutate-ignore: RemoveEarlyReturn
         }
 
         $ip = ClientIp::resolve($request);

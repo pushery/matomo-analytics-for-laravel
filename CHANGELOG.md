@@ -4,6 +4,60 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-08-19
+
+**This release starts deleting something, and that is the one thing to decide before you
+upgrade.** Batches that gave up on delivery are parked in `matomo_dead_letters`, and until now
+nothing ever removed them — the two commands that can are both things a person has to run, so
+the installation where nothing goes wrong is exactly the one whose table only grew. A daily
+prune now clears entries older than 30 days. If you have been treating that table as a
+permanent archive, set `batch.dead_letter.retention_days` to `0` first.
+
+Everything else is the package keeping promises it had already made: its dependency list says
+component-only, and shipped code no longer contradicts that; its bot list says it tracks the
+AI-crawler landscape, and it is current again.
+
+### Added
+
+- **Dead letters are now deleted after 30 days**, by a daily scheduled prune. Until now
+  nothing ever removed them: `matomo:replay` deletes an entry when it re-queues it and
+  `--prune` empties the queue on demand, but both need someone to run them — so an
+  installation where nothing goes wrong accumulated the table forever, one full batch of hits
+  per row. Set `batch.dead_letter.retention_days` to `0` to keep the old behavior, or lower it if
+  your queue is large. `matomo:replay --prune-older-than=N` does it by hand.
+
+  There is a second reason beyond disk. A hit's timestamp is stamped when the payload is
+  built, so replaying a month-old dead letter sends a month-old timestamp — and Matomo refuses
+  a backdated hit older than about a day unless the request carries `token_auth`. Without one
+  it records the hit at today's date instead, moving old visits into the current report. An
+  entry nobody has looked at in a month is past the point where replaying it helps.
+
+- Two AI crawler tokens in the shipped bot list, `ExaSearchBot` and `Lightpanda`, taking it
+  from 160 to 162. The weekly sync had been generating these updates since 2026-06-29 and
+  pushing them to a branch, but the step that opens the pull request was failing silently, so
+  none of them reached a release. If you rely on `bots.*` to keep crawler traffic out of your
+  analytics, those two were being counted as visitors.
+
+### Fixed
+
+- **The package no longer calls any Laravel Foundation global helper in shipped code**, which
+  is what its component-only dependency list has always promised. Four `config()` calls in the
+  migrations and one translation helper in the publishable privacy-policy view would have
+  fataled on an install that has the `illuminate/*` components but not `laravel/framework` —
+  the migrations at the worst possible moment, since they run when the package is first
+  installed. They now go through `Illuminate\Support\Facades`, which the package does depend on.
+
+  The guard that was supposed to catch this searched only `src/` and `config/`. It searches the
+  whole shipped tree now.
+
+- The `failed_at` index on the dead-letter table is back. It shipped originally, was removed
+  in 0.19.0 because no query read it, and is now the column the retention prune filters on.
+
+- The AI-crawler sync now fails when it cannot open its pull request, instead of reporting
+  success. Seven weekly runs in a row were green while delivering nothing, and a green check
+  on a sync job reads as "the list is current". It also reuses one branch rather than opening
+  a new one per run.
+
 ## [0.20.0] - 2026-08-19
 
 **This release is about what your error dashboard shows you.** A Matomo endpoint that

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Buffer;
 
 use Generator;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\HitBuffer;
@@ -167,6 +168,6 @@ final class FileHitBuffer implements HitBuffer
 
     private function dir(): string
     {
-        return rtrim(Config::string('matomo-analytics.batch.path', storage_path('app/matomo-analytics')), '/');
+        return rtrim(Config::string('matomo-analytics.batch.path', App::storagePath('app/matomo-analytics')), '/');
     }
 }
