@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use MatomoAnalytics\Support\Config;
 
 // Holds batches that exhausted delivery (a poison payload Matomo permanently
 // rejects, or transient failures past batch.max_attempts). Nothing is lost: the
@@ -36,8 +37,6 @@ return new class extends Migration
 
     private function table(): string
     {
-        $table = config('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
-
-        return is_string($table) ? $table : 'matomo_dead_letters';
+        return Config::string('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
     }
 };

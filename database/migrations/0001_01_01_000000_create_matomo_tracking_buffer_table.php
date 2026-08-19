@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use MatomoAnalytics\Support\Config;
 
 // Backs the database driver of the cross-request batch buffer. It is only read
 // and written when the package runs in batch mode with the database driver;
@@ -30,8 +31,6 @@ return new class extends Migration
 
     private function table(): string
     {
-        $table = config('matomo-analytics.batch.table', 'matomo_tracking_buffer');
-
-        return is_string($table) ? $table : 'matomo_tracking_buffer';
+        return Config::string('matomo-analytics.batch.table', 'matomo_tracking_buffer');
     }
 };

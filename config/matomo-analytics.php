@@ -84,6 +84,29 @@ return [
         'dead_letter' => [
             'enabled' => true,
             'table' => 'matomo_dead_letters',
+
+            // How long a dead-lettered batch is kept before it is deleted, in days.
+            // `0` keeps them forever — the same convention as `--max-runs`, `--max-time`
+            // and `--memory`, where 0 means "no limit".
+            //
+            // ON by default, and that is a deliberate choice rather than a default that
+            // happened. Two reasons, and the second is the one specific to this package:
+            //
+            //  1. Nothing else ever deletes from this table. `matomo:replay` removes an
+            //     entry it re-queues and `--prune` empties the queue on demand — both need
+            //     a human. An installation where nothing goes wrong never runs either, so
+            //     the table only grows, and its rows carry a longText payload each.
+            //  2. An old dead letter is not merely stale, it is misleading to replay.
+            //     `cdt` is stamped when the payload is BUILT, so a replayed batch carries
+            //     its original timestamp — and Matomo refuses a `cdt` older than about a
+            //     day unless the request carries `token_auth`. Without a token the hit is
+            //     recorded at today's date instead, which quietly moves month-old visits
+            //     into the current report.
+            //
+            // 30 days is far beyond any realistic diagnosis window and well short of the
+            // point where the table becomes a problem. Set it to `0` if you would rather
+            // keep everything, or lower it if the queue is large.
+            'retention_days' => env('MATOMO_DEAD_LETTER_RETENTION_DAYS', 30),
         ],
     ],
 

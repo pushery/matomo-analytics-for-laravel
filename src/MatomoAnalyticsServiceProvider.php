@@ -105,6 +105,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->registerMiddleware();
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();
+        $this->registerScheduledDeadLetterPrune();
         $this->registerTerminatingFlush();
 
         if ($this->app->runningInConsole()) {
@@ -162,6 +163,43 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             // flush must not hold the mutex for the framework default of 1440 minutes
             // (24h), which would silently stall the every-minute drain for a full day.
             $schedule->command('matomo:flush')->everyMinute()->withoutOverlapping(10);
+        });
+    }
+
+    /**
+     * Delete dead letters past the retention window, once a day.
+     *
+     * NOT gated on `mode === 'batch'`, unlike the flush above, and that is the easy mistake
+     * here: a batch is dead-lettered from BOTH delivery modes — `SendHitsJob` parks an
+     * exhausted batch in queue mode, the flusher does it in batch mode — so a prune that
+     * only registered for batch would leave the queue-mode table growing exactly as it does
+     * today.
+     */
+    private function registerScheduledDeadLetterPrune(): void
+    {
+        if (! Config::bool('matomo-analytics.batch.dead_letter.enabled', true)) {
+            return;
+        }
+
+        // The fallback is 30 because the SHIPPED config says 30, and those two have to
+        // agree — `ConfigFallbackParityTest` enforces it, and it caught this line reading 0.
+        // The reason is not tidiness: a consumer whose published config predates this key,
+        // or who trimmed it, would silently get the opposite behavior from the one the file
+        // they are reading describes, with nothing to notice it by.
+        //
+        // "Keep forever" is therefore 0, not null — the same convention this package already
+        // uses for --max-runs, --max-time and --memory, where 0 means "no limit". A null or
+        // unparsable value reads as absent and gets the shipped default, which is exactly
+        // what the parity rule asks for.
+        $days = Config::int('matomo-analytics.batch.dead_letter.retention_days', 30);
+        if ($days < 1) {
+            return;
+        }
+
+        $this->callAfterResolving(Schedule::class, static function (Schedule $schedule) use ($days): void {
+            $schedule->command('matomo:replay', ['--prune-older-than' => (string) $days])
+                ->daily()
+                ->withoutOverlapping(10);
         });
     }
 

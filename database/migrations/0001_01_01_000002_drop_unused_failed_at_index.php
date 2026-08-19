@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use MatomoAnalytics\Support\Config;
 
 // The dead-letter table shipped with an index on failed_at that no query ever used:
 // the recent list orders by id, the replay walks by id, the cleanup deletes by id.
@@ -64,8 +65,6 @@ return new class extends Migration
 
     private function table(): string
     {
-        $table = config('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
-
-        return is_string($table) ? $table : 'matomo_dead_letters';
+        return Config::string('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
     }
 };

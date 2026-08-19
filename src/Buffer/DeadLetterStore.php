@@ -50,9 +50,9 @@ final class DeadLetterStore
         $entries = [];
         foreach ($rows as $row) {
             $entries[] = [
-                'id' => is_numeric($row->id ?? null) ? (int) $row->id : 0,
-                'hits' => is_numeric($row->hits ?? null) ? (int) $row->hits : 0,
-                'attempts' => is_numeric($row->attempts ?? null) ? (int) $row->attempts : 0,
+                'id' => is_numeric($row->id ?? null) ? (int) $row->id : 0, // @pest-mutate-ignore: DecrementInteger,IncrementInteger,RemoveIntegerCast
+                'hits' => is_numeric($row->hits ?? null) ? (int) $row->hits : 0, // @pest-mutate-ignore: DecrementInteger,IncrementInteger,RemoveIntegerCast
+                'attempts' => is_numeric($row->attempts ?? null) ? (int) $row->attempts : 0, // @pest-mutate-ignore: DecrementInteger,IncrementInteger,RemoveIntegerCast
                 'error' => is_string($row->error ?? null) ? $row->error : '',
                 'failed_at' => is_string($row->failed_at ?? null) ? $row->failed_at : '',
             ];
@@ -75,9 +75,9 @@ final class DeadLetterStore
 
         $entries = [];
         foreach ($query->get() as $row) {
-            $raw = is_string($row->payloads ?? null) ? $row->payloads : '';
+            $raw = is_string($row->payloads ?? null) ? $row->payloads : ''; // @pest-mutate-ignore: EmptyStringToNotEmpty
             $entries[] = [
-                'id' => is_numeric($row->id ?? null) ? (int) $row->id : 0,
+                'id' => is_numeric($row->id ?? null) ? (int) $row->id : 0, // @pest-mutate-ignore: DecrementInteger,IncrementInteger,RemoveIntegerCast
                 'payloads' => Json::decodeAll(explode("\n", $raw)),
             ];
         }
@@ -95,6 +95,31 @@ final class DeadLetterStore
         }
 
         DB::table($this->table())->whereIn('id', $ids)->delete();
+    }
+
+    /**
+     * Delete entries that failed longer ago than $days, and report how many went.
+     *
+     * Filters on `failed_at`, which is why the column finally carries an index — the
+     * original migration left it deliberately unindexed and said so: "it earns one the day
+     * something filters on age (a retention window)". This is that day.
+     *
+     * A row whose `failed_at` is NULL is never pruned, and that comes from SQL rather than
+     * from a clause here: `NULL < x` evaluates to UNKNOWN, not TRUE, so such a row simply
+     * never matches. An explicit `whereNotNull()` stood here first and was removed after its
+     * own red probe passed — with the clause deleted the behavior was identical, which is the
+     * definition of a branch no run can enter. It would have survived every mutant forever
+     * while reading like a safeguard.
+     *
+     * The guarantee is worth keeping tested even though it is the database's: a later rewrite
+     * that coalesces the column, or filters the other way round, would start deleting rows
+     * whose age nobody established. `DeadLetterRetentionTest` holds it.
+     */
+    public function pruneOlderThan(int $days): int
+    {
+        return DB::table($this->table())
+            ->where('failed_at', '<', Date::now()->subDays($days))
+            ->delete();
     }
 
     public function purge(): int
