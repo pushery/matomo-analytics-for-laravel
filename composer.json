@@ -41,6 +41,7 @@
         "illuminate/redis": "^12.0 || ^13.0",
         "illuminate/routing": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0",
+        "illuminate/translation": "^12.0 || ^13.0",
         "illuminate/view": "^12.0 || ^13.0"
     },
     "require-dev": {

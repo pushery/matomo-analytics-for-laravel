@@ -157,6 +157,27 @@ final class SendHitsJob implements ShouldQueue
      */
     private function exhaust(DeadLetterStore $deadLetters, Throwable $e): void
     {
+        // THE OPT-OUT, honored on the queue path too. The dead-letter migration has always
+        // documented `batch.dead_letter.enabled = false`, and `BufferFlusher` has always
+        // respected it — but only for BATCH mode. Queue mode reached `record()`
+        // unconditionally, so an installation that switched the store off still had rows
+        // written to it, and an installation that suppressed the package migrations got
+        // "Undefined table" in place of its actual delivery error.
+        //
+        // The migration's wording, "then failed batches stay in the buffer", describes batch
+        // mode; queue mode has no buffer to stay in. Its honest equivalent is the job failing
+        // the ordinary way, which is what `fail()` does: the batch lands in `failed_jobs`,
+        // visible and re-runnable.
+        //
+        // `fail()` and NOT `throw`, deliberately. Rethrowing would hand the exception to the
+        // application's own handler — exactly the behavior 0.20.0 removed, and it would make
+        // `resilience.never_throw` untrue again for the mode most installations run.
+        if (! Config::bool('matomo-analytics.batch.dead_letter.enabled', true)) {
+            $this->fail($e);
+
+            return;
+        }
+
         // Record before deleting: if the dead-letter write throws, the job is neither
         // deleted nor released, so the worker's own handling still owns the batch and
         // the hits are not lost between the two steps.

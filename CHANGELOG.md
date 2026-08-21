@@ -4,6 +4,65 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-08-21
+
+### Added
+
+- **`MATOMO_JS_ENABLED` turns the client-side tracker off from the environment.** `js.enabled`
+  was the one switch in that block with no env seam, and the default is unchanged — but a
+  deployment whose `config/matomo-analytics.php` is template-managed had no supported way to say
+  no. Editing the literal there is reverted by the next sync, silently: the switch reads "off"
+  until one day it does not, and nothing announces it.
+
+  It governs **both** doors that put tracking into a page — `@matomoScript` and the `<noscript>`
+  pixel behind `@matomoNoscript`. `@matomoWebVitals` has its own switch and ships off;
+  `@matomoOptOut` is not tracking and keeps working. That table is now in the client-side guide,
+  because the list is easy to get wrong from memory: a consuming project's audit named two of the
+  four directives, and the two it missed were the pixel and the Web Vitals reporter.
+
+- **`matomo:test` now names settings the running application cannot see.** A configuration cache
+  built before a package update, and never rebuilt, is the whole truth at runtime — the package's
+  recursive config merge does not run at all when the config is cached — so a setting added since
+  is simply absent. Nothing throws; the code fallback answers instead, which is usually even
+  correct. Usually is not always, and the exceptions are the settings you set on purpose.
+
+  Advisory, never fatal: the command is asked when something is already wrong, and turning a
+  diagnostic into a failure removes the diagnosis.
+
+### Fixed
+
+- **`MatomoFake::assertTracked()` now says which type its callback receives.** Asking by an inner
+  hit type matches a hit decorated with `CustomParameters`, and the callback then gets the
+  DECORATOR rather than the inner hit — so the natural-looking
+  `fn (SiteSearch $s) => …` raises a TypeError as soon as anybody wraps that hit. The behavior is
+  unchanged and was already correct; what was missing is the sentence that stops you writing the
+  narrow form. Narrow inside the body instead: `fn (Hit $hit) => $hit instanceof SiteSearch && …`.
+
+- **`illuminate/translation` is now declared, and on a lean install the shipped privacy-policy
+  partial no longer fatals.** The package ships translations for seven locales, registers them
+  from its service provider and renders them from a Blade partial — but never named the
+  component that provides the `translator` binding, and no declared component pulls it in. On a
+  full `laravel/framework` install nothing showed; on the slim install this package's separate
+  `illuminate/*` requirements exist for, rendering the partial threw.
+
+- **The daily dead-letter prune no longer fails when the table does not exist.** 0.21.0
+  introduced that prune and ran it unconditionally, so an installation that suppresses the
+  package migrations — or switches the dead-letter store off — got an "Undefined table" error
+  every night. That is the opposite of what 0.21.0 set out to do. A cleanup task has nothing to
+  report when the thing it cleans up is absent.
+
+- **`batch.dead_letter.enabled = false` now takes effect in `queue` mode, not only in `batch`
+  mode.** The migration has always documented the opt-out and the batch flusher has always
+  honored it, but the queued delivery job wrote to the store regardless — so switching it off
+  left rows being written to a store you had switched off.
+
+  What the opt-out means depends on the mode, and the two differ: in `batch` mode the failed
+  batch stays in the buffer; in `queue` mode there is no buffer to stay in, so the job fails the
+  ordinary way and the batch lands in `failed_jobs`. Both are visible and neither loses hits.
+  The migration comment now says both, because its single clause was true for batch users and
+  misleading for queue users.
+
+
 ## [0.21.0] - 2026-08-19
 
 **This release starts deleting something, and that is the one thing to decide before you
