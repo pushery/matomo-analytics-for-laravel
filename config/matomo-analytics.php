@@ -321,7 +321,16 @@ return [
     */
 
     'js' => [
-        'enabled' => true,
+        // The client-side tracker as a whole. It governs BOTH doors that put tracking into a
+        // page: `@matomoScript` and the `<noscript>` pixel (`@matomoNoscript`) — both go
+        // through the same `active()` check. `@matomoWebVitals` has its own switch below and
+        // ships off; `@matomoOptOut` is not tracking and keeps working either way.
+        //
+        // It has an env seam because a consumer who wants the client tracker structurally off
+        // may not be able to edit this file: where it is template-managed, the extension point
+        // is the MATOMO_* keys, and an edit to the literal is silently reverted by the next
+        // sync — the switch reads "off" until one day it does not, and nobody sees it.
+        'enabled' => env('MATOMO_JS_ENABLED', true),
         'host' => env('MATOMO_JS_HOST'),  // optional separate host for matomo.js, e.g. a Matomo Cloud CDN: https://cdn.matomo.cloud/your-instance.matomo.cloud (tracking still goes to MATOMO_HOST)
         'tag_manager' => null,        // full MTM container URL; when set, mtm.js renders instead of matomo.js
         'enable_link_tracking' => true,

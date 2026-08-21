@@ -142,6 +142,18 @@ final class MatomoFake implements Tracker
      * CustomParameters matches its inner type too, so wrapping a hit never breaks
      * an assertion; the callback still receives the recorded (outer) hit.
      *
+     * ⚠️ THE CALLBACK MUST ACCEPT `Hit`, NOT THE TYPE YOU ASKED FOR. That is the direct
+     * consequence of the sentence above and it is easy to miss, because the narrow form reads
+     * naturally:
+     *
+     *     $fake->assertTracked(SiteSearch::class, fn (SiteSearch $s) => $s->keyword === 'hats');
+     *
+     * Ask by an inner type for a hit somebody decorated with `CustomParameters::for()` and the
+     * callback receives the DECORATOR — so that closure raises a TypeError. Narrow inside the
+     * body instead, where it costs one `instanceof` and cannot surprise anybody:
+     *
+     *     fn (Hit $hit) => $hit instanceof SiteSearch && $hit->keyword === 'hats'
+     *
      * @param  class-string<Hit>  $type
      * @param  (Closure(Hit): bool)|null  $callback
      */

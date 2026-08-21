@@ -79,6 +79,12 @@ final class FileHitBuffer implements HitBuffer
                 continue;
             }
 
+            // `??=`, and it is LOAD-BEARING -- not a micro-optimization. appendHandle()
+            // takes LOCK_EX, and a plain `=` evaluates the right-hand side (blocking on that
+            // lock) BEFORE the previous handle is released. The second overflow line would
+            // then wait on a lock this same process is still holding: a self-deadlock, with
+            // the flusher hung and nothing in the log. Measured -- the mutation survey hangs
+            // indefinitely on exactly this substitution.
             $remainder ??= $this->appendHandle($queue);
             $remainder->fwrite($line."\n");
         }

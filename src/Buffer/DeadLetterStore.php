@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Buffer;
 
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -117,6 +118,18 @@ final class DeadLetterStore
      */
     public function pruneOlderThan(int $days): int
     {
+        // A MISSING TABLE IS NOTHING TO CLEAN UP, not an error. An installation can suppress
+        // the package migrations (`ignoreMigrations()`) or switch the store off entirely, and
+        // the daily prune then ran against a table that was never created — throwing
+        // "Undefined table" every night, in a release whose whole point was to REMOVE noise
+        // from the error dashboard. Reported from a consumer within hours of 0.21.0.
+        //
+        // A cleanup command that fails on the absence of the thing it cleans up has no state
+        // to report.
+        if (! Schema::hasTable($this->table())) {
+            return 0;
+        }
+
         return DB::table($this->table())
             ->where('failed_at', '<', Date::now()->subDays($days))
             ->delete();
