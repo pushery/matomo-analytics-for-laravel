@@ -45,7 +45,7 @@
         "illuminate/view": "^12.0 || ^13.0"
     },
     "require-dev": {
-        "larastan/larastan": "^3.0",
+        "larastan/larastan": "3.10.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
@@ -54,11 +54,12 @@
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.0",
         "pestphp/pest-plugin-laravel": "^5.0",
-        "pestphp/pest-plugin-phpstan": "^5.0",
-        "pestphp/pest-plugin-rector": "^5.0",
+        "pestphp/pest-plugin-phpstan": "5.1.0",
+        "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "rector/rector": "^2.0",
-        "spaze/phpstan-disallowed-calls": "^4.12"
+        "phpstan/phpstan": "2.2.8",
+        "rector/rector": "2.6.3",
+        "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
         "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",

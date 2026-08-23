@@ -4,6 +4,45 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-08-23
+
+### Added
+
+- **Two more AI crawlers are recognized: `Meta-ExternalTest` and `Reflectionbot`.** Refreshed from
+  the upstream catalog by the weekly sync, bringing the list to 164 tokens. Nothing else changed —
+  the rest of that diff is the generator reflowing five entries per line.
+
+  Tokens are matched case-insensitively as SUBSTRINGS, so a careless entry would classify real
+  visitors as bots and silently drop their page views. Both were checked against ordinary Chrome,
+  Safari, Firefox, curl, Postman, Googlebot, bingbot and `facebookexternalhit` user agents before
+  merging: no false positives, and no duplicate token in the list.
+
+### Changed
+
+- **`ReportClient` now declares the 22 convenience helpers it always answered to.** The facade
+  advertised all 27 methods and pointed at a contract carrying 5, so the documented way to reach
+  the read side — inject `ReportClient` — could not call `visitsSummary()` under static analysis
+  while the README advertised it. It ran fine; the promise simply was not written down anywhere a
+  type checker could read. Same API, two different answers depending on how you reached it.
+
+  **Implementing the contract is still a five-method job.** Every helper is one call to `get()`
+  with a fixed Matomo method name, and `ResolvesCommonReports` — which declares `get()` abstract
+  for exactly this purpose — supplies all 22 from it. An existing implementation adds one `use`
+  statement; both shipped implementations needed no change at all, which is the measurement
+  behind calling this cheap rather than the assumption.
+
+  Classified as a **minor** rather than a patch: it widens a published interface, so a
+  third-party implementation that did not use the trait must add it. None is known, and on 0.x a
+  minor is the right vehicle for that.
+
+  A second interface was considered and rejected. It would leave anyone who injects
+  `ReportClient` — the bound name, the documented one — looking at five methods while the facade
+  advertises 27 — the reported defect left in place under a new name. A discoverability
+  problem is not fixed by adding something else to discover.
+
+  The facade's advertised surface and the contract are now held against each other in both
+  directions, so the two can no longer drift apart the way they had.
+
 ## [0.22.0] - 2026-08-21
 
 ### Added
