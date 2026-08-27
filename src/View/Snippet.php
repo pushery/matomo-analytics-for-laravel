@@ -40,11 +40,24 @@ final readonly class Snippet
         $path = $this->js(URL::to(Config::string('matomo-analytics.web_vitals.path', 'matomo-analytics/web-vitals')));
         $names = '['.implode(',', array_map($this->js(...), Config::stringList('matomo-analytics.web_vitals.metrics'))).']';
 
+        // THE GLUE WAITS INSTEAD OF ASSUMING. It read `window.webVitals` the instant it
+        // parsed, which only works if the library above it blocked the parser — so the
+        // measurement of Core Web Vitals was itself costing a render-blocking request, and
+        // the numbers it reported were worse for its own presence. Deferring the library and
+        // running the glue on DOMContentLoaded keeps the ordering (`defer` scripts execute in
+        // order, before that event) while taking both off the critical path.
+        //
+        // `readyState` is checked first for the one case the event cannot cover: a consumer
+        // who places the directive at the end of `<body>`, where the document may already be
+        // interactive by the time this runs and DOMContentLoaded will never fire again.
         $glue = implode("\n", [
             '(function(){',
-            '  var wv=window.webVitals; if(!wv){return;}',
-            '  var send=function(m){try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType})],{type:"application/json"}));}catch(e){}};',
-            '  '.$names.'.forEach(function(n){var f=wv["on"+n];if(f){f(send);}});',
+            '  var start=function(){',
+            '    var wv=window.webVitals; if(!wv){return;}',
+            '    var send=function(m){try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType})],{type:"application/json"}));}catch(e){}};',
+            '    '.$names.'.forEach(function(n){var f=wv["on"+n];if(f){f(send);}});',
+            '  };',
+            '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',
             '})();',
         ]);
 
@@ -52,7 +65,7 @@ final readonly class Snippet
 
         $library = Config::nullableString('matomo-analytics.web_vitals.library');
         if ($library !== null) {
-            return '<script'.$this->nonceAttribute($nonce).' src="'.e($library).'"></script>'."\n".$script;
+            return '<script'.$this->nonceAttribute($nonce).' defer src="'.e($library).'"></script>'."\n".$script;
         }
 
         return $script;

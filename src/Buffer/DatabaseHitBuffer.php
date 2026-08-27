@@ -37,7 +37,9 @@ final class DatabaseHitBuffer implements HitBuffer
         }
 
         $ref = Str::uuid()->toString();
-        $stale = Date::now()->subMinutes(Config::int('matomo-analytics.batch.stale_after_minutes', 15));
+        // Floored at one minute for the reason RedisHitBuffer spells out: at 0 every claim
+        // is already expired when it is made, so at-least-once becomes guaranteed twice.
+        $stale = Date::now()->subMinutes(max(1, Config::int('matomo-analytics.batch.stale_after_minutes', 15)));
 
         $ids = DB::table($this->table())
             ->where(function (Builder $query) use ($stale): void {

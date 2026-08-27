@@ -10,6 +10,7 @@ use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Events\HitsDeadLettered;
 use MatomoAnalytics\Events\TrackingSent;
 use MatomoAnalytics\Exceptions\TrackingSendException;
+use MatomoAnalytics\Exceptions\UnreadableBatchException;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
 use Throwable;
@@ -39,17 +40,49 @@ final readonly class BufferFlusher
         private ConsecutiveFailures $failures,
     ) {}
 
+    /**
+     * Drain the buffer and report the hits delivered.
+     *
+     * The count nearly every caller wants. A caller that has to tell a quiet run apart from
+     * a losing one — both end at zero delivered — asks `drain()` instead.
+     */
     public function flush(): int
+    {
+        return $this->drain()->delivered;
+    }
+
+    public function drain(): FlushOutcome
     {
         $size = max(1, Config::int('matomo-analytics.batch.size', 50));
         $max = max(1, Config::int('matomo-analytics.batch.max_per_flush', 2000));
         $processed = 0;
         $delivered = 0;
+        $deadLettered = 0;
 
         while ($processed < $max) {
             $batch = $this->buffer->claim(min($size, $max - $processed));
-            if ($batch->isEmpty()) {
+            if ($batch->claimedNothing()) {
                 break;
+            }
+
+            // CLAIMED ROWS, NO READABLE PAYLOADS — a poison pill of a different kind, and the
+            // loop used to stop dead on it. `isEmpty()` was the break condition, so a batch
+            // whose payloads no longer decode read as "the buffer is drained": the rows kept
+            // their claim, went stale, were reclaimed, failed to decode again, and every hit
+            // behind them waited forever. No error, no dead letter, no failing flush.
+            //
+            // There is nothing to deliver and nothing to replay — a payload that will not
+            // decode cannot be sent to Matomo by anyone. So it is reported once and acked
+            // away, which is the only disposal that lets the rest of the buffer move.
+            if ($batch->isEmpty()) {
+                $this->reporter->report(
+                    new UnreadableBatchException('A buffered batch held no decodable payload and was discarded.'),
+                    ['stage' => 'flush'],
+                );
+                $this->buffer->ack($batch);
+                $processed += $size;
+
+                continue;
             }
 
             $outcome = $this->deliver($batch);
@@ -62,10 +95,12 @@ final readonly class BufferFlusher
 
             if ($outcome === self::DELIVERED) {
                 $delivered += $count;
+            } else {
+                $deadLettered++;
             }
         }
 
-        return $delivered;
+        return new FlushOutcome($delivered, $deadLettered);
     }
 
     private function deliver(BufferBatch $batch): int
@@ -145,7 +180,18 @@ final readonly class BufferFlusher
     {
         // Record first, then ack: if recording throws, the batch stays claimed and
         // is reclaimed as stale later, so a dead-letter write failure never loses hits.
-        $this->deadLetters->record($batch->payloads, $attempts, $e->getMessage());
+        //
+        // A write that could not happen gets the same treatment as one that threw. `record()`
+        // now answers false when there is no table to write to, and acking on that answer
+        // would drop the batch to make room for a row that was never written. Releasing it
+        // instead puts the hits back at the head of the buffer, where the next flush finds
+        // them — the outage is still an outage, but it is not also a loss.
+        if (! $this->deadLetters->record($batch->payloads, $attempts, $e->getMessage())) {
+            $this->buffer->release($batch);
+
+            return;
+        }
+
         $this->buffer->ack($batch);
 
         if (Config::bool('matomo-analytics.events', true)) {

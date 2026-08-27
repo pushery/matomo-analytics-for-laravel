@@ -38,6 +38,31 @@ final class Config
         return is_string($value) && $value !== '' ? $value : null;
     }
 
+    /**
+     * A nullable string that still has a floor when the key is simply not there.
+     *
+     * `nullableString()` cannot tell "the operator switched this off" from "this key is
+     * absent", and for `web_vitals.throttle` those two mean opposite things: the first is a
+     * deliberate `null`, the second is a consumer whose published config predates the key —
+     * or who trimmed it — and who then runs an unauthenticated POST endpoint with no rate
+     * limit at all. It was the one security-relevant read in the package with no floor
+     * underneath it; `string()`, `int()` and `bool()` all carry an explicit default and
+     * `stringList()` already falls back to the shipped file.
+     *
+     * PRESENCE is the discriminator, not emptiness: `has()` is true for a key declared as
+     * null, so an explicit opt-out is honored and an absent key gets what the package ships.
+     */
+    public static function nullableStringOrShipped(string $key): ?string
+    {
+        if (ConfigFacade::has($key)) {
+            return self::nullableString($key);
+        }
+
+        $shipped = self::shipped($key);
+
+        return is_string($shipped) && $shipped !== '' ? $shipped : null;
+    }
+
     public static function int(string $key, int $default = 0): int
     {
         $value = ConfigFacade::get($key);

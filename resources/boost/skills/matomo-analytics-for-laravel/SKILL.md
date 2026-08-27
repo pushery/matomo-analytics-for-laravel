@@ -34,16 +34,20 @@ The service provider is registered automatically through package discovery.
 
 ### 2. Configure
 
-Two environment variables are the whole minimum:
+Three environment variables are the whole minimum:
 
 ```dotenv
+MATOMO_ENABLED=true
 MATOMO_HOST=https://your-instance.matomo.cloud
 MATOMO_SITE_ID=1
 ```
 
-Tracking is a **no-op until both are set**, so the package stays inert in local
-and CI environments — do not add conditionals around it for that. Verify a real
-connection with `php artisan matomo:test`.
+`MATOMO_ENABLED` is the master switch and it ships **off**: nothing is tracked
+until it is true, whatever else is configured. Host and site id are a second
+belt — with the switch on but either of them missing, tracking is still a no-op.
+So the package stays inert in local and CI environments on its own, and you
+should not add conditionals around it for that. Verify a real connection with
+`php artisan matomo:test`, which names whichever of the three is holding it back.
 
 Publish everything at once, or only the configuration file:
 
@@ -96,7 +100,10 @@ setting worth thinking about:
   response. Needs a queue worker.
 - `batch` — hits buffer across requests in a `database`, `redis`, or `file`
   buffer and flush in large batches via `matomo:flush` or `matomo:work`.
-  Requires publishing the migrations for the `database` driver.
+  The `database` driver's migrations are registered automatically, so
+  `php artisan migrate` creates the tables — publish them only if you want to own
+  them, and then call `MatomoAnalyticsServiceProvider::ignoreMigrations()` from a
+  provider's `register()` so they are not registered twice.
 - `sync` — inline, for tests and low-volume apps.
 
 None of them let a Matomo outage surface in the application: delivery failures
@@ -117,14 +124,19 @@ Reading requires `MATOMO_TOKEN`; tracking does not.
 Every facade has a fake, so tracking is asserted rather than mocked:
 
 ```php
+use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\PageView;
 
 $fake = Matomo::fake();
 
 // exercise the code under test
 
-$fake->assertTracked(PageView::class, fn (PageView $hit): bool => $hit->title === 'Checkout');
+$fake->assertTracked(PageView::class, fn (Hit $hit): bool => $hit instanceof PageView && $hit->title === 'Checkout');
 ```
+
+Type the callback's parameter as `Hit`, not as the class in the first argument:
+the callback is offered **every** recorded hit, so a narrower type is a `TypeError`
+waiting for the first test that tracks two different things.
 
 `MatomoReports::fake()`, `MatomoGdpr::fake()`, and `MatomoAnnotations::fake()`
 follow the same shape.

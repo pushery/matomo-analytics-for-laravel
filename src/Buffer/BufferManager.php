@@ -9,8 +9,9 @@ use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Support\Config;
 
 /**
- * Resolves the configured batch buffer driver. (file and redis drivers arrive in
- * a later phase; until then any non-array driver uses the database buffer.)
+ * Resolves the configured batch buffer driver: array, file, redis, or database — the
+ * fallback for any name this does not recognize, so an unreadable driver setting degrades
+ * to the durable buffer rather than to none.
  */
 final class BufferManager
 {
