@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config as ConfigFacade;
+use Illuminate\Support\Facades\Redis;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Support\Config;
@@ -37,6 +38,7 @@ final class TestConnectionCommand extends Command
         }
 
         $this->reportConfigDrift();
+        $this->reportRedisEvictionPolicy();
 
         try {
             $result = $sender->send([$this->probe($connection)]);
@@ -55,6 +57,55 @@ final class TestConnectionCommand extends Command
         $this->info(sprintf('Matomo OK — test hit accepted at %s (HTTP %d).', $connection->trackingUrl(), $result->status));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Warn when the Redis buffer runs on an instance that is allowed to evict it.
+     *
+     * The buffer's durability claim -- claim a batch, remove it only on a confirmed 200 --
+     * holds for the `redis` driver only while Redis is not permitted to throw its keys away.
+     * The buffer sets no TTL on any of them, because they are pending work rather than
+     * cache; under an `allkeys-*` `maxmemory-policy` that makes them exactly as evictable as
+     * everything else in the keyspace.
+     *
+     * WHAT AN EVICTION LOOKS LIKE IS NOTHING. `LLEN` answers 0, the claim comes back empty,
+     * the flush ends, and `matomo:flush` prints "Flushed 0 Matomo hit(s)." and exits zero --
+     * the same output an idle minute produces. Hits vanish and every signal stays green,
+     * which is why this belongs in the command someone runs when they are already wondering
+     * where the data went.
+     *
+     * Advisory, never fatal, like every other line this command prints: it is a diagnostic,
+     * and a diagnostic that fails the run removes the diagnosis. Anything unreadable is
+     * skipped in silence -- a Redis that does not answer CONFIG is a managed instance with
+     * the command disabled, which is common and is not itself a finding.
+     */
+    private function reportRedisEvictionPolicy(): void
+    {
+        if (Config::string('matomo-analytics.mode', 'queue') !== 'batch'
+            || Config::string('matomo-analytics.batch.driver', 'database') !== 'redis') {
+            return;
+        }
+
+        try {
+            $policy = Redis::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default')
+                ->command('config', ['GET', 'maxmemory-policy']);
+        } catch (Throwable) {
+            return;
+        }
+
+        // phpredis answers with a map, predis with a flat list. Take the last string either
+        // way rather than indexing into a shape that depends on the extension.
+        $values = is_array($policy) ? array_values(array_filter($policy, is_string(...))) : [];
+        $value = $values === [] ? null : $values[count($values) - 1];
+
+        if ($value === null || ! str_starts_with($value, 'allkeys')) {
+            return;
+        }
+
+        $this->warn(sprintf(
+            'Redis maxmemory-policy is "%s", so the buffer can be evicted — buffered hits would disappear with no error and no failed flush. Use noeviction or a volatile-* policy; the setting is instance-wide, so a separate logical database does not help.',
+            $value,
+        ));
     }
 
     /**

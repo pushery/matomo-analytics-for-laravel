@@ -94,7 +94,15 @@ final class RedisHitBuffer implements HitBuffer
      */
     private function reclaimStale(Connection $connection): void
     {
-        $cutoff = Date::now()->subMinutes(Config::int('matomo-analytics.batch.stale_after_minutes', 15))->getTimestamp();
+        // A FLOOR OF ONE MINUTE, because zero inverts the guarantee. `stale_after_minutes`
+        // was the only batch value with no lower bound, and at 0 every claim is already
+        // expired the moment it is made: the next flush reclaims a batch that the current
+        // one is still sending, so at-least-once delivery becomes guaranteed double delivery
+        // and Matomo counts every hit twice. Every other bound in this class uses max(1, …);
+        // this one was simply missed.
+        $stale = max(1, Config::int('matomo-analytics.batch.stale_after_minutes', 15));
+
+        $cutoff = Date::now()->subMinutes($stale)->getTimestamp();
 
         $stale = $connection->command('zrangebyscore', [$this->processingSet(), '-inf', $cutoff]);
         if (! is_array($stale)) {

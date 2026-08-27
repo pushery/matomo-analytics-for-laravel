@@ -162,7 +162,19 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             // Bound the overlap lock to the run cadence: a hard-killed (SIGKILL/OOM)
             // flush must not hold the mutex for the framework default of 1440 minutes
             // (24h), which would silently stall the every-minute drain for a full day.
-            $schedule->command('matomo:flush')->everyMinute()->withoutOverlapping(10);
+            // IN THE BACKGROUND, because this runs inside the CONSUMER's scheduler. Without
+            // it Laravel's Event::run() calls finish() synchronously, so `schedule:run` waits
+            // for the flush -- and a flush waits on Matomo. A slow or unreachable instance
+            // therefore held up every other scheduled task in that minute, in an application
+            // that installed this package to have analytics rather than a queue of its own.
+            //
+            // The cost, stated because it is real: a background event does NOT throw on a
+            // non-zero exit, so the command's own FAILURE code stops reaching the scheduler.
+            // `matomo:flush` reports its state through the consecutive-failure counter and
+            // the TrackingFailed / HitsDeadLettered events, which is where a consumer should
+            // be listening anyway -- an exit code from a per-minute background task is not a
+            // channel anyone watches.
+            $schedule->command('matomo:flush')->everyMinute()->runInBackground()->withoutOverlapping(10);
         });
     }
 
@@ -199,6 +211,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule) use ($days): void {
             $schedule->command('matomo:replay', ['--prune-older-than' => (string) $days])
                 ->daily()
+                ->runInBackground()
                 ->withoutOverlapping(10);
         });
     }

@@ -4,6 +4,221 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-08-27
+
+### Added
+
+- **`symfony/http-foundation` and `symfony/http-kernel` are declared dependencies.** Both are
+  named in the package's own public API — `OptOut::enable()` returns a Symfony `Cookie`, the
+  middlewares type-hint its `Response`, the gate uses `IpUtils`, the controller throws
+  `NotFoundHttpException` — and neither was in `require`. They resolved anyway, transitively
+  through `illuminate/*`, which is exactly why nobody noticed. Same constraint the framework
+  uses, so nothing about resolution changes.
+
+- **`web_vitals.middleware`** names extra middleware for the ingest route. It is empty by
+  default and stays that way, because the browser beacons that route with `sendBeacon()` and
+  that carries no CSRF token. The consequence is now written down rather than left to be
+  discovered: no session is started on that path, so `tracking.track_authenticated` and
+  `tracking.except_abilities` see a guest there regardless of who is logged in. Set it to
+  `['web']` if you need those rules to apply, and exempt the one route from CSRF on your side.
+
+- **An index on `matomo_tracking_buffer.claimed_by`.** Three of the five buffer operations
+  filter on that column — reading the payloads back after a claim, acknowledging a delivered
+  batch, and releasing a failed one — and none of them had an index to use. A delivered batch
+  therefore cost two full scans of the buffer table and a released one cost two more, at up to
+  forty batches per flush run. That is invisible while the buffer is small and stops being
+  invisible exactly when a backlog builds, which is the situation the buffer exists for.
+
+  It ships as a new migration rather than an edit to the one that creates the table, so
+  existing installations get it too. Run `php artisan migrate` after upgrading.
+
+### Changed
+
+- **`@matomoWebVitals` no longer blocks the parser to measure how fast your page renders.**
+  The library tag carried neither `async` nor `defer`, and the inline glue read
+  `window.webVitals` the instant it parsed — so it had to block, and the numbers it reported
+  were worse for its own presence. The tag is `defer` now and the glue waits for
+  `DOMContentLoaded` (or starts immediately if the document is already parsed, for the
+  placement at the end of `<body>`). `defer` rather than `async` on purpose: deferred scripts
+  run in document order, so the glue still finds the library where `async` would race it.
+
+- **Both scheduled commands now run in the background.** They are registered on the
+  **consumer's** scheduler, and without `runInBackground()` Laravel calls `finish()`
+  synchronously — so `schedule:run` waited for a flush, and a flush waits on an HTTP call to
+  Matomo. A slow or unreachable instance held up every other task in that minute. The
+  trade-off, stated because it is real: a background event no longer throws on a non-zero exit,
+  so the command's exit code stops reaching the scheduler. The `TrackingFailed` and
+  `HitsDeadLettered` events are the channel for that, and they now fire from both delivery
+  modes.
+
+- **`batch` mode collects during the request and writes once at the end, as `queue` mode
+  already did.** Every tracked hit used to make its own `push()` — a database `INSERT` or a
+  Redis round trip depending on the driver — while the response was still being built. The two
+  modes paid very different prices for the same call and only one of them had a reason to. If
+  you call `Matomo::track()` outside a request lifecycle and rely on the buffer being written
+  immediately, call `Matomo::flush()`; the service provider already does this on terminate.
+  `TrackingQueued` now carries the request's hits in one event in `batch` mode, matching
+  `queue` mode, instead of one event per hit.
+
+- **`batch.stale_after_minutes` is floored at one minute.** It was the only batch value with no
+  lower bound, and zero inverts the guarantee: every claim is expired the moment it is made, so
+  the next flush reclaims a batch the current one is still sending and Matomo counts every hit
+  twice. All three buffer drivers apply the floor.
+
+- **AI-chatbot telemetry is recorded in the middleware's `terminate()`.** It ran after
+  `$next()` in `handle()`, which reads as "afterwards" and is not: the fetcher is still on the
+  wire while the payload is built and — in `sync` mode — while the call to Matomo completes.
+  The documentation already promised that this "costs the fetcher nothing", and that sentence
+  was only ever true of `terminate()`.
+
+- **`matomo:replay` now delivers through the channel your mode actually uses.** It pushed
+  every replayed hit into the buffer regardless of mode — and the buffer is only ever drained
+  in `batch` mode, because the scheduled flush is not registered for anything else. On the
+  shipped default (`queue`) the command deleted the dead-letter rows, filled a store nothing
+  reads, and printed "Replayed N hits". The hits were gone.
+
+  `batch` mode still goes through the buffer. `queue` mode dispatches a `SendHitsJob` per
+  entry, the same way the live path does. `sync` mode sends immediately — and if that send is
+  refused, the dead-letter row is **kept** and the command exits non-zero, rather than being
+  deleted for a delivery that did not happen.
+
+- **`DeadLetterStore::take()` returns a generator instead of an array.** It materialized every
+  row and its decoded payload tree at once. With a realistic Matomo payload (493 bytes of JSON,
+  50 payloads to a row) a decoded row costs about 86 KB against 24 KB on disk, so a two-thousand
+  row backlog came to roughly 168 MB before the first hit moved. `matomo:replay` now holds one
+  entry at a time. Code that calls `take()` and indexes into the result needs
+  `iterator_to_array()`; `foreach` is unaffected.
+
+- **The retention prune deletes in steps of 500 rather than in one statement.** Each row here
+  carries a whole batch in a `longText`, so an unbounded `DELETE` held the table for as long as
+  the outage that filled it — and on PostgreSQL left the dead tuples behind until autovacuum
+  caught up. The cutoff is computed once, before the loop, so a long prune cannot widen its own
+  window.
+
+### Security
+
+- **The Web Vitals endpoint could lose its rate limit without anyone changing it.** The route
+  read `web_vitals.throttle` with an accessor that cannot tell "the operator switched this off"
+  from "this key is absent" — and it was the only security-relevant read in the package with no
+  shipped fallback under it. A consumer whose published config predates the key, or who trimmed
+  the file to the keys they tune, ran an unauthenticated POST endpoint with no limit at all. An
+  absent key now falls back to the shipped `60,1`; an explicit `null` still switches it off.
+
+- **The measurement in a Web Vitals beacon is now bounded.** The metric name and the rating were
+  both held against allowlists; the one number in the payload was checked with `is_numeric()`
+  alone, which accepts any magnitude — so `1e400` cast to `INF` and an unauthenticated browser
+  POST could put a non-finite value into your reports, where it poisons every average it lands
+  in. Values must now be finite, non-negative, and no larger than an hour in milliseconds.
+
+### Fixed
+
+- **One unreadable row used to stop the whole buffer, permanently.** A batch whose payloads no
+  longer decode came back with a claim and zero payloads, and the flusher's exit condition read
+  that as "the buffer is drained". The rows kept their claim, went stale, were reclaimed, failed
+  to decode again — and every hit behind them waited forever, with no error, no dead letter and
+  no failing flush. Such a batch is now reported once and discarded, which is the only disposal
+  that lets the rest of the buffer move: a payload that will not decode cannot be sent to Matomo
+  by anyone, so there is nothing to dead-letter and nothing to replay.
+
+- **`SendHitsJob::failed()` now accepts `?Throwable`, which is what the framework passes.** A
+  job killed by `queue:work --timeout`, or failed through `Queue::failing()` with nothing
+  attached, arrives with a null — and a non-nullable parameter turned that into a `TypeError`
+  inside the worker's own failure handling, the one place an error has nowhere left to go.
+
+- **Every version heading in this changelog now resolves.** Thirty-one of them sat in square
+  brackets with no link definition anywhere in the file, so GitHub and Packagist rendered a
+  literal `[0.23.0]` where a compare link belonged.
+
+- **`matomo:flush` exits zero while losing every batch.** It reported failure only once the
+  consecutive-failure counter reached the alerting threshold, and that counter has exactly one
+  increment site in the package — in the *transient* branch. A wrong site id or host makes
+  Matomo answer `4xx`, every batch is dead-lettered as poison, and the run ends at zero
+  delivered: the same number a quiet minute produces, printed with the same line. A run that
+  delivered nothing **and** lost at least one batch now says so and exits non-zero. One poison
+  batch among delivered hits stays green, which is the dead-letter queue doing its job.
+
+- **`php artisan matomo:test` now reads Redis's `maxmemory-policy`** when the `redis` buffer is
+  in use, and warns on an `allkeys-*` policy. Under one of those the buffer's keys are as
+  evictable as any cache entry, and an eviction looks like nothing at all: `LLEN` answers 0,
+  the flush ends, and the command prints `Flushed 0 Matomo hit(s).` and exits zero. The
+  reliability guide now states the precondition, and that `maxmemory-policy` is instance-wide —
+  a separate logical database on the same server does not help.
+
+- **IPv6 anonymization produced an address that was not an address.** `anonymize_ip` split the
+  value on `:` and kept the first three groups, which is correct for the fully written-out form
+  and for no other. Any address carrying a `::` run — the ordinary way IPv6 is written — split
+  into empty elements, so `2001:db8::1` went to Matomo as `2001:db8:::`. Neither side complained:
+  Matomo stored what it was sent, and the geolocation simply missed. The address is now
+  normalized through `inet_pton` before the first 48 bits are kept, so every input form gives the
+  same, valid result. An IPv4-mapped address (`::ffff:192.0.2.1`) is anonymized as the IPv4
+  address it is, rather than collapsing to `::` along with every other mapped address.
+
+- **`HitsDeadLettered` now fires in `queue` mode.** The event was dispatched from exactly one
+  place in the package, and that place only runs in `batch` mode — so on the shipped default the
+  listener this documentation recommends as the alarm for parked hits never fired, while the
+  dead-letter table filled up. `TrackingFailed` still fires alongside it: one says the batch will
+  not be attempted again, the other says where it went.
+
+- **A missing dead-letter table no longer throws out of the delivery path.** Every read and write
+  on the store now checks for the table, as the retention prune already did. An installation that
+  calls `ignoreMigrations()` while leaving the dead-letter store switched on used to get a
+  `QueryException` for "Undefined table" in place of its actual delivery error. A batch that
+  cannot be parked now takes the honest route instead: the queued job fails into `failed_jobs`
+  where it is visible and re-runnable, and the buffered flusher releases the batch back into the
+  buffer rather than acknowledging it away.
+
+### Documentation
+
+- **The scaling guide now states the `redis` driver's boundary.** The buffer has no upper
+  bound — `push()` is an unconditional `RPUSH` and `batch.max_per_flush` limits draining, not
+  filling — so an outage turns straight into Redis memory at whatever rate your traffic
+  produces hits. The counter-pressure that exists is slow by design: a batch dead-letters only
+  after its full attempt window, roughly twenty-five minutes for fifty hits on the shipped
+  defaults. The page says what to watch (`LLEN`) and why sizing for steady state is the wrong
+  sizing.
+
+- **The bundled Boost skill said three things the source contradicts, and one of them
+  configured a package that tracks nothing.** Its setup step named two environment variables
+  as "the whole minimum" and left out `MATOMO_ENABLED` — the master switch that ships off and
+  that the tracking gate consults as its very first rule — while the next sentence advised
+  against looking for conditionals. Boost hands this file to a coding agent inside your
+  application, so it is followed rather than skimmed. It also asked for the migrations to be
+  published, which the package registers itself, and it taught the `assertTracked` callback
+  with a narrowed parameter type that throws as soon as a test tracks two different things.
+  Four arms now hold the skill against the source instead of against a reviewer's memory.
+
+- **A README badge disagreed with the package's own configuration.** The threshold behind it
+  was raised in an earlier release and only one of the places that state it moved, so the badge
+  on GitHub and Packagist showed a number the project no longer used. It is derived from the
+  configuration now instead of written down beside it.
+
+- **Seven documentation pages said something the source contradicts.** Two code examples could
+  not run as written — the `sync`-mode example was missing the master switch and the
+  connection, and the reporting example called a function that does not exist anywhere. The
+  database reference claimed neither table is touched outside `batch` mode, when the
+  dead-letter table is written from `queue` mode too; it also said "two migrations" (there are
+  four) and called the buffer "exactly-once" where the rest of the documentation correctly
+  promises at-least-once. Troubleshooting listed host and site id as the most common cause of
+  "no data" without mentioning the master switch. The site-search middleware records any
+  response below 400, not only a 2xx.
+
+- **The consent seam's own comment overstated it.** `tracking.gate` is consulted **last** and
+  can only refuse: returning `true` does not force tracking past a bot check, an opt-out cookie
+  or Do-Not-Track. The shipped config said it "wins" and could "force it", which is the kind of
+  promise a consumer builds a consent layer on.
+
+
+- The Octane guide now says what "shared" does not cover. Its line is drawn at request
+  state, which is the right line for the property it is about — one request seeing
+  another's data — and the connection details hold none of it. They are, however, read
+  once and shared from then on, so an application that varies this package's configuration
+  per request or per queued job keeps whatever a long-lived worker resolved first. That is
+  the ordinary multi-tenant shape, where each tenant tracks into its own site.
+
+  The new section also names the workaround that does not work, because it is the first one
+  a reader reaches for: forgetting the connection instance leaves the payload builder, the
+  sender and the gate holding the object that was current when they were built.
+
 ## [0.23.0] - 2026-08-23
 
 ### Added
@@ -984,7 +1199,7 @@ First public release.
   lists, and a pluggable detector); bots are excluded by default.
 - URL redaction: secrets and PII are stripped from tracked URLs before they reach
   Matomo (on by default, configurable query parameters and regex patterns).
-- Server-side opt-out: the gate honours a first-party opt-out cookie
+- Server-side opt-out: the gate honors a first-party opt-out cookie
   (`MatomoAnalytics\Privacy\OptOut::enable()`/`disable()`).
 
 #### Resilience
@@ -1004,3 +1219,45 @@ First public release.
 - Support for both self-hosted Matomo and Matomo Cloud.
 - Console commands: `matomo:install`, `matomo:test`, `matomo:flush`, `matomo:work`,
   `matomo:report`, `matomo:replay`.
+
+<!--
+Every version heading above is a reference link, and until 2026-08-27 none of them
+resolved: thirty-one headings sat in square brackets with no definition anywhere in the
+file, so GitHub and Packagist rendered a literal `[0.23.0]` where a compare link belonged.
+Keep a Changelog's format assumes these definitions; the format was followed and the
+half that makes it work was not.
+-->
+
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.23.0...v0.24.0
+[0.23.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.22.0...v0.23.0
+[0.22.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.21.0...v0.22.0
+[0.21.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.2...v0.20.0
+[0.19.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.1...v0.19.2
+[0.19.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.0...v0.19.1
+[0.19.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.3...v0.15.0
+[0.14.3]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.2...v0.14.3
+[0.14.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.0...v0.14.1
+[0.14.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/pushery/matomo-analytics-for-laravel/releases/tag/v0.1.0

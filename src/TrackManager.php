@@ -109,19 +109,18 @@ final class TrackManager implements Tracker
             return;
         }
 
-        if ($mode === 'batch') {
-            $this->buffer->push($payload);
-
-            if (Config::bool('matomo-analytics.events', true)) {
-                EventFacade::dispatch(new TrackingQueued([$payload]));
-            }
-
-            return;
-        }
-
+        // BATCH MODE COLLECTS TOO, and used to write straight through. `push()` is a database
+        // INSERT or a Redis round trip depending on the driver, so every tracked hit put one
+        // of those on the critical request path — while queue mode, three lines down, had
+        // always deferred its dispatch to `terminating()`. The two modes paid very different
+        // prices for the same call, and only one of them had a reason to.
         $this->pending[] = $payload;
     }
 
+    /**
+     * Hand off whatever the request collected. Runs from the provider's `terminating()`
+     * callback, so the response is already on its way out.
+     */
     public function flush(): void
     {
         if ($this->pending === []) {
@@ -133,6 +132,14 @@ final class TrackManager implements Tracker
 
         if (Config::bool('matomo-analytics.events', true)) {
             EventFacade::dispatch(new TrackingQueued($payloads));
+        }
+
+        if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
+            foreach ($payloads as $payload) {
+                $this->buffer->push($payload);
+            }
+
+            return;
         }
 
         Bus::dispatch(new SendHitsJob($payloads));

@@ -152,12 +152,55 @@ final readonly class PayloadBuilder
         }
 
         if (str_contains($ip, ':')) {
-            $blocks = explode(':', $ip);
-            $kept = array_slice($blocks, 0, 3);
-
-            return implode(':', [...$kept, ':']);
+            return $this->anonymizeIpv6($ip);
         }
 
+        return $this->anonymizeIpv4($ip);
+    }
+
+    /**
+     * Keep the first 48 bits and zero the rest, the way Matomo's own two-byte mask does.
+     *
+     * NORMALIZED THROUGH inet_pton RATHER THAN SPLIT ON COLONS. Splitting is correct only
+     * for the fully written-out form: any address carrying a `::` run explodes into empty
+     * elements, so `2001:db8::1` came out as `2001:db8:::` — not an address at all. That is
+     * the ordinary way IPv6 is written, so most anonymized addresses left here malformed,
+     * and neither side complains: Matomo stores what it is sent and the geolocation simply
+     * misses.
+     *
+     * The two `is_string` arms are the declared `string|false` of the two calls, not a
+     * second opinion about the input — a value this method returns unchanged is one
+     * `filter_var` already refused.
+     */
+    private function anonymizeIpv6(string $ip): string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            // The forwarding header this can come from (`ip_header`) is whatever a proxy
+            // put there, so anything that is not an address is handed back untouched
+            // rather than sliced into something that resembles one.
+            return $ip;
+        }
+
+        if (str_contains($ip, '.')) {
+            // An IPv4 address wearing an IPv6 coat (`::ffff:192.0.2.1`) is anonymized as
+            // the IPv4 address it is. Masking it to 48 bits would be correct arithmetic and
+            // useless data: every mapped address has 48 zero bits in front, so all of them
+            // would collapse to the same `::`.
+            $parts = explode(':', $ip);
+            $parts[count($parts) - 1] = $this->anonymizeIpv4($parts[count($parts) - 1]);
+
+            return implode(':', $parts);
+        }
+
+        $packed = inet_pton($ip);
+        $masked = (is_string($packed) ? substr($packed, 0, 6) : '').str_repeat("\0", 10);
+        $anonymized = inet_ntop($masked);
+
+        return is_string($anonymized) ? $anonymized : $ip;
+    }
+
+    private function anonymizeIpv4(string $ip): string
+    {
         $octets = explode('.', $ip);
         if (count($octets) === 4) {
             $octets[3] = '0';

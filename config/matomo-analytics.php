@@ -209,11 +209,12 @@ return [
         'except_ips' => [],              // skip these client IPs / CIDR ranges
         'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*'],
 
-        // THE CONSENT SEAM. Consulted before EVERY hit, server- and client-side, and
-        // it wins: return false to refuse tracking, true to force it, null to fall
-        // through to the rules above. If your application already has its own consent
-        // layer, wire it here — that is how this package defers to it rather than
-        // tracking around it.
+        // THE CONSENT SEAM, and it can only ever say NO. Consulted LAST, after every
+        // rule above it, and server-side only: return false to refuse tracking; true and
+        // null both leave the earlier verdict exactly as it was. It cannot re-admit a
+        // visitor the bot check, the opt-out cookie or Do-Not-Track already turned away.
+        // If your application has its own consent layer, wire it here — that is how this
+        // package defers to it rather than tracking around it.
         //
         //     'gate' => \App\Analytics\ConsentGate::class,   // __invoke(Request, $hit): ?bool
         //
@@ -411,8 +412,18 @@ return [
         'category' => 'Web Vitals',
         'metrics' => ['LCP', 'CLS', 'INP', 'FCP', 'TTFB'],
         'throttle' => '60,1', // route throttle "requests,minutes"; null to disable
+        'middleware' => [],   // extra route middleware; see the note below
         'library' => null,    // optional <script src> for web-vitals; null = app provides it
     ],
+
+    /*
+    | The web-vitals route is registered outside every middleware group, because the
+    | browser beacons it with sendBeacon() and that carries no CSRF token. The consequence
+    | is that no session is started on this path, so the gate's `track_authenticated` and
+    | `except_abilities` rules see a guest there regardless of who is logged in. Name
+    | middleware in `web_vitals.middleware` if you need those rules to apply — `['web']`
+    | starts a session, and you then owe this one route a CSRF exemption on your side.
+    */
 
     /*
     |--------------------------------------------------------------------------

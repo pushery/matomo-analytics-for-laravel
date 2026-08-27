@@ -125,7 +125,9 @@ final class FileHitBuffer implements HitBuffer
 
     private function reclaimStale(): void
     {
-        $cutoff = Date::now()->subMinutes(Config::int('matomo-analytics.batch.stale_after_minutes', 15))->getTimestamp();
+        // Floored at one minute for the reason RedisHitBuffer spells out: at 0 every claim
+        // is already expired when it is made, so at-least-once becomes guaranteed twice.
+        $cutoff = Date::now()->subMinutes(max(1, Config::int('matomo-analytics.batch.stale_after_minutes', 15)))->getTimestamp();
 
         foreach (glob($this->dir().'/processing.*.jsonl') ?: [] as $file) {
             $modified = filemtime($file);

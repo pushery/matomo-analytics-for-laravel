@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event as EventFacade;
 use MatomoAnalytics\Buffer\DeadLetterStore;
 use MatomoAnalytics\Contracts\Sender;
+use MatomoAnalytics\Events\HitsDeadLettered;
 use MatomoAnalytics\Events\TrackingFailed;
 use MatomoAnalytics\Events\TrackingSent;
 use MatomoAnalytics\Exceptions\TrackingSendException;
@@ -106,9 +107,21 @@ final class SendHitsJob implements ShouldQueue
     /**
      * Only reachable when `resilience.never_throw` is off, because that is the one
      * configuration in which this job still lets an exception escape.
+     *
+     * NULLABLE, BECAUSE THE FRAMEWORK'S CONTRACT IS. `CallQueuedHandler::failed()` passes
+     * `?Throwable`, and it really can be null: a job killed by `queue:work --timeout`, or one
+     * failed through `Queue::failing()` without an exception, arrives here with nothing to
+     * report. A non-nullable parameter turns that into a TypeError inside the worker's own
+     * failure handling — the one place an error has nowhere left to go.
      */
-    public function failed(Throwable $exception): void
+    public function failed(?Throwable $exception): void
     {
+        // Nothing to say and nothing to report. The batch is already in `failed_jobs`; a
+        // TrackingFailed carrying a manufactured exception would be a worse answer than none.
+        if (! $exception instanceof Throwable) {
+            return;
+        }
+
         if (Config::bool('matomo-analytics.events', true)) {
             EventFacade::dispatch(new TrackingFailed($exception));
         }
@@ -181,10 +194,28 @@ final class SendHitsJob implements ShouldQueue
         // Record before deleting: if the dead-letter write throws, the job is neither
         // deleted nor released, so the worker's own handling still owns the batch and
         // the hits are not lost between the two steps.
-        $deadLetters->record($this->payloads, $this->attempts(), $e->getMessage());
+        //
+        // AND A WRITE THAT COULD NOT HAPPEN IS NOT A WRITE. `record()` answers false when
+        // there is no table — the state an installation reaches by calling
+        // `ignoreMigrations()` while leaving the store switched on, which the installation
+        // guide suggests and nothing here used to reconcile. Parking was impossible, so the
+        // batch takes the same honest route as a switched-off store: `failed_jobs`, where
+        // it is visible and re-runnable, rather than a `delete()` that would drop it.
+        if (! $deadLetters->record($this->payloads, $this->attempts(), $e->getMessage())) {
+            $this->fail($e);
+
+            return;
+        }
 
         if (Config::bool('matomo-analytics.events', true)) {
+            // BOTH events, and neither stands in for the other. `TrackingFailed` says this
+            // batch will not be attempted again; `HitsDeadLettered` says where it went. The
+            // queue path fired only the first, so the listener the documentation recommends
+            // for exactly this alarm — "a HitsDeadLettered event fires whenever a batch is
+            // dead-lettered" — never fired in the shipped default mode. The batch path has
+            // dispatched both all along.
             EventFacade::dispatch(new TrackingFailed($e));
+            EventFacade::dispatch(new HitsDeadLettered(count($this->payloads), $this->attempts()));
         }
 
         App::make(Reporter::class)->report($e, ['final' => 1]);

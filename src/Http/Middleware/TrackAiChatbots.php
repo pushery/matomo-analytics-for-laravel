@@ -30,13 +30,27 @@ final readonly class TrackAiChatbots
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $response = $next($request);
+        return $next($request);
+    }
 
+    /**
+     * TRACKED AFTER THE RESPONSE IS SENT, not merely after it is built.
+     *
+     * This used to sit in `handle()` behind `$next()`, which reads as "afterwards" and is
+     * not: the fetcher is still on the wire while the payload is built and — in `sync` mode —
+     * while the call to Matomo completes. The public documentation said this middleware
+     * "runs after the response, so it costs the fetcher nothing", and that sentence was only
+     * ever true of `terminate()`.
+     *
+     * Laravel terminates middleware BEFORE it runs the application's own terminating
+     * callbacks, so a hit queued here is still picked up by the flush the service provider
+     * registers there. The ordering queue mode depends on is unchanged.
+     */
+    public function terminate(Request $request): void
+    {
         if ($this->captures($request)) {
             $this->tracker->aiChatbot($request);
         }
-
-        return $response;
     }
 
     private function captures(Request $request): bool
