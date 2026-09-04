@@ -4,6 +4,53 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-09-04
+
+### Added
+
+- **Laravel 12 is verified on every change, not only declared.** The package has stated
+  `illuminate/* ^12.0 || ^13.0` for months while only the Laravel 13 half was ever exercised.
+  Both majors are now checked against the shipped code whenever it changes: the service provider
+  registers, config merging keeps nested keys, the ingest route appears with its rate limit, the
+  Blade directives compile, the console commands register, the migrations run, a hit reaches the
+  buffer, and the gate still refuses traffic while the master switch is off.
+
+  The supported range itself did not change.
+
+### Changed
+
+- **The Redis buffer claims a batch in one round trip instead of one per hit.** Claiming worked
+  by issuing a separate `LMOVE` for every hit it wanted, so a batch of forty cost forty round
+  trips to Redis and paid the network latency forty times. The whole batch now goes out as a
+  single pipeline and comes back as one reply set, with the previous per-hit loop kept as the
+  path for a client that has no pipeline of its own. Returning hits to the queue after a failed
+  flush works the same way, and asks how many there are before it does anything at all.
+
+- **The HTTP sender reuses one connection for a whole flush run.** Each batch built its own
+  request, its own handler stack and therefore its own curl handle, so a flush that walked forty
+  batches opened forty connections to the same host and paid a TCP and TLS handshake for each.
+  One handler is now shared across sends.
+
+  It shares the handler rather than the client on purpose, and that distinction is load-bearing
+  for anyone testing an application that uses this package: a shared client bypasses the handler
+  stack that `Http::fake()` installs itself into, which would silently turn faked requests into
+  real ones. A shared handler sits underneath that stub, so faking still intercepts and no socket
+  is opened.
+
+
+### Fixed
+
+- **The package requires `symfony/http-foundation` and `symfony/http-kernel` at `^7.0 || ^8.0` again, so every Laravel 12 application can install it.** Both were declared in 0.24.0 at `^7.4.0 || ^8.0.0`. That is Laravel 13's own constraint, and this package also supports Laravel 12 — whose framework asks for Symfony `^7.2.0`. An application running Laravel 12 with Symfony 7.2 or 7.3 therefore could not install 0.24.0 at all, or was forced to upgrade Symfony to take it, while the README and the documentation both said "Laravel 12 or 13".
+
+  Nothing about what the package DOES changed, and nothing in it ever needed Symfony 7.4: the four APIs it touches — `IpUtils::checkIp`, `Cookie`, `Response` and `NotFoundHttpException` — are unchanged since Symfony 7.0. The constraint was simply narrower than the promise.
+
+- **Two compare links in this file pointed at a tag that does not exist.** The `[0.19.0]` and
+  `[0.18.0]` definitions both named `v0.18.0`, and both answered 404 — in the published document,
+  not only here. The 0.18.0 section says so itself nine hundred lines higher ("no `v0.18.0` tag
+  exists; it was never published"), so the file contradicted its own links. Both now point at
+  `v0.17.0...v0.19.0`, the range those changes actually shipped in.
+
+
 ## [0.24.0] - 2026-08-27
 
 ### Added
@@ -1228,7 +1275,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.21.0...v0.22.0
@@ -1236,8 +1284,8 @@ half that makes it work was not.
 [0.20.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.2...v0.20.0
 [0.19.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.0...v0.19.1
-[0.19.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.18.0...v0.19.0
-[0.18.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.18.0
+[0.19.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.19.0
+[0.18.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.19.0
 [0.17.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.3...v0.15.0

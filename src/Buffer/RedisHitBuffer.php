@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Buffer;
 
 use Illuminate\Redis\Connections\Connection;
+use Illuminate\Redis\Connections\PhpRedisConnection;
 use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Redis as RedisFacade;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Support\Config;
+use Redis as PhpRedis;
 
 /**
  * Redis-backed buffer using the reliable-queue pattern: a claim atomically moves
@@ -47,15 +49,7 @@ final class RedisHitBuffer implements HitBuffer
         // point during the claim still leaves a reclaimable entry — never an orphan.
         $connection->command('zadd', [$this->processingSet(), Date::now()->getTimestamp(), $processing]);
 
-        $taken = [];
-        for ($i = 0; $i < $limit; $i++) {
-            $item = $connection->command('lmove', [$this->key(), $processing, 'LEFT', 'RIGHT']);
-            if (! is_string($item)) {
-                break;
-            }
-
-            $taken[] = $item;
-        }
+        $taken = $this->move($connection, $this->key(), $processing, 'LEFT', 'RIGHT', $limit);
 
         if ($taken === []) {
             $connection->command('del', [$processing]);
@@ -118,17 +112,89 @@ final class RedisHitBuffer implements HitBuffer
 
     private function drainBackToQueue(Connection $connection, string $processing): void
     {
-        while (true) {
-            $moved = $connection->command('lmove', [$processing, $this->key(), 'RIGHT', 'LEFT']);
-            if (! is_string($moved)) {
+        // ASK HOW MANY FIRST. The loop used to walk one LMOVE at a time until the server said
+        // "empty", which cannot be pipelined because the stop condition is the previous reply.
+        // `LLEN` turns an unknown count into a known one, and a known count is one round trip.
+        //
+        // A concurrent writer cannot make this wrong: nothing else ever writes to a processing
+        // list — it is named after a claim nobody else holds — so its length only shrinks, by
+        // this call. Asking for more than is there moves what is there and answers null for the
+        // rest, which `move()` already treats as the end.
+        $length = $connection->command('llen', [$processing]);
+
+        if (! is_int($length) || $length < 1) {
+            return;
+        }
+
+        $this->move($connection, $processing, $this->key(), 'RIGHT', 'LEFT', $length);
+    }
+
+    /**
+     * Move up to $limit items between two lists, in as few round trips as the client allows.
+     *
+     * ONE ROUND TRIP INSTEAD OF $limit OF THEM, where the client can do it. The claim path used
+     * to issue a separate `LMOVE` per hit — fifty sequential requests for a default batch, and
+     * the same again on every release and every reclaim. On a local server that is microseconds;
+     * against a managed Redis with a millisecond of latency it is fifty milliseconds per batch
+     * and, at forty batches to a flush, two seconds of a one-minute schedule spent waiting.
+     *
+     * The pipelined answers are the items, in order, and a non-string ends the take: an `LMOVE`
+     * against an exhausted source moves nothing and answers null, so asking for more than exists
+     * is safe rather than merely tolerable.
+     *
+     * ⚠️ `pipeline()` IS DECLARED ONLY ON THE PHPREDIS CONNECTION. Predis reaches it through
+     * `Connection::__call`, so it would work there too — but not in a way the analyser can see,
+     * and a package that narrows a data path on an unchecked assumption has learned nothing from
+     * the rest of this class. The sequential path below is therefore kept, not as dead code but
+     * as the correctness path for every other client; `RedisHitBufferTest` drives it and the
+     * real-server suite drives the pipeline.
+     *
+     * @return list<string>
+     */
+    private function move(Connection $connection, string $from, string $to, string $take, string $put, int $limit): array
+    {
+        if ($connection instanceof PhpRedisConnection) {
+            // Typed as the phpredis client because that is what `PhpRedisConnection::pipeline()`
+            // hands the callback — `$this->client()->pipeline()`, the same object in queued mode.
+            // Aliased, because `Illuminate\Support\Facades\Redis` already owns the short name
+            // in this file and importing both is a fatal rather than a warning.
+            $replies = $connection->pipeline(static function (PhpRedis $pipe) use ($from, $to, $take, $put, $limit): void {
+                for ($i = 0; $i < $limit; $i++) {
+                    $pipe->lmove($from, $to, $take, $put);
+                }
+            });
+
+            $moved = [];
+
+            foreach (is_array($replies) ? $replies : [] as $reply) {
+                if (! is_string($reply)) {
+                    break;
+                }
+
+                $moved[] = $reply;
+            }
+
+            return $moved;
+        }
+
+        $moved = [];
+
+        for ($i = 0; $i < $limit; $i++) {
+            $item = $connection->command('lmove', [$from, $to, $take, $put]);
+
+            if (! is_string($item)) {
                 break;
             }
+
+            $moved[] = $item;
         }
+
+        return $moved;
     }
 
     private function connection(): Connection
     {
-        return Redis::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
+        return RedisFacade::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
     }
 
     private function key(): string
