@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics;
 
+use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
@@ -174,7 +175,14 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             // the TrackingFailed / HitsDeadLettered events, which is where a consumer should
             // be listening anyway -- an exit code from a per-minute background task is not a
             // channel anyone watches.
-            $schedule->command('matomo:flush')->everyMinute()->runInBackground()->withoutOverlapping(10);
+            //
+            // ⚠️ AND IT IS A SWITCH NOW, because that cost is the consumer's to weigh rather
+            // than ours to impose. Laravel throws on a non-zero exit only when
+            // `! $event->runInBackground`, so a background task dispatches no
+            // ScheduledTaskFailed and never reaches the exception handler — Sentry, Flare and
+            // Nightwatch included. Reported from a real adoption, where the consequence was
+            // neither documented nor escapable.
+            self::scheduled($schedule->command('matomo:flush')->everyMinute())->withoutOverlapping(10);
         });
     }
 
@@ -209,11 +217,27 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         }
 
         $this->callAfterResolving(Schedule::class, static function (Schedule $schedule) use ($days): void {
-            $schedule->command('matomo:replay', ['--prune-older-than' => (string) $days])
-                ->daily()
-                ->runInBackground()
-                ->withoutOverlapping(10);
+            self::scheduled(
+                $schedule->command('matomo:replay', ['--prune-older-than' => (string) $days])->daily()
+            )->withoutOverlapping(10);
         });
+    }
+
+    /**
+     * Apply the consumer's background preference to a scheduled event.
+     *
+     * One place rather than two call sites, so the two commands cannot drift apart on the
+     * setting — and `schedule.run_in_background` sits at the TOP level rather than under
+     * `batch`, which is where the reporting ticket suggested it. The prune is deliberately
+     * NOT gated on batch mode (a batch is dead-lettered from both delivery modes), so filing
+     * its knob under `batch` would repeat the very mistake the comment above that registration
+     * warns about.
+     */
+    private static function scheduled(Event $event): Event
+    {
+        return Config::bool('matomo-analytics.schedule.run_in_background', true)
+            ? $event->runInBackground()
+            : $event;
     }
 
     private function registerTerminatingFlush(): void

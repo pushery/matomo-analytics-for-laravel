@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-09-04
+
+### Added
+
+- **`schedule.run_in_background` lets you take the scheduled commands out of the background.** Both of them run there by default, unchanged, so `schedule:run` never waits on Matomo — but that costs you the failure report, and until now it could not be declined. Laravel raises a scheduled command's non-zero exit only when the event is NOT in the background, so a background one dispatches no `ScheduledTaskFailed` and never reaches your exception handler: a nightly prune that fails is invisible to Sentry, Flare or Nightwatch. Set `MATOMO_SCHEDULE_BACKGROUND=false` when that report matters more than the wait.
+
+### Fixed
+
+- **`symfony/console` is a declared dependency now, so a lean install cannot be missing it.** The package's nine console commands return `self::SUCCESS` and `self::FAILURE` thirty-one times, and those constants belong to Symfony's `Command` — Laravel's extends it and declares neither. The dependency has been real since the first command and was resolved only because `illuminate/console` happens to bring it. Declared at `^7.0 || ^8.0`, which is wider than what Laravel 12 (`^7.2.0`) or Laravel 13 (`^7.4.0 || ^8.0.0`) already require, so no installation that works today stops working.
+
 ## [0.25.0] - 2026-09-04
 
 ### Added
@@ -1275,7 +1285,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.22.0...v0.23.0

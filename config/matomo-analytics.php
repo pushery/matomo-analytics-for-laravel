@@ -57,6 +57,32 @@ return [
 
     'mode' => env('MATOMO_MODE', 'queue'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | The scheduled commands, and what running them in the background costs
+    |--------------------------------------------------------------------------
+    | Both scheduled commands run in the background by default, so `schedule:run`
+    | never waits on Matomo — a slow or unreachable instance would otherwise hold
+    | up every other task in that minute, inside an application that installed
+    | this package to have analytics rather than a queue of its own.
+    |
+    | THE PRICE IS YOUR ERROR REPORTING, and it is why this is a switch rather
+    | than a decision made for you. Laravel's ScheduleRunCommand throws on a
+    | non-zero exit only when `! $event->runInBackground`, so a background task
+    | dispatches no ScheduledTaskFailed and never reaches the exception handler —
+    | Sentry, Flare and Nightwatch included. A nightly prune that fails is then
+    | invisible on the surface somebody actually watches.
+    |
+    | Set this to false if that report is what you need. The commands report
+    | plenty on their own besides the exit code — the consecutive-failure counter
+    | and the TrackingFailed / HitsDeadLettered events — but an exit code is what
+    | a scheduler monitor reads, and only the foreground path hands it over.
+    */
+
+    'schedule' => [
+        'run_in_background' => env('MATOMO_SCHEDULE_BACKGROUND', true),
+    ],
+
     'queue' => [
         'connection' => env('MATOMO_QUEUE_CONNECTION'),
         'queue' => env('MATOMO_QUEUE', 'matomo'),
