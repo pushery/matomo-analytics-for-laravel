@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.2] - 2026-09-05
+
+### Fixed
+
+- The documentation described two things the package does not do. The batch section showed `batch.size` defaulting to `50`, which it has not since 0.27.0 — draining 2000 hits takes 1021ms at 50 against 276ms at the shipped 200, so a config copied from that page pinned the slower setting. And the schema reference named `claimed_at`, `created_at` and `failed_at` as `timestamp` columns, which 0.27.0 converted to `datetime`: on MySQL a `TIMESTAMP` is converted from the session time zone, so a worker in another zone reads every open claim an hour off and a batch still being sent gets reclaimed and counted twice, and the type additionally ends in 2038. The reason now stands beside the schema table rather than only inside a migration.
+
 ## [0.27.1] - 2026-09-05
 
 ### Changed
@@ -1367,6 +1373,7 @@ half that makes it work was not.
 -->
 
 [Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...HEAD
+[0.27.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.25.0...v0.26.0
