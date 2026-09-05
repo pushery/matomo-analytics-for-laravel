@@ -4,6 +4,14 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-09-05
+
+### Added
+
+- `matomo-analytics.site_id_resolver` names the site per hit, for applications that track each tenant into its own Matomo site. It is `fn(): ?int` — an invokable class-string or a closure — and it takes no arguments, because the tenant is a property of your own request context. A buffered batch may therefore carry hits for several sites, which Matomo's Bulk endpoint accepts: each buffered hit already holds its own `idsite`. That is why this is a resolver rather than a per-request connection — rebuilding the connection would not have fixed the buffer. Anything other than a positive int falls back to `site_id`, including a resolver that throws, because an extension point that can break tracking is worse than none.
+- `matomo-analytics.require_tls` (`MATOMO_REQUIRE_TLS`, default `false`) refuses to track over a plaintext host. With it on, an `http://` host counts as unconfigured and nothing is tracked — the same no-op path a missing host already takes, never an exception, because this package does not throw into application code and a security setting is the last place to start. It is off by default: Matomo on a private network without TLS is a legitimate deployment, and defaulting to on would silently stop tracking for every one of them. What it protects is concrete — `token_auth` travels in the request body on every server-side hit, so an admin-capable credential crosses the network in clear text. `matomo:test` names this refusal separately from a missing host, because the two need opposite reactions.
+- `SendHitsJob` now carries Horizon tags. Queued batches show up as `matomo` — and as `matomo:site-<id>` where a site id is configured — instead of disappearing into Horizon's `default` group, where the package's jobs were only ever visible as a share of a number nobody could attribute. Horizon reads the method and every other queue driver ignores it, so nothing changes for an application that does not run it. The tag set is deliberately bounded to one entry per configured site: anything per-batch would mint a new tag on every dispatch, and Horizon indexes them.
+
 ## [0.27.2] - 2026-09-05
 
 ### Fixed
@@ -1373,6 +1381,7 @@ half that makes it work was not.
 -->
 
 [Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...HEAD
+[0.28.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.2...v0.28.0
 [0.27.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.26.0...v0.27.0

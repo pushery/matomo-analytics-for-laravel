@@ -26,6 +26,19 @@ final class TestConnectionCommand extends Command
     public function handle(Connection $connection, Sender $sender): int
     {
         if (! $connection->isConfigured()) {
+            // TWO REFUSALS WEAR THE SAME BOOLEAN, AND THEY NEED OPPOSITE REACTIONS. A missing
+            // host is something nobody has done yet; a plaintext host under require_tls is
+            // something the operator asked this package to refuse. Printing "set MATOMO_HOST"
+            // to somebody who has set it sends them looking for a fault that is not there.
+            if ($connection->requireTls && $connection->host !== '' && ! $connection->hostIsEncrypted()) {
+                // Two short lines rather than one long one: the console wraps, and a wrapped
+                // line can split the very word an operator would search the output for.
+                $this->error(sprintf('REFUSED by require_tls: "%s" is not https.', $connection->host));
+                $this->line('Nothing is tracked while both hold. Use an https host, or set MATOMO_REQUIRE_TLS=false to accept that token_auth crosses the network in clear text on every hit.');
+
+                return self::FAILURE;
+            }
+
             $this->error('Matomo is not configured. Set MATOMO_HOST and MATOMO_SITE_ID.');
 
             return self::FAILURE;
