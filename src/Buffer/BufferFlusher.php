@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Event as EventFacade;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Events\HitsDeadLettered;
+use MatomoAnalytics\Events\TrackingFailed;
 use MatomoAnalytics\Events\TrackingSent;
+use MatomoAnalytics\Exceptions\BufferUnavailableException;
 use MatomoAnalytics\Exceptions\TrackingSendException;
 use MatomoAnalytics\Exceptions\UnreadableBatchException;
 use MatomoAnalytics\Support\Config;
@@ -53,14 +55,26 @@ final readonly class BufferFlusher
 
     public function drain(): FlushOutcome
     {
-        $size = max(1, Config::int('matomo-analytics.batch.size', 50));
+        $size = max(1, Config::int('matomo-analytics.batch.size', 200));
         $max = max(1, Config::int('matomo-analytics.batch.max_per_flush', 2000));
         $processed = 0;
         $delivered = 0;
         $deadLettered = 0;
 
         while ($processed < $max) {
-            $batch = $this->buffer->claim(min($size, $max - $processed));
+            // A driver that cannot claim has nothing to hand back but an empty batch, and an
+            // empty batch is how this loop learns the buffer is drained. So it throws instead
+            // — and the run ends marked unavailable rather than green. Caught here rather
+            // than left to the caller because both commands go through `drain()`, and because
+            // a tracking failure must not become an exception in someone's scheduler.
+            try {
+                $batch = $this->buffer->claim(min($size, $max - $processed));
+            } catch (BufferUnavailableException $e) {
+                $this->reporter->report($e, ['stage' => 'flush']);
+
+                return new FlushOutcome($delivered, $deadLettered, unavailable: true);
+            }
+
             if ($batch->claimedNothing()) {
                 break;
             }
@@ -74,11 +88,28 @@ final readonly class BufferFlusher
             // There is nothing to deliver and nothing to replay — a payload that will not
             // decode cannot be sent to Matomo by anyone. So it is reported once and acked
             // away, which is the only disposal that lets the rest of the buffer move.
-            if ($batch->isEmpty()) {
+            //
+            // THE REPORT IS DRIVEN BY `skipped`, NOT BY `isEmpty()`, AND THAT IS THE HALF
+            // 0.24.0 LEFT BEHIND. The all-or-nothing case was fixed and the PARTIAL one was
+            // not: two readable rows and one corrupt row delivered two hits, acked all three
+            // — `ack()` deletes by claim ref, so the skipped row goes with them — and ended
+            // green. Measured: delivered 2, dead-lettered 0, `isStuck()` false, no event, no
+            // log, buffer empty, dead-letter table empty. The quieter of the two failures,
+            // and the likelier: a fully unreadable batch at least stopped the run.
+            //
+            // One report site covers both, because the fully unreadable batch is just the
+            // case where `skipped` equals everything claimed.
+            if ($batch->skipped > 0) {
                 $this->reporter->report(
-                    new UnreadableBatchException('A buffered batch held no decodable payload and was discarded.'),
+                    new UnreadableBatchException(sprintf(
+                        '%d buffered hit(s) held no decodable payload and were discarded.',
+                        $batch->skipped,
+                    )),
                     ['stage' => 'flush'],
                 );
+            }
+
+            if ($batch->isEmpty()) {
                 $this->buffer->ack($batch);
                 $processed += $size;
 
@@ -121,6 +152,17 @@ final readonly class BufferFlusher
                 && ! in_array($result->status, [408, 423, 425, 429], true);
 
             return $this->onFailure($batch, TrackingSendException::status($result->status), $permanent);
+        }
+
+        // Matomo answers 200 to a bulk request it partly refused, and the count it states was
+        // read and then dropped one layer down until now. Reported rather than acted on: the
+        // envelope does not say WHICH hits, so there is nothing to release or dead-letter —
+        // but a batch that half arrived must not look identical to one that fully did.
+        if ($result->invalid > 0) {
+            $this->reporter->report(
+                TrackingSendException::rejected($result->invalid),
+                ['stage' => 'flush'],
+            );
         }
 
         $this->buffer->ack($batch);
@@ -195,6 +237,22 @@ final readonly class BufferFlusher
         $this->buffer->ack($batch);
 
         if (Config::bool('matomo-analytics.events', true)) {
+            // BOTH EVENTS, AND `TrackingFailed` WAS MISSING HERE ENTIRELY. It has only ever
+            // been dispatched from `SendHitsJob` — the queue path — while three places said
+            // otherwise, including `config/matomo-analytics.php`, which is the file a consumer
+            // publishes and reads, and a comment in `SendHitsJob` itself claiming "the batch
+            // path has dispatched both all along". Measured over four batch-mode failure
+            // shapes before this line existed: zero dispatches.
+            //
+            // That gap mattered more here than in the queue path, because `matomo:flush` is
+            // registered in the background by default, where its exit code reaches nothing.
+            // The events are the channel, and one of the two was not connected.
+            //
+            // Dispatched from `deadLetter()` rather than from `onFailure()` on purpose: the
+            // event means "this batch will not be attempted again", which is exactly the set
+            // of paths that end here. A released batch is retried on the next flush and must
+            // not announce a terminal failure, or the event fires on every blip.
+            EventFacade::dispatch(new TrackingFailed($e));
             EventFacade::dispatch(new HitsDeadLettered(count($batch->payloads), $attempts));
         }
     }

@@ -212,8 +212,13 @@ final class SendHitsJob implements ShouldQueue
             // batch will not be attempted again; `HitsDeadLettered` says where it went. The
             // queue path fired only the first, so the listener the documentation recommends
             // for exactly this alarm — "a HitsDeadLettered event fires whenever a batch is
-            // dead-lettered" — never fired in the shipped default mode. The batch path has
-            // dispatched both all along.
+            // dead-lettered" — never fired in the shipped default mode.
+            //
+            // THIS SENTENCE USED TO END "the batch path has dispatched both all along",
+            // AND THE BATCH PATH HAD NEVER DISPATCHED `TrackingFailed` AT ALL. A comment
+            // asserting a neighbour's behavior is a claim nothing checks, and this one sent
+            // three readers past the defect: the config file, the provider and the 0.24.0
+            // changelog all repeated it. `BufferFlusher::deadLetter()` dispatches both now.
             EventFacade::dispatch(new TrackingFailed($e));
             EventFacade::dispatch(new HitsDeadLettered(count($this->payloads), $this->attempts()));
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Testing;
 
 use Closure;
+use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Annotations\Concerns\AnnotatesReleases;
 use MatomoAnalytics\Contracts\AnnotationsClient;
 use PHPUnit\Framework\Assert;
@@ -13,7 +14,7 @@ use PHPUnit\Framework\Assert;
  * In-memory AnnotationsClient for tests: records every annotation instead of
  * sending it. Swap it in with MatomoAnnotations::fake().
  */
-final class AnnotationsFake implements AnnotationsClient
+final class AnnotationsFake implements AnnotationsClient, Fake
 {
     use AnnotatesReleases;
 

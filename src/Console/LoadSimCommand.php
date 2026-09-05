@@ -81,7 +81,7 @@ final class LoadSimCommand extends Command
 
         $posts = $sender instanceof NullSender
             ? $sender->posts
-            : (int) ceil($delivered / max(1, Config::int('matomo-analytics.batch.size', 50)));
+            : (int) ceil($delivered / max(1, Config::int('matomo-analytics.batch.size', 200)));
 
         $this->info(sprintf('Delivered %s hit(s) in %s bulk POST(s).', number_format($delivered), number_format($posts)));
         $this->render($hits, $delivered, $posts, $enqueueSeconds, $flushSeconds);

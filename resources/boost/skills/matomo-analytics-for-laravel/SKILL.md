@@ -134,9 +134,12 @@ $fake = Matomo::fake();
 $fake->assertTracked(PageView::class, fn (Hit $hit): bool => $hit instanceof PageView && $hit->title === 'Checkout');
 ```
 
-Type the callback's parameter as `Hit`, not as the class in the first argument:
-the callback is offered **every** recorded hit, so a narrower type is a `TypeError`
-waiting for the first test that tracks two different things.
+Type the callback's parameter as `Hit`, not as the class in the first argument.
+The callback only ever sees hits of the type you asked for, so a narrower type
+looks safe — until a hit is wrapped in `CustomParameters`. A decorated hit matches
+by its inner type, which is what makes the assertion still find it, but the callback
+is handed the wrapper. `fn (PageView $hit)` is a `TypeError` there. Narrow with
+`instanceof` inside the closure instead.
 
 `MatomoReports::fake()`, `MatomoGdpr::fake()`, and `MatomoAnnotations::fake()`
 follow the same shape.

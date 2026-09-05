@@ -12,10 +12,23 @@ final readonly class BufferBatch
 {
     /**
      * @param  list<array<string, scalar>>  $payloads
+     * @param  int  $skipped  Claimed entries whose payload would not decode and were dropped.
+     *
+     * `skipped` EXISTS BECAUSE DROPPING THEM WAS SILENT, AND ACKING DELETED THEM ANYWAY.
+     * A driver that decodes stored bytes skips what it cannot read, and `ack()` then removes
+     * every entry of the claim — the readable ones because they were delivered, the skipped
+     * one because it shares the ref. Measured with three rows and one corrupt payload:
+     * delivered 2, dead-lettered 0, `isStuck()` false, no event, no log, buffer empty,
+     * dead-letter table empty. The third hit was gone and nothing said so.
+     *
+     * There is no recovery to offer — a payload that will not decode cannot be sent to Matomo
+     * by anyone — so this carries the count out to `BufferFlusher`, which reports it. The
+     * difference bought is between a hit that was lost and a hit that was lost unnoticed.
      */
     public function __construct(
         public string $ref,
         public array $payloads,
+        public int $skipped = 0,
     ) {}
 
     public static function empty(): self

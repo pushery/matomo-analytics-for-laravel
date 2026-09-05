@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Testing;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Request as RequestFacade;
+use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Tracking\ContentImpression;
 use MatomoAnalytics\Tracking\ContentInteraction;
@@ -29,7 +30,7 @@ use PHPUnit\Framework\Assert;
  * Test double recording every hit instead of sending it. Swapped in via
  * Matomo::fake().
  */
-final class MatomoFake implements Tracker
+final class MatomoFake implements Fake, Tracker
 {
     /**
      * @var list<Hit>
@@ -142,7 +143,7 @@ final class MatomoFake implements Tracker
      * CustomParameters matches its inner type too, so wrapping a hit never breaks
      * an assertion; the callback still receives the recorded (outer) hit.
      *
-     * ⚠️ THE CALLBACK MUST ACCEPT `Hit`, NOT THE TYPE YOU ASKED FOR. That is the direct
+     * THE CALLBACK MUST ACCEPT `Hit`, NOT THE TYPE YOU ASKED FOR. That is the direct
      * consequence of the sentence above and it is easy to miss, because the narrow form reads
      * naturally:
      *

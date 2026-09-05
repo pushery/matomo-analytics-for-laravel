@@ -65,8 +65,12 @@ final class TrackManager implements Tracker
 
             $decision = $this->gate->decide($request, $hit);
             if (! $decision->allowed) {
-                if ($decision->reason !== null && Config::bool('matomo-analytics.events', true)) {
-                    EventFacade::dispatch(new VisitorExcluded($decision->reason));
+                // `deniedReason()` rather than a null check on the property: a denial always
+                // carries a reason (private constructor, `deny(string)`), so the old
+                // `$decision->reason !== null` was a condition no run could make false — a
+                // permanently surviving mutant, and a reader's reason to believe otherwise.
+                if (Config::bool('matomo-analytics.events', true)) {
+                    EventFacade::dispatch(new VisitorExcluded($decision->deniedReason()));
                 }
 
                 return;
@@ -130,19 +134,36 @@ final class TrackManager implements Tracker
         $payloads = $this->pending;
         $this->pending = [];
 
-        if (Config::bool('matomo-analytics.events', true)) {
-            EventFacade::dispatch(new TrackingQueued($payloads));
-        }
-
-        if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
-            foreach ($payloads as $payload) {
-                $this->buffer->push($payload);
+        // THE HANDOVER IS WRAPPED TOO, AND IT WAS THE ONE ENTRY POINT THAT WAS NOT.
+        // `track()` and `aiChatbot()` have always run inside `safe()`; this did not — and in
+        // `batch` and `queue` the actual work happens HERE, not there. Only `sync` sends from
+        // inside `track()`, which is why every arm around `never_throw` passed over it.
+        //
+        // What escaped: this runs from the provider's `terminating()` callback, and
+        // `Application::terminate()` has no try/catch of its own. So a `RedisException` from a
+        // brief queue outage — the SHIPPED DEFAULT is `queue` — reached PHP's uncaught handler,
+        // which reports UNCONDITIONALLY: around `never_throw`, around `report_after_attempts`,
+        // around the per-signature throttle, around `channel => 'silent'`. One unthrottled
+        // error-tracker event per tracked request, and then an error page rendered onto a
+        // response whose body had already been sent, which on a JSON API corrupts the payload.
+        //
+        // `$pending` is cleared BEFORE the work on purpose: a failed handover must not leave the
+        // hits queued for a second attempt that would double-count them.
+        $this->safe(function () use ($payloads): void {
+            if (Config::bool('matomo-analytics.events', true)) {
+                EventFacade::dispatch(new TrackingQueued($payloads));
             }
 
-            return;
-        }
+            if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
+                foreach ($payloads as $payload) {
+                    $this->buffer->push($payload);
+                }
 
-        Bus::dispatch(new SendHitsJob($payloads));
+                return;
+            }
+
+            Bus::dispatch(new SendHitsJob($payloads));
+        });
     }
 
     public function pageView(string $title, ?string $url = null): static

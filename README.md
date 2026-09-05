@@ -80,7 +80,8 @@ server-side opt-out cookie, a publishable privacy-policy partial, and GDPR
 erase/export through Matomo's PrivacyManager API.
 
 **Bots and AI traffic.** Bots and AI crawlers are excluded by default, from a
-curated list that updates itself, with an optional exhaustive backstop. AI
+curated list refreshed against the upstream catalog every week, with an optional
+exhaustive backstop. The refresh arrives in a release, not at runtime. AI
 assistant referrals need no configuration; on-demand assistant page fetches can be
 recorded as server-side bot telemetry — no edge worker required.
 

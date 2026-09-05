@@ -93,7 +93,19 @@ return [
 
     'batch' => [
         'driver' => env('MATOMO_BATCH_DRIVER', 'database'), // database|redis|file|array
-        'size' => env('MATOMO_BATCH_SIZE', 50),
+
+        // HOW MANY HITS GO INTO ONE BULK REQUEST, AND THEREFORE HOW MANY REQUESTS A
+        // BACKLOG COSTS. It is the round-trip knob, and it was set low enough to matter:
+        // draining 2000 hits against a Matomo answering in 20ms took 1021ms at 50, 276ms
+        // at 200 and 125ms at 500 — the same hits, the same connection, 8x apart. These
+        // are round trips rather than handshakes; the shared cURL handler already reuses
+        // one TCP connection for a whole flush.
+        //
+        // It is ALSO the memory knob, which the old comment did not say: a claimed batch
+        // is held in memory at roughly 2.3 KB per hit, so 200 costs about 460 KB and 500
+        // about 1.2 MB per flushing process. 200 is the middle of that trade — four times
+        // fewer requests for less than half a megabyte.
+        'size' => env('MATOMO_BATCH_SIZE', 200),
         'flush_interval' => env('MATOMO_BATCH_INTERVAL', 60),
         'max_per_flush' => 2000,
         'stale_after_minutes' => 15,
@@ -210,13 +222,19 @@ return [
         'user_id' => null,   // 'auth' to attach the authenticated user id, or null
     ],
 
-    // On by default. Matomo truncates the last octet(s) server-side, which is what
-    // most EU deployments need; turn it off deliberately if you have a basis to
-    // store full addresses.
+    // On by default, and the truncation happens HERE — in this application, before
+    // the hit is sent. That is the answer to the question an EU deployment actually
+    // asks: the full address never leaves your server. (Matomo can also anonymize
+    // server-side; that is its own setting and independent of this one.) Turn this
+    // off deliberately if you have a basis to store full addresses.
     'anonymize_ip' => true,
 
     // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
-    // Cloudflare). SECURITY: the header value is trusted verbatim, so only set this when
+    // Cloudflare). A forwarding header is a CHAIN — `X-Forwarded-For` carries
+    // `client, proxy1, proxy2` — and the first address in it is the client; a port,
+    // brackets and a zone id are stripped for the same reason. A value holding no
+    // address at all is passed on untouched.
+    // SECURITY: the header is trusted WITHOUT VERIFICATION, so only set this when
     // the origin is reachable EXCLUSIVELY through the trusted proxy. If the origin is
     // directly reachable, a client can spoof it (poisoning cip / bypassing except_ips) —
     // prefer leaving this null and configuring Laravel's TrustProxies + $request->ip().
@@ -233,7 +251,11 @@ return [
         'track_authenticated' => true,   // include logged-in users
         'except_abilities' => [],        // skip users passing any of these Gate abilities, e.g. ['admin']
         'except_ips' => [],              // skip these client IPs / CIDR ranges
-        'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*'],
+        // `livewire-*/*` is Livewire 4, whose endpoint prefix carries a hash
+        // (`/livewire-490cd34f/update`); `livewire/*` alone covers Livewire 3 only.
+        // The second segment is required on purpose, so a page at `/livewire-tips`
+        // stays tracked.
+        'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*', 'livewire-*/*'],
 
         // THE CONSENT SEAM, and it can only ever say NO. Consulted LAST, after every
         // rule above it, and server-side only: return false to refuse tracking; true and
@@ -274,10 +296,15 @@ return [
         'redact' => [
             'enabled' => true,
             'replacement' => 'REDACTED',
+            // The OAuth callback is named in the documentation as a covered case, and its
+            // secret-bearing parameter is `code` — which was not on this list, along with
+            // `state`, `id_token`, `jwt` and `refresh_token`. A callback URL lands in `urlref`
+            // on the very next page view, so the authorization code reached Matomo intact.
             'query_params' => [
-                'token', 'api_key', 'apikey', 'api-key', 'access_token', 'auth',
-                'auth_token', 'password', 'passwd', 'pwd', 'secret', 'client_secret',
-                'signature', 'sig', '_token', 'session', 'session_id', 'sessionid',
+                'token', 'api_key', 'apikey', 'api-key', 'access_token', 'refresh_token',
+                'id_token', 'jwt', 'code', 'state', 'auth', 'auth_token', 'password',
+                'passwd', 'pwd', 'secret', 'client_secret', 'signature', 'sig', '_token',
+                'session', 'session_id', 'sessionid',
             ],
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
             'keys' => ['url', 'urlref', 'link', 'download'],

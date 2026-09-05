@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use MatomoAnalytics\Buffer\BufferFlusher;
+use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -32,7 +33,7 @@ final class WorkCommand extends Command
      */
     private bool $shouldStop = false;
 
-    public function handle(BufferFlusher $flusher): int
+    public function handle(BufferFlusher $flusher, ConsecutiveFailures $failures): int
     {
         $interval = max(1, Config::int('matomo-analytics.batch.flush_interval', 60));
         $maxRuns = $this->intOption('max-runs');
@@ -65,9 +66,38 @@ final class WorkCommand extends Command
         // unreachable lines and dropped this class to 95.7%.
         $this->trap(fn (): array => [SIGTERM, SIGINT], $this->stopAfterCurrentRun(...));
 
+        // THIS LOOP USED TO CALL `flush()`, DISCARD ITS COUNT, AND RETURN SUCCESS NO MATTER
+        // WHAT. Measured with three buffered hits: Matomo answering 400 gave exit 0 and no
+        // output; Matomo answering 200 gave exit 0 and no output. Byte-identical. Under a
+        // supervisor, a daemon losing every hit was indistinguishable from a healthy one, and
+        // `matomo:flush` in the same state exited 1 with a diagnosis.
+        //
+        // What is printed is deliberately asymmetric. A drainer runs every minute forever, so
+        // a line per run is a log nobody reads — the counterpart failure, and the one that
+        // would make this fix worthless. It speaks when hits moved and when a run is stuck,
+        // and stays silent on an idle minute.
+        $stuck = false;
+
         while (true) {
-            $flusher->flush();
+            $outcome = $flusher->drain();
             $runs++;
+
+            if ($outcome->delivered > 0) {
+                $this->info(sprintf('Flushed %d Matomo hit(s).', $outcome->delivered));
+            }
+
+            // The same two conditions `matomo:flush` uses, for the same reasons: zero
+            // delivered with something lost is the shape a wrong host, site id or token
+            // makes, and a consecutive-failure count at the alerting threshold is a drain
+            // that is not moving. Read every run, because a daemon's value is that it is
+            // still running — the exit code alone would only arrive when it stops.
+            $reason = $outcome->stuckReason();
+            $stuck = $reason !== null
+                || $failures->current() >= max(1, Config::int('matomo-analytics.resilience.reporting.report_after_attempts', 3));
+
+            if ($stuck) {
+                $this->error($reason ?? 'The drain is not moving — consecutive failures have reached the alerting threshold.');
+            }
 
             if ($this->shouldStop
                 || $this->option('once') === true
@@ -80,7 +110,7 @@ final class WorkCommand extends Command
             sleep($interval);
         }
 
-        return self::SUCCESS;
+        return $stuck ? self::FAILURE : self::SUCCESS;
     }
 
     /**

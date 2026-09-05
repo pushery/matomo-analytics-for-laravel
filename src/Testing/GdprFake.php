@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Testing;
 
 use Closure;
+use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Contracts\GdprClient;
 use PHPUnit\Framework\Assert;
 
@@ -12,7 +13,7 @@ use PHPUnit\Framework\Assert;
  * In-memory GdprClient for tests: records every operation and returns stubbed
  * results (no real deletion). Swap it in with MatomoGdpr::fake().
  */
-final class GdprFake implements GdprClient
+final class GdprFake implements Fake, GdprClient
 {
     /** @var list<array{op: string, segment: string|null, site: int|string|null, visits: int}> */
     public array $calls = [];

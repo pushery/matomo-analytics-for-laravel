@@ -23,7 +23,12 @@ interface GdprClient
     /**
      * Find the data subject by segment and erase every matching visit.
      *
-     * @return array<string, int>|null deletion counts keyed by storage area, [] if nothing matched, null on failure
+     * The counts carry Matomo's own storage areas, plus this package's local stores under
+     * `local_buffer` and `local_dead_letters`, plus `local_segment_understood` — a boolean
+     * saying whether the local half could evaluate the segment at all, which is a different
+     * answer from "nothing matched".
+     *
+     * @return array<string, bool|int>|null deletion counts keyed by storage area, [] if nothing matched, null on failure
      */
     public function forget(string $segment, int|string|null $site = null): ?array;
 

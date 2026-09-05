@@ -57,11 +57,43 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * self::ignoreMigrations() to publish and manage them in the host app instead
      * (e.g. queue-mode apps that do not use the database batch buffer).
      */
+    /** The named rate limiter the Web Vitals route uses — see routes/matomo-analytics.php. */
+    public const string WEB_VITALS_LIMITER = 'matomo-analytics-web-vitals';
+
     public static bool $runsMigrations = true;
+
+    /**
+     * Applied to each scheduled event before registration. See configureSchedule().
+     *
+     * @var (callable(Event): void)|null
+     */
+    private static $scheduleCallback;
 
     public static function ignoreMigrations(): void
     {
         self::$runsMigrations = false;
+    }
+
+    /**
+     * A consumer's hook on each scheduled event, applied before it is registered.
+     *
+     * WITHOUT IT THE OUTPUT OF BOTH COMMANDS GOES TO /dev/null AND NOTHING CAN CHANGE THAT.
+     * Laravel's `CommandBuilder` redirects to `$event->output` in `buildForegroundCommand()`
+     * AND `buildBackgroundCommand()`, so the diagnosis `matomo:flush` prints is discarded on
+     * the scheduled path in both modes — `schedule.run_in_background` buys back the exit code,
+     * not the message. And because this package registers the two events itself, every seam
+     * Laravel offers for a scheduled task was out of reach for exactly these two:
+     * `sendOutputTo()`, `emailOutputOnFailure()`, `onFailure()`, `pingOnFailure()`.
+     *
+     * A callback rather than a config key, because what belongs here is a file path, a webhook,
+     * a Slack ping or a monitor heartbeat, and none of those is a string in a config file. Same
+     * shape as `ignoreMigrations()` above, which is the seam this package already uses.
+     *
+     * @param  (callable(Event): void)|null  $callback  Null clears it.
+     */
+    public static function configureSchedule(?callable $callback): void
+    {
+        self::$scheduleCallback = $callback;
     }
 
     #[Override]
@@ -82,11 +114,20 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         // Scoped behaves exactly like a singleton within a classic request lifecycle.
         $this->app->scoped(ArrayHitBuffer::class);
         $this->app->singleton(DeadLetterStore::class);
-        $this->app->singleton(ConsecutiveFailures::class);
+        // Also scoped now, for the same reason one line down: `reset()` remembers whether it
+        // has already cleared the counter in this run, and that memo must not outlive the run.
+        // An instance kept across Octane requests would skip the delete that clears what a
+        // PREVIOUS request left, and only the TTL would ever clear it again.
+        $this->app->scoped(ConsecutiveFailures::class);
         $this->app->scoped(HitBuffer::class, static fn (): HitBuffer => App::make(BufferManager::class)->driver());
         $this->app->scoped(Tracker::class, TrackManager::class);
 
-        $this->app->singleton(ReportCache::class);
+        // SCOPED, not singleton, and that became load-bearing when `version()` grew a memo.
+        // The cache-key version is per-request state: another process can retire it at any
+        // time, so an instance that survives into the next request would go on building keys
+        // against a version that is no longer current and read its own stale entries back.
+        // Outside Octane `scoped` behaves exactly as `singleton` did.
+        $this->app->scoped(ReportCache::class);
         $this->app->scoped(ReportClient::class, MatomoReports::class);
         $this->app->scoped(GdprClient::class, GdprManager::class);
         $this->app->scoped(AnnotationsClient::class, AnnotationsManager::class);
@@ -176,7 +217,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             // be listening anyway -- an exit code from a per-minute background task is not a
             // channel anyone watches.
             //
-            // ⚠️ AND IT IS A SWITCH NOW, because that cost is the consumer's to weigh rather
+            // AND IT IS A SWITCH NOW, because that cost is the consumer's to weigh rather
             // than ours to impose. Laravel throws on a non-zero exit only when
             // `! $event->runInBackground`, so a background task dispatches no
             // ScheduledTaskFailed and never reaches the exception handler — Sentry, Flare and
@@ -235,9 +276,18 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      */
     private static function scheduled(Event $event): Event
     {
-        return Config::bool('matomo-analytics.schedule.run_in_background', true)
+        $event = Config::bool('matomo-analytics.schedule.run_in_background', true)
             ? $event->runInBackground()
             : $event;
+
+        // LAST, so a consumer's callback can override anything decided above it — including
+        // the background preference. It is their scheduler; the package's defaults are a
+        // starting point, and a seam that cannot reach the setting next to it is half a seam.
+        if (self::$scheduleCallback !== null) {
+            (self::$scheduleCallback)($event);
+        }
+
+        return $event;
     }
 
     private function registerTerminatingFlush(): void

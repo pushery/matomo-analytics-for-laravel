@@ -20,8 +20,9 @@ use DeviceDetector\DeviceDetector;
  *       'detector' => \MatomoAnalytics\Bots\DeviceDetectorBotDetector::class,
  *   ],
  *
- * The built-in token lists still run first; this is consulted last as the
- * comprehensive backstop (see DefaultBotDetector).
+ * The built-in token lists still run first; this is consulted last, and it is what
+ * catches a bot no token names -- the upstream catalog is maintained against every
+ * category, where the shipped lists cover the AI crawlers and the common generics.
  */
 final class DeviceDetectorBotDetector
 {

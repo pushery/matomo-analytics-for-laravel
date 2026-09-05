@@ -8,8 +8,11 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config as ConfigFacade;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
+use MatomoAnalytics\Buffer\DeadLetterStore;
 use MatomoAnalytics\Connection;
+use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Support\Config;
 use Throwable;
@@ -38,7 +41,11 @@ final class TestConnectionCommand extends Command
         }
 
         $this->reportConfigDrift();
+        $this->reportPlaintextHost();
         $this->reportRedisEvictionPolicy();
+        $this->reportRedisPersistence();
+        $this->reportPostgresTimeouts();
+        $this->reportBacklog();
 
         try {
             $result = $sender->send([$this->probe($connection)]);
@@ -79,6 +86,167 @@ final class TestConnectionCommand extends Command
      * skipped in silence -- a Redis that does not answer CONFIG is a managed instance with
      * the command disabled, which is common and is not itself a finding.
      */
+    /**
+     * Whether the host this package talks to is reachable without TLS.
+     *
+     * THIS IS A WARNING AND NOT A REFUSAL, DELIBERATELY. Matomo on a private network without
+     * TLS is a legitimate deployment, and refusing it would break installations that are fine.
+     * What is NOT fine is that it happens silently: `token_auth` travels in the request BODY on
+     * every hit, so a plaintext host puts an admin-capable credential on the wire each time —
+     * and until now the only feedback was this command answering "Matomo OK".
+     *
+     * It sits beside the eviction warning for the same reason: this is the surface an operator
+     * reaches for when they want to know whether the setup is sound.
+     */
+    /**
+     * How much is waiting, and how much has been given up on.
+     *
+     * THE PACKAGE SHIPPED NO SUPPORTED WAY TO ASK EITHER QUESTION. `HitBuffer::size()` had
+     * exactly one caller in the shipped tree — the load simulator — and `matomo:flush` reports
+     * only the pass it just made, so "the buffer grows and never drains", which the
+     * troubleshooting guide names as a symptom, could not be observed with anything the
+     * package hands you. This is the command someone runs while wondering where the data went.
+     *
+     * Silent when both are zero, and silent about the buffer outside `batch` mode: the shipped
+     * default is `queue`, where nothing writes to the buffer, so asking would stand a table up
+     * to report a number that cannot be anything but zero. A line on every healthy run is a
+     * line nobody reads.
+     */
+    /**
+     * Say when the Redis holding the buffer would not survive its own restart.
+     *
+     * The claim-before-send contract is about a crashing PROCESS and says nothing about the
+     * store. Measured: 5,000 hits buffered, `kill -9` on the server, restart — `size()`
+     * answers 0, the next flush delivers 0 and exits zero, which is what an idle minute also
+     * looks like. Persistence appeared nowhere in this package's documentation or output, and
+     * neither `appendonly` nor a tight `save` is the default anywhere.
+     */
+    private function reportRedisPersistence(): void
+    {
+        if (Config::string('matomo-analytics.mode', 'queue') !== 'batch'
+            || Config::string('matomo-analytics.batch.driver', 'database') !== 'redis') {
+            return;
+        }
+
+        try {
+            $connection = Redis::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
+            $appendonly = $connection->command('config', ['GET', 'appendonly']);
+            $save = $connection->command('config', ['GET', 'save']);
+        } catch (Throwable) {
+            return;
+        }
+
+        $aof = is_array($appendonly) ? ($appendonly['appendonly'] ?? $appendonly[1] ?? null) : null;
+        $rdb = is_array($save) ? ($save['save'] ?? $save[1] ?? null) : null;
+
+        if ($aof === 'yes') {
+            return;
+        }
+
+        $this->warn(is_string($rdb) && trim($rdb) !== ''
+            ? sprintf('Redis has appendonly off and saves on "%s" — a restart loses every hit buffered since the last save.', trim($rdb))
+            : 'Redis has appendonly off and no save points — a restart loses the whole buffer.');
+    }
+
+    /**
+     * Report the three PostgreSQL timeouts, because none of them can be set from Laravel.
+     *
+     * With no `lock_timeout`, the buffer write waits exactly as long as a lock on the table is
+     * held — measured at 22.9 seconds against a 22.9-second `ACCESS EXCLUSIVE`, with no upper
+     * bound, from the framework's `terminating()` callback and therefore inside a worker.
+     * Laravel's `pgsql` connector has no option for these, so they live on the role or the
+     * database, and a diagnostic is the only place a consumer would find out.
+     */
+    private function reportPostgresTimeouts(): void
+    {
+        try {
+            $connection = DB::connection();
+
+            if ($connection->getDriverName() !== 'pgsql') {
+                return;
+            }
+
+            $rows = $connection->select("SELECT name, setting FROM pg_settings WHERE name IN ('lock_timeout', 'statement_timeout', 'idle_in_transaction_session_timeout')");
+        } catch (Throwable) {
+            return;
+        }
+
+        $unset = [];
+
+        foreach ($rows as $row) {
+            $name = is_object($row) ? ($row->name ?? null) : null;
+            $setting = is_object($row) ? ($row->setting ?? null) : null;
+
+            if (is_string($name) && ($setting === '0' || $setting === 0)) {
+                $unset[] = $name;
+            }
+        }
+
+        if ($unset === []) {
+            return;
+        }
+
+        $this->warn(sprintf(
+            'PostgreSQL has %s unset, so a lock on the buffer table blocks the write that runs after each response for as long as the lock lasts. Set them with ALTER ROLE.',
+            implode(' and ', $unset),
+        ));
+    }
+
+    private function reportBacklog(): void
+    {
+        // EACH COUNT IS ITS OWN try, AND NEITHER MAY FAIL THE COMMAND. This is a
+        // diagnostic: an unreachable Redis, a spool that is not there yet, a database with no
+        // migration run — every one of those is a normal state for somebody typing
+        // `matomo:test`, and turning any of them into an exception removes the connectivity
+        // answer they actually came for. The same reasoning as the eviction probe below.
+        //
+        // Separate blocks rather than one, because the two stores fail independently: a Redis
+        // buffer being unreachable says nothing about whether the dead-letter table can be
+        // read, and one shared catch would hide the second number behind the first.
+        if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
+            try {
+                $waiting = App::make(HitBuffer::class)->size();
+            } catch (Throwable) {
+                $waiting = 0;
+            }
+
+            if ($waiting > 0) {
+                $this->warn(sprintf('Buffer: %d hit(s) waiting to be flushed.', $waiting));
+            }
+        }
+
+        if (! Config::bool('matomo-analytics.batch.dead_letter.enabled', true)) {
+            return;
+        }
+
+        try {
+            $dead = App::make(DeadLetterStore::class)->count();
+        } catch (Throwable) {
+            return;
+        }
+
+        if ($dead > 0) {
+            $this->warn(sprintf(
+                'Dead letters: %d batch(es) gave up and are parked — inspect them, then `matomo:replay`.',
+                $dead,
+            ));
+        }
+    }
+
+    private function reportPlaintextHost(): void
+    {
+        $host = Config::nullableString('matomo-analytics.host');
+
+        if ($host === null || str_starts_with(strtolower($host), 'https://')) {
+            return;
+        }
+
+        $this->warn(sprintf(
+            'MATOMO_HOST is "%s", which is not https — token_auth travels in the request body on every hit, so an admin-capable credential crosses the network in clear text. That is supportable on a private network and nowhere else.',
+            $host,
+        ));
+    }
+
     private function reportRedisEvictionPolicy(): void
     {
         if (Config::string('matomo-analytics.mode', 'queue') !== 'batch'

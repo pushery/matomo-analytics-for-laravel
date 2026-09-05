@@ -22,7 +22,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create($this->table(), function (Blueprint $table): void {
+        $table = $this->table();
+
+        $this->assertIdentifiersFit([$table]);
+
+        Schema::create($table, function (Blueprint $table): void {
             $table->id();
             $table->longText('payloads'); // one JSON hit per line (JSONL)
             $table->unsignedInteger('hits');
@@ -33,13 +37,54 @@ return new class extends Migration
             // index here would be paid for on every insert and used by nothing. It earns
             // one the day something filters on age (a retention window); until then it is
             // overhead with a plausible-looking name.
-            $table->timestamp('failed_at')->nullable();
+            $table->dateTime('failed_at')->nullable();
         });
     }
 
     public function down(): void
     {
         Schema::dropIfExists($this->table());
+    }
+
+    /**
+     * Refuse BEFORE any DDL when the prefixed identifiers would not fit.
+     *
+     * `Schema::create()` sends more than one statement, and MySQL reports
+     * `supportsSchemaTransactions: false` -- so a failure halfway leaves the table created,
+     * the migration unrecorded, `migrate:rollback` doing nothing, and every later `migrate`
+     * dying on "1050 Table already exists". Neither forward nor back, until somebody drops it
+     * by hand. Measured: with a table prefix of 22 characters it runs, at 23 it falls, and a
+     * `tenant_<uuid>_` prefix is about 44.
+     *
+     * PostgreSQL is not safe either, it is merely recoverable: past 63 characters it TRUNCATES
+     * silently, which collided two index names at a prefix of 32, and its transactional DDL
+     * then rolled the whole thing back.
+     *
+     * So the check runs first and names the identifier and the prefix. A migration that
+     * refuses is a problem somebody can fix; a half-created schema is not.
+     *
+     * @param  list<string>  $identifiers  unprefixed table and index names this migration creates
+     */
+    private function assertIdentifiersFit(array $identifiers): void
+    {
+        $prefix = Schema::getConnection()->getTablePrefix();
+        $limit = Schema::getConnection()->getDriverName() === 'pgsql' ? 63 : 64;
+
+        foreach ($identifiers as $identifier) {
+            $full = $prefix.$identifier;
+
+            if (strlen($full) <= $limit) {
+                continue;
+            }
+
+            throw new RuntimeException(sprintf(
+                'The Matomo migration cannot create "%s": %d characters with the table prefix "%s", and this database allows %d. Shorten the prefix, or rename the table through matomo-analytics.batch.table.',
+                $full,
+                strlen($full),
+                $prefix,
+                $limit,
+            ));
+        }
     }
 
     private function table(): string

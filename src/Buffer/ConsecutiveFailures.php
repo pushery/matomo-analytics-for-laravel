@@ -16,6 +16,9 @@ final class ConsecutiveFailures
 {
     private const string KEY = 'matomo-analytics:flush:consecutive-failures';
 
+    /** Whether this instance has already cleared the counter — see reset(). */
+    private bool $cleared = false;
+
     public function current(): int
     {
         $value = Cache::get(self::KEY);
@@ -55,13 +58,42 @@ final class ConsecutiveFailures
         // long since tripped `batch.max_attempts`.
         Cache::add(self::KEY, 0, Date::now()->addDay());
 
+        $this->cleared = false;
+
         $next = Cache::increment(self::KEY);
 
         return is_int($next) ? $next : $this->current();
     }
 
+    /**
+     * Forget the counter, at most once per instance until it is incremented again.
+     *
+     * THIS WAS A ROUND TRIP PER DELIVERED BATCH, ALMOST ALWAYS ON A KEY THAT DOES NOT
+     * EXIST. `deliver()` calls it on every success, so a fully healthy 2000-hit flush issued
+     * 40 `DEL` commands — counted at a TCP relay. At 1ms of round-trip time that is 40ms per
+     * flush and, on a per-minute schedule, 57,600 consequence-free round trips per day per
+     * application. Thirty-nine of the forty are repeats of a delete that already happened
+     * inside the same run.
+     *
+     * THE FLAG SAYS "ALREADY CLEARED", NOT "NEVER INCREMENTED", AND THE DIFFERENCE IS THE
+     * WHOLE CORRECTNESS OF THIS. The counter is CROSS-PROCESS by design — it is what carries a
+     * failure from one scheduled `matomo:flush` to the next, and each of those is a new
+     * process. A flag meaning "this instance never incremented" would therefore skip the very
+     * delete that matters, the one clearing what the PREVIOUS run left, and nothing but the
+     * TTL would ever clear the counter again. The first version of this was written that way
+     * and an existing arm caught it.
+     *
+     * So the first `reset()` after construction always reaches the cache, and only the repeats
+     * within one drain are dropped. Every cross-process guarantee is unchanged.
+     */
     public function reset(): void
     {
+        if ($this->cleared) {
+            return;
+        }
+
+        $this->cleared = true;
+
         Cache::forget(self::KEY);
     }
 }
