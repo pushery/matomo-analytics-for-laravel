@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] - 2026-09-05
+
+### Changed
+
+- Nothing in the installed package. Every file this package installs is byte-identical to `v0.27.0` — measured, and the only difference in the published tree is this changelog entry itself. Everything else that changed since then is repository maintenance that never leaves the private repo. Consumers on `v0.27.0` gain nothing by upgrading, and the version exists so the tag history stays continuous instead of skipping a number.
+
 ## [0.27.0] - 2026-09-05
 
 ### Added
@@ -1361,6 +1367,7 @@ half that makes it work was not.
 -->
 
 [Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...HEAD
+[0.27.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.24.0...v0.25.0
