@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\BotDetector;
 use MatomoAnalytics\Contracts\TrackingGate;
@@ -68,7 +69,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
         }
 
         $routes = Config::stringList('matomo-analytics.tracking.except_routes');
-        if ($routes !== [] && $request->is(...$routes)) {
+        if ($routes !== [] && Str::is($routes, $this->trackedPath($request, $hit))) {
             return GateDecision::deny('route');
         }
 
@@ -114,6 +115,32 @@ final readonly class DefaultTrackingGate implements TrackingGate
         $user = $request->user();
 
         return $user !== null && Gate::forUser($user)->any($abilities);
+    }
+
+    /**
+     * The path this hit is ABOUT, which is not always the path it arrived on.
+     *
+     * `except_routes` USED TO MEASURE THE REQUEST AND NOTHING ELSE, so a Web Vitals beacon
+     * was tested against `/matomo-analytics/web-vitals` — a path no exclusion list ever names.
+     * Measured with `except_routes => ['admin/*']`: a page view on `/admin/customers` was
+     * denied with reason `route`, and a beacon measured ON that page was allowed. Both
+     * `web-vitals.md` ("an excluded route produces no event") and `tracking-gate.md` ("every
+     * hit passes through one gate") describe the first case and not the second.
+     *
+     * A hit that carries its own `url` is telling us where it happened; anything else is
+     * about the request it arrived on, which is the ordinary case and unchanged.
+     */
+    private function trackedPath(Request $request, Hit $hit): string
+    {
+        $url = $hit->toParams()['url'] ?? null;
+
+        if (! is_string($url) || $url === '') {
+            return $request->decodedPath();
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+
+        return is_string($path) ? trim(rawurldecode($path), '/') : $request->decodedPath();
     }
 
     private function excludedByIp(Request $request): bool

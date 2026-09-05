@@ -26,6 +26,7 @@
     "require": {
         "php": "^8.4",
         "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.0 || ^8.0",
         "illuminate/auth": "^12.0 || ^13.0",
         "illuminate/bus": "^12.0 || ^13.0",
         "illuminate/cache": "^12.0 || ^13.0",
@@ -43,12 +44,13 @@
         "illuminate/support": "^12.0 || ^13.0",
         "illuminate/translation": "^12.0 || ^13.0",
         "illuminate/view": "^12.0 || ^13.0",
+        "nesbot/carbon": "^3.0",
         "symfony/console": "^7.0 || ^8.0",
         "symfony/http-foundation": "^7.0 || ^8.0",
         "symfony/http-kernel": "^7.0 || ^8.0"
     },
     "require-dev": {
-        "larastan/larastan": "3.10.0",
+        "larastan/larastan": "3.11.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
@@ -60,8 +62,8 @@
         "pestphp/pest-plugin-phpstan": "5.2.0",
         "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "phpstan/phpstan": "2.2.9",
-        "rector/rector": "2.6.3",
+        "phpstan/phpstan": "2.2.13",
+        "rector/rector": "2.6.6",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {

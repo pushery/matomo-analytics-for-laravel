@@ -54,7 +54,7 @@ final readonly class Snippet
             '(function(){',
             '  var start=function(){',
             '    var wv=window.webVitals; if(!wv){return;}',
-            '    var send=function(m){try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType})],{type:"application/json"}));}catch(e){}};',
+            '    var send=function(m){try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType,url:location.href})],{type:"application/json"}));}catch(e){}};',
             '    '.$names.'.forEach(function(n){var f=wv["on"+n];if(f){f(send);}});',
             '  };',
             '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',

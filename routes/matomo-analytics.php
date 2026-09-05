@@ -2,8 +2,13 @@
 
 declare(strict_types=1);
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use MatomoAnalytics\Http\Controllers\WebVitalsController;
+use MatomoAnalytics\MatomoAnalyticsServiceProvider;
+use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 
 // Core Web Vitals ingest endpoint. The route is always registered (so toggling the
@@ -20,9 +25,26 @@ $webVitals = Route::post(
 // it, got `null` and therefore an unauthenticated POST endpoint with no rate limit at all.
 // An explicit `'throttle' => null` still switches it off; an absent key now gets what the
 // package ships.
+//
+// AND IT IS KEYED ON THE PACKAGE'S OWN CLIENT IP, NOT ON `$request->ip()`. Laravel's throttle
+// resolves its key from the request's IP, which is the proxy's address behind a CDN unless the
+// application has configured TrustProxies — so every visitor of such an installation shares
+// one bucket, and the limit meant to bound one abuser bounds everybody instead. This package
+// already resolves the real address through `ip_header` for `cip` and `except_ips`; the
+// throttle now uses the same answer.
+//
+// Registered as a NAMED limiter rather than `throttle:<max>,<minutes>`, because the key is
+// only reachable that way. The configured "requests,minutes" shape is unchanged.
 $throttle = Config::nullableStringOrShipped('matomo-analytics.web_vitals.throttle');
 if ($throttle !== null) {
-    $webVitals->middleware('throttle:'.$throttle);
+    [$max, $minutes] = array_pad(array_map(trim(...), explode(',', $throttle, 2)), 2, '1');
+
+    RateLimiter::for(MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER, static fn (Request $request): Limit => Limit::perMinutes(
+        max(1, (int) $minutes),
+        max(1, (int) $max),
+    )->by(ClientIp::resolve($request) ?? 'matomo-analytics:unknown-client'));
+
+    $webVitals->middleware('throttle:'.MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER);
 }
 
 // THIS ROUTE IS IN NO MIDDLEWARE GROUP, and that has a consequence worth stating rather

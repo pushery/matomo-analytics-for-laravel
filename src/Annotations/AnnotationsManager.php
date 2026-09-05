@@ -96,7 +96,10 @@ final class AnnotationsManager implements AnnotationsClient
     {
         return Http::asForm()
             ->timeout(Config::int('matomo-analytics.reporting.timeout', 10))
-            ->withOptions(['version' => 1.1]);
+            ->withOptions(['version' => 1.1])
+            // Same reason as `HttpSender::request()`: a 307/308 replays the body, and the body
+            // carries `token_auth`. Refused rather than sanitized.
+            ->withoutRedirecting();
     }
 
     private function fail(string $message, ?Throwable $previous = null): null

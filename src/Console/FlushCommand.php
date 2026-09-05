@@ -32,11 +32,10 @@ final class FlushCommand extends Command
         // longer throws — so this code is for the reader who runs it by hand, for
         // `matomo:work`, and for whatever watches exit codes. The events remain the channel
         // for the scheduled path.
-        if ($outcome->isStuck()) {
-            $this->error(sprintf(
-                'Nothing was delivered and %d batch(es) were dead-lettered — check host, site id and token.',
-                $outcome->deadLettered,
-            ));
+        $reason = $outcome->stuckReason();
+
+        if ($reason !== null) {
+            $this->error($reason);
 
             return self::FAILURE;
         }

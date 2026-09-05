@@ -46,11 +46,40 @@ final class GdprManager implements GdprClient
         return array_values(array_filter($result, is_array(...)));
     }
 
+    /**
+     * @return array<string, bool|int>|null Matomo's counts, plus `local_buffer`,
+     *                                      `local_dead_letters` and `local_segment_understood`
+     */
     public function forget(string $segment, int|string|null $site = null): ?array
     {
         $visits = $this->descriptorsFor($segment, $site);
 
-        return is_array($visits) ? $this->deleteVisits($visits) : null;
+        if (! is_array($visits)) {
+            return null;
+        }
+
+        $counts = $this->deleteVisits($visits);
+
+        if ($counts === null) {
+            return null;
+        }
+
+        // MATOMO IS NOT THE ONLY PLACE THIS PERSON'S HITS ARE. `matomo_tracking_buffer`
+        // holds one built payload per row and `matomo_dead_letters` holds whole batches for up
+        // to thirty days — `cip`, `ua`, `url`, `urlref`, `uid` — in the CONSUMER's own
+        // database. Erasing only at Matomo let an operator report a request fulfilled while
+        // the same person's address and user agent sat in their own tables.
+        //
+        // Reported under its own keys rather than folded into Matomo's counts: the two are
+        // different systems, and `local_segment_understood` says whether this half ran at all
+        // — a segment expression this package will not evaluate is a real answer, not a zero.
+        $local = (new LocalHitPurge)->forget($segment);
+
+        return array_merge($counts, [
+            'local_buffer' => $local['buffer'],
+            'local_dead_letters' => $local['dead_letters'],
+            'local_segment_understood' => $local['matched'],
+        ]);
     }
 
     public function export(string $segment, int|string|null $site = null): ?array
@@ -180,7 +209,10 @@ final class GdprManager implements GdprClient
     {
         return Http::asForm()
             ->timeout(Config::int('matomo-analytics.reporting.timeout', 10))
-            ->withOptions(['version' => 1.1]);
+            ->withOptions(['version' => 1.1])
+            // Same reason as `HttpSender::request()`: a 307/308 replays the body, and the body
+            // carries `token_auth`. Refused rather than sanitized.
+            ->withoutRedirecting();
     }
 
     private function fail(string $message, ?Throwable $previous = null): null

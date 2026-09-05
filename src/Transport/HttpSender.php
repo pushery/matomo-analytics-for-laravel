@@ -28,7 +28,7 @@ final class HttpSender implements Sender
      * handshake — up to forty of them against the same host in one flush run, where one
      * connection would have done.
      *
-     * ⚠️ SHARED HANDLER, NOT A SHARED CLIENT, and the difference decides whether `Http::fake()`
+     * SHARED HANDLER, NOT A SHARED CLIENT, and the difference decides whether `Http::fake()`
      * still works. `PendingRequest::setClient()` bypasses `buildHandlerStack()` entirely, and
      * the fake IS a handler-stack middleware — so reusing a client would have silently turned
      * every faked request in the suite into a real one. `setHandler()` sits UNDER that
@@ -62,9 +62,48 @@ final class HttpSender implements Sender
             ? $this->sendSingle($payloads[0])
             : $this->sendBulk($payloads);
 
-        return $response->successful()
-            ? SendResult::success($response->status())
-            : SendResult::failure($response->status());
+        if (! $response->successful()) {
+            return SendResult::failure($response->status());
+        }
+
+        return $this->readEnvelope($response);
+    }
+
+    /**
+     * What a 200 says about itself.
+     *
+     * THE BODY WAS NEVER READ, AND MATOMO ANSWERS 200 TO A BULK REQUEST IT PARTLY REFUSED.
+     * `successful()` alone made every one of those a delivery: the batch was acked out of the
+     * buffer, never dead-lettered, and the hits were gone with every signal green.
+     *
+     * Two things are acted on and no more, because the per-entry envelope shape was read
+     * rather than measured against a live instance:
+     *
+     *   `status: error`   unambiguous under any reading — Matomo refusing inside a 200 is not
+     *                     a delivery, so the batch takes the ordinary failure path.
+     *   `invalid: N`      carried out as a number for the caller to report. It does not say
+     *                     WHICH hits, so no accounting is built on it and the batch is still
+     *                     a success: the ones that landed did land.
+     *
+     * Anything else — an empty body, an image, a non-JSON string, JSON without these keys —
+     * behaves exactly as before. The tracker answers a single hit with an image or with
+     * nothing, depending on `send_image`, so that path must stay untouched.
+     */
+    private function readEnvelope(Response $response): SendResult
+    {
+        $body = json_decode($response->body(), true);
+
+        if (! is_array($body)) {
+            return SendResult::success($response->status());
+        }
+
+        if (($body['status'] ?? null) === 'error') {
+            return SendResult::failure($response->status());
+        }
+
+        $invalid = $body['invalid'] ?? 0;
+
+        return SendResult::success($response->status(), is_int($invalid) ? max(0, $invalid) : 0);
     }
 
     /**
@@ -103,6 +142,18 @@ final class HttpSender implements Sender
         return Http::connectTimeout($this->connection->connectTimeout)
             ->timeout($this->connection->timeout)
             ->withOptions(['version' => 1.1])
+            // A 307 OR 308 KEEPS THE METHOD AND THE BODY, AND THE TOKEN IS IN THE BODY.
+            // Guzzle's `RedirectMiddleware` hands back an empty modifier set for any status
+            // above 302, so the POST is replayed verbatim at whatever host the Location names.
+            // Its cross-origin stripping covers `Authorization` and `Cookie` — headers — and
+            // this token is a form field, so it travelled. Measured end to end: a 307 sent
+            // `token_auth` to a foreign host, and `protocols` allowed the downgrade to http.
+            //
+            // The trigger is a RESPONSE FROM THE MATOMO HOST, which on Matomo Cloud is a third
+            // party — and the same token is an admin token, because the GDPR deletion path
+            // requires one. A redirect is not an expected state here, so it is refused rather
+            // than sanitized.
+            ->withoutRedirecting()
             ->setHandler($this->handler());
     }
 

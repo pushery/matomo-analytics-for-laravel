@@ -39,11 +39,26 @@ final class MatomoReports implements ReportClient
             return null;
         }
 
-        return $this->cache->remember(
+        $result = $this->cache->remember(
             $this->cache->key($method, $params),
             $this->cache->ttlFor($method, $params),
             fn (): ?array => $this->fetch($method, $params),
         );
+
+        // A CACHE HIT NEVER REACHED THE ONE PLACE THAT CLEARS `lastError`. `remember()`
+        // returns before the resolver runs, and `call()` — inside the resolver — held the only
+        // `lastError = null` there was. So a read that SUCCEEDED left a previous failure
+        // standing for as long as the entry lived, and the contract promises "null when
+        // healthy". The documented use is a dashboard banner, which is exactly what kept
+        // showing.
+        //
+        // Cleared here rather than at the top of the method, because a miss whose fetch fails
+        // must keep the error the fetch just set.
+        if ($result !== null) {
+            $this->lastError = null;
+        }
+
+        return $result;
     }
 
     public function query(string $method): ReportQuery
@@ -170,7 +185,10 @@ final class MatomoReports implements ReportClient
     {
         return Http::asForm()
             ->timeout(Config::int('matomo-analytics.reporting.timeout', 10))
-            ->withOptions(['version' => 1.1]);
+            ->withOptions(['version' => 1.1])
+            // Same reason as `HttpSender::request()`: a 307/308 replays the body, and the body
+            // carries `token_auth`. Refused rather than sanitized.
+            ->withoutRedirecting();
     }
 
     private function isReady(): bool

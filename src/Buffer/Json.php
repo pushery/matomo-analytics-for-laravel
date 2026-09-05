@@ -36,7 +36,16 @@ final class Json
             }
         }
 
-        return $payload;
+        // EVERY VALUE DROPPED IS THE LOUDEST CORRUPTION SIGNAL THERE IS, AND IT USED TO
+        // RETURN `[]` — which `decodeAll()` kept as a valid payload. Downstream that meant
+        // `BufferBatch::isEmpty()` was false, so the unreadable-batch path never ran, and empty
+        // payloads went to Matomo as hits and counted as delivered.
+        //
+        // An empty result is refused whether the line decoded to `{}` or to an object whose
+        // values were all non-scalar: neither can be sent as a hit, because Matomo needs at
+        // least `idsite` and `rec`. One surviving value is enough to keep the line — refusing
+        // over a single unexpected key would throw away a real hit.
+        return $payload === [] ? null : $payload;
     }
 
     /**

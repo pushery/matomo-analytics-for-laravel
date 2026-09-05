@@ -168,33 +168,61 @@ final readonly class PayloadBuilder
      * and neither side complains: Matomo stores what it is sent and the geolocation simply
      * misses.
      *
-     * The two `is_string` arms are the declared `string|false` of the two calls, not a
-     * second opinion about the input — a value this method returns unchanged is one
-     * `filter_var` already refused.
+     * REJECTION IS `inet_pton` RATHER THAN `filter_var`, and the difference is one class:
+     * a zone id. `filter_var` refuses `fe80::1%eth0`, so it used to leave here VERBATIM — a
+     * whole link-local address surviving the setting that exists to cut it. It is an address
+     * with an interface qualifier, not a non-address, and it is now masked like one. The
+     * contract the paragraph above states is unchanged: what is not an address is handed back.
+     *
+     * The `is_string` arms are the declared `string|false` of the calls, not a second opinion
+     * about the input.
      */
     private function anonymizeIpv6(string $ip): string
     {
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+        // THE ZONE ID IS STRIPPED HERE RATHER THAN LEFT TO `inet_pton`, because whether it
+        // accepts one is a LIBC question. It does on glibc and on macOS; it does not on musl,
+        // which is what the container CI runs — so the arm covering `fe80::1%eth0` passed
+        // locally and failed on the lane, over a portability difference rather than over
+        // behavior. `ClientIp` strips it at the source for the same reason it is meaningless
+        // here: it names an interface on the machine that wrote it.
+        $percent = strpos($ip, '%');
+        $ip = $percent === false ? $ip : substr($ip, 0, $percent);
+
+        $packed = inet_pton($ip);
+
+        if (! is_string($packed) || strlen($packed) !== 16) {
             // The forwarding header this can come from (`ip_header`) is whatever a proxy
             // put there, so anything that is not an address is handed back untouched
             // rather than sliced into something that resembles one.
             return $ip;
         }
 
-        if (str_contains($ip, '.')) {
+        // Ten zero bytes then `ff ff`: the packed form of `::ffff:0:0/96`, the range RFC 4291
+        // reserves for an IPv4 address carried inside an IPv6 one.
+        $mappedPrefix = str_repeat("\0", 10)."\xff\xff";
+
+        if (str_starts_with($packed, $mappedPrefix)) {
             // An IPv4 address wearing an IPv6 coat (`::ffff:192.0.2.1`) is anonymized as
             // the IPv4 address it is. Masking it to 48 bits would be correct arithmetic and
             // useless data: every mapped address has 48 zero bits in front, so all of them
             // would collapse to the same `::`.
-            $parts = explode(':', $ip);
-            $parts[count($parts) - 1] = $this->anonymizeIpv4($parts[count($parts) - 1]);
+            //
+            // THE TEST USED TO BE `str_contains($ip, '.')`, AND RFC 4291 LETS **ANY** IPv6
+            // ADDRESS END IN DOTTED-QUAD NOTATION. `2001:db8::192.0.2.1` is an ordinary
+            // global address that merely writes its last 32 bits the familiar way — it took
+            // this branch and left with 112 of its 128 bits intact, on the one setting whose
+            // whole job is to remove them.
+            //
+            // Reading the packed prefix asks what the branch is actually about, and it makes
+            // the two spellings of one mapped address agree as a side effect: `::ffff:c000:201`
+            // carries no dot, so it used to fall through to the 48-bit mask and collapse to
+            // `::` while `::ffff:192.0.2.1` kept its network.
+            $mapped = inet_ntop(substr($packed, 12));
 
-            return implode(':', $parts);
+            return is_string($mapped) ? '::ffff:'.$this->anonymizeIpv4($mapped) : $ip;
         }
 
-        $packed = inet_pton($ip);
-        $masked = (is_string($packed) ? substr($packed, 0, 6) : '').str_repeat("\0", 10);
-        $anonymized = inet_ntop($masked);
+        $anonymized = inet_ntop(substr($packed, 0, 6).str_repeat("\0", 10));
 
         return is_string($anonymized) ? $anonymized : $ip;
     }

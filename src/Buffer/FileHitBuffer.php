@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\HitBuffer;
+use MatomoAnalytics\Exceptions\BufferUnavailableException;
 use MatomoAnalytics\Support\Config;
 use SplFileObject;
 
@@ -51,15 +52,35 @@ final class FileHitBuffer implements HitBuffer
         $this->reclaimStale();
 
         $queue = $this->queue();
-        if (! is_file($queue)) {
+
+        // Atomically rename the queue aside, and READ THE SYSCALL'S OWN ANSWER. There used to
+        // be an `is_file($queue)` guard above this and no check at all below it, so three very
+        // different states came out as one empty batch: nothing buffered, a concurrent claim
+        // that got there first, and a rename that FAILED.
+        //
+        // THE THIRD ONE WEDGED THE SPOOL SILENTLY AND FOREVER. An empty batch is how the
+        // flusher learns the buffer is drained. Measured with the spool directory at `0555`:
+        // delivered 0, dead-lettered 0, `isStuck()` false, no log, no event, and
+        // `matomo:flush` printing `Flushed 0 Matomo hit(s).` every minute over hits that were
+        // still sitting in the file.
+        //
+        // The queue file separates the last two. A rival renamed it away, so it is gone; a
+        // rename that failed on permissions, a full disk or a read-only mount left it exactly
+        // where it was. `clearstatcache()` because the answer must come from the filesystem
+        // rather than from a stat taken before the rename.
+        $claim = $this->dir().'/processing.'.Str::uuid().'.jsonl';
+
+        if (! @rename($queue, $claim)) {
+            clearstatcache(true, $queue);
+
+            if (is_file($queue)) {
+                throw new BufferUnavailableException(
+                    'The Matomo file buffer could not claim its queue — check that '.$this->dir().' is writable.',
+                );
+            }
+
             return BufferBatch::empty();
         }
-
-        // Atomically rename the queue aside. If a concurrent claim already took it,
-        // the rename is a no-op and the claim file is absent — readLines() then
-        // streams nothing and the empty-batch path below applies.
-        $claim = $this->dir().'/processing.'.Str::uuid()->toString().'.jsonl';
-        @rename($queue, $claim);
 
         // rename(2) preserves the queue's mtime, so on an idle spool the fresh claim file
         // inherits an already-stale timestamp. Stamp it with the claim time up front so a
@@ -99,7 +120,9 @@ final class FileHitBuffer implements HitBuffer
 
         file_put_contents($claim, implode("\n", $taken)."\n");
 
-        return new BufferBatch($claim, Json::decodeAll($taken));
+        $payloads = Json::decodeAll($taken);
+
+        return new BufferBatch($claim, $payloads, count($taken) - count($payloads));
     }
 
     public function ack(BufferBatch $batch): void

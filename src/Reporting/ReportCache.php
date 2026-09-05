@@ -18,6 +18,9 @@ use MatomoAnalytics\Support\Config;
  */
 final class ReportCache
 {
+    /** @see version() — read once per instance, moved by flush(). */
+    private ?int $memoizedVersion = null;
+
     /**
      * @param  Closure(): (array<array-key, mixed>|null)  $resolver
      * @return array<array-key, mixed>|null
@@ -82,18 +85,42 @@ final class ReportCache
 
     public function flush(): void
     {
-        $this->repo()->forever($this->versionKey(), $this->version() + 1);
+        $next = $this->version() + 1;
+
+        $this->repo()->forever($this->versionKey(), $next);
+
+        // The memo is this instance's, so the flush that just moved the version has to move
+        // it here too — otherwise the very request that cleared the cache keeps building keys
+        // against the version it just retired and reads its own stale entries back.
+        $this->memoizedVersion = $next;
     }
 
+    /**
+     * The cache-key version segment, read once per instance.
+     *
+     * IT WAS READ ON EVERY KEY BUILD, AND A KEY IS BUILT PER REPORT. Twelve warm dashboard
+     * widgets therefore cost 24 round trips, half of them fetching the same counter — which
+     * cannot change within a request unless this instance changes it, and `flush()` updates
+     * the memo when it does.
+     *
+     * THE BINDING WAS CHANGED FROM `singleton` TO `scoped` FOR THIS. "Per instance" is only
+     * "per request" if the instance is, and a singleton survives every request under Octane —
+     * it would keep serving a version another process had already retired. A static property
+     * would have the same defect and no binding to fix it.
+     */
     private function version(): int
     {
+        if ($this->memoizedVersion !== null) {
+            return $this->memoizedVersion;
+        }
+
         $value = $this->repo()->get($this->versionKey());
 
         if (is_int($value)) {
-            return $value;
+            return $this->memoizedVersion = $value;
         }
 
-        return is_numeric($value) ? (int) $value : 0;
+        return $this->memoizedVersion = is_numeric($value) ? (int) $value : 0;
     }
 
     private function versionKey(): string

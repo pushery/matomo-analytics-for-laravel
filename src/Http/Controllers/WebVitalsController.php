@@ -6,8 +6,11 @@ namespace MatomoAnalytics\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Tracking\CustomParameters;
+use MatomoAnalytics\Tracking\Event;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -62,14 +65,61 @@ final class WebVitalsController
         // client cannot push an arbitrary unbounded name.
         $rating = $request->input('rating');
 
-        $tracker->event(
+        $event = new Event(
             Config::string('matomo-analytics.web_vitals.category', 'Web Vitals'),
             $metric,
             is_string($rating) && in_array($rating, ['good', 'needs-improvement', 'poor'], true) ? $rating : null,
             $measurement,
         );
 
+        $page = $this->pageUrl($request);
+
+        $tracker->track($page === null ? $event : CustomParameters::for($event)->param('url', $page));
+
         return new Response(status: Response::HTTP_NO_CONTENT);
+    }
+
+    /**
+     * The page the measurement was taken on, or null when the beacon did not name one this
+     * application will vouch for.
+     *
+     * WITHOUT THIS, EVERY WEB VITALS EVENT WAS FILED AGAINST THE INGEST ENDPOINT. The
+     * payload builder takes `url` from the request it runs in, and for a beacon that request
+     * is `/matomo-analytics/web-vitals` — so Matomo learned the metric and the rating and
+     * never which page was slow, which is the one question the feature exists to answer. It
+     * is also why `except_routes` could not protect these events: the gate had only the
+     * beacon's own path to match, and no exclusion list names that.
+     *
+     * AND THE VALUE IS UNAUTHENTICATED CLIENT INPUT ON A PUBLIC ENDPOINT. A form-encoded
+     * cross-origin POST is CORS-simple and needs no preflight, so any page anywhere can make
+     * its own visitors beacon this route — measured at HTTP 204 with the event recorded.
+     * Trusting the URL would let that page choose which of this application's pages the
+     * poisoned measurement is filed under.
+     *
+     * So only this application's own origin is accepted, compared on scheme, host and port.
+     * A URL from anywhere else is DROPPED rather than refused: the beacon is still a real
+     * measurement from a real visitor, and the fallback is exactly the old behavior.
+     */
+    private function pageUrl(Request $request): ?string
+    {
+        $url = $request->input('url');
+
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        $own = parse_url(URL::to('/'));
+
+        if (! is_array($parts) || ! is_array($own)) {
+            return null;
+        }
+
+        $same = ($parts['scheme'] ?? null) === ($own['scheme'] ?? null)
+            && ($parts['host'] ?? null) === ($own['host'] ?? null)
+            && ($parts['port'] ?? null) === ($own['port'] ?? null);
+
+        return $same ? $url : null;
     }
 
     private function plausibleMeasurement(mixed $value): ?float

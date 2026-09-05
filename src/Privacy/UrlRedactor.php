@@ -26,26 +26,50 @@ final class UrlRedactor
         return $this->redactPatterns($this->redactQueryParams($url, $replacement), $replacement);
     }
 
+    /**
+     * ONE PASS OVER THE URL, NOT ONE PER PARAMETER. This ran a separate
+     * `preg_replace_callback` for every configured name — two dozen ship by default, so an
+     * ordinary hit paid one full scan of its URL per name, and the audit counted 36 passes
+     * per hit across the two URLs a payload carries.
+     *
+     * The names go into one alternation instead. Each match is independent of the others, so
+     * the combined pattern finds exactly what the sequence of patterns found: `[?&]` anchors
+     * every branch to a parameter boundary, and `[^&#]*` stops at the next one, so no branch
+     * can consume the separator another branch needs.
+     *
+     * The early return is the bigger win in practice: a URL with no `?` cannot match `[?&]`
+     * at all, and most page views have no query string.
+     */
     private function redactQueryParams(string $url, string $replacement): string
     {
+        if (! str_contains($url, '?')) {
+            return $url;
+        }
+
+        $names = [];
+
         foreach (Config::stringList('matomo-analytics.privacy.redact.query_params') as $param) {
-            // Match `name=` and the array forms `name[]=` / `name[0]=`, so a bracketed
-            // key does not let the value slip through unredacted.
-            $pattern = '/([?&]'.preg_quote($param, '/').'(?:\[[^\]&#]*\])?=)[^&#]*/i';
-
-            $result = preg_replace_callback(
-                $pattern,
-                /** @param array<int, string> $matches */
-                static fn (array $matches): string => $matches[1].rawurlencode($replacement),
-                $url,
-            );
-
-            if (is_string($result)) {
-                $url = $result;
+            if ($param !== '') {
+                $names[] = preg_quote($param, '/');
             }
         }
 
-        return $url;
+        if ($names === []) {
+            return $url;
+        }
+
+        // Match `name=` and the array forms `name[]=` / `name[0]=`, so a bracketed
+        // key does not let the value slip through unredacted.
+        $pattern = '/([?&](?:'.implode('|', $names).')(?:\[[^\]&#]*\])?=)[^&#]*/i';
+
+        $result = preg_replace_callback(
+            $pattern,
+            /** @param array<int, string> $matches */
+            static fn (array $matches): string => $matches[1].rawurlencode($replacement),
+            $url,
+        );
+
+        return is_string($result) ? $result : $url;
     }
 
     private function redactPatterns(string $url, string $replacement): string

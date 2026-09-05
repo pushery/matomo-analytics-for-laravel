@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Testing;
 
 use Closure;
+use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Reporting\Concerns\ResolvesCommonReports;
 use MatomoAnalytics\Reporting\ReportQuery;
@@ -14,7 +15,7 @@ use PHPUnit\Framework\Assert;
  * In-memory ReportClient for tests: records every request and returns stubbed
  * responses (default null = a cache/API miss). Swap it in with MatomoReports::fake().
  */
-final class MatomoReportsFake implements ReportClient
+final class MatomoReportsFake implements Fake, ReportClient
 {
     use ResolvesCommonReports;
 
