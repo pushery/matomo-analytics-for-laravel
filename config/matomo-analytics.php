@@ -38,6 +38,35 @@ return [
 
     'host' => env('MATOMO_HOST'),
     'site_id' => env('MATOMO_SITE_ID'),
+
+    // A SITE ID PER REQUEST, FOR MULTI-TENANT APPLICATIONS. Null means "use site_id above",
+    // which is what almost every application wants.
+    //
+    // The shape is `fn(): ?int` -- an invokable class-string (config-cache-safe) or a closure.
+    // It takes no arguments on purpose: the tenant is a property of the application's own
+    // request context, which the callback already has, and passing a Hit would tie this seam
+    // to a value object it has no business knowing.
+    //
+    // It is resolved PER PAYLOAD, so a buffered batch may legitimately carry hits for several
+    // sites -- each buffered hit already holds its own `idsite`, and Matomo's Bulk endpoint
+    // accepts a mixed batch. That is why this is a resolver rather than a `scoped` binding:
+    // rebuilding the connection per request would not fix the buffer, and this does.
+    //
+    // A resolver that throws, or answers with anything but a positive int, falls back to
+    // `site_id`. Tracking never breaks the caller, and that includes an extension point.
+    'site_id_resolver' => null,
+
+    // REFUSE TO TRACK OVER A PLAINTEXT HOST. Off by default, because Matomo on a private
+    // network without TLS is a legitimate deployment and turning this on by default would
+    // silently stop tracking for every one of them.
+    //
+    // With it on, a `host` that is not https makes the connection count as UNCONFIGURED --
+    // the same no-op path a missing host takes, never an exception. This package does not
+    // throw into application code, and a security setting is the last place to start.
+    //
+    // What it protects: `token_auth` travels in the request body on every server-side hit,
+    // so an admin-capable credential crosses the network in clear text.
+    'require_tls' => env('MATOMO_REQUIRE_TLS', false),
     'token' => env('MATOMO_TOKEN'),
     'tracker_path' => env('MATOMO_TRACKER_PATH', 'matomo.php'),
     'js_path' => env('MATOMO_JS_PATH', 'matomo.js'),

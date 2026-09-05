@@ -20,6 +20,7 @@ final readonly class Connection
         public int $timeout,
         public int $connectTimeout,
         public string $reportingPath = 'index.php',
+        public bool $requireTls = false,
     ) {}
 
     public static function fromConfig(): self
@@ -32,12 +33,30 @@ final readonly class Connection
             timeout: Config::int('matomo-analytics.timeout', 5),
             connectTimeout: Config::int('matomo-analytics.resilience.connect_timeout', 2),
             reportingPath: Config::string('matomo-analytics.reporting.path', 'index.php'),
+            requireTls: Config::bool('matomo-analytics.require_tls', false),
         );
     }
 
     public function isConfigured(): bool
     {
-        return $this->host !== '' && $this->siteId > 0;
+        if ($this->host === '' || $this->siteId <= 0) {
+            return false;
+        }
+
+        return ! $this->requireTls || $this->hostIsEncrypted();
+    }
+
+    /**
+     * Whether the configured host would carry `token_auth` over TLS.
+     *
+     * Kept separate from isConfigured() so a caller can tell the two refusals apart. They
+     * need opposite reactions -- a missing host is something you have not done yet, a
+     * plaintext host under require_tls is something you asked the package to refuse -- and
+     * a single boolean would send an operator hunting for a host that is already set.
+     */
+    public function hostIsEncrypted(): bool
+    {
+        return str_starts_with(strtolower($this->host), 'https://');
     }
 
     public function trackingUrl(): string

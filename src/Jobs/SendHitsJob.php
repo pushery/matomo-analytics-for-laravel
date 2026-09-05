@@ -45,6 +45,31 @@ final class SendHitsJob implements ShouldQueue
         $this->onQueue(Config::string('matomo-analytics.queue.queue', 'matomo'));
     }
 
+    /**
+     * Horizon reads this; every other queue driver ignores it.
+     *
+     * Without it a buffered batch lands in Horizon's `default` group and stops being
+     * distinguishable from the application's own work — the package's jobs are then
+     * visible only as a share of a number nobody can attribute.
+     *
+     * THIS METHOD MUST NOT THROW. It runs while the job is being pushed, and this
+     * package's whole stance is that tracking never breaks the caller. `Config::int`
+     * is total — it answers with its default for a missing, null or non-numeric value —
+     * so the site id cannot turn a dispatch into an exception.
+     *
+     * The site id is included because it is BOUNDED: one tag per configured site.
+     * Anything per-batch (a hit count, a payload digest) would mint a new tag on every
+     * dispatch, and Horizon indexes tags.
+     *
+     * @return list<string>
+     */
+    public function tags(): array
+    {
+        $siteId = Config::int('matomo-analytics.site_id');
+
+        return $siteId > 0 ? ['matomo', "matomo:site-{$siteId}"] : ['matomo'];
+    }
+
     public function tries(): int
     {
         return Config::int('matomo-analytics.queue.tries', 5);

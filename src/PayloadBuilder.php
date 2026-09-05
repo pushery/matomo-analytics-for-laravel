@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace MatomoAnalytics;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config as ConfigFacade;
 use MatomoAnalytics\Contracts\VisitorIdResolver;
 use MatomoAnalytics\Privacy\UrlRedactor;
+use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Tracking\Hit;
+use Throwable;
 
 /**
  * Turns a Hit plus the originating request into a flat Matomo Tracking API
@@ -26,12 +29,38 @@ final readonly class PayloadBuilder
     ) {}
 
     /**
+     * The site this hit belongs to: whatever the configured resolver answers, else the
+     * connection's own id.
+     *
+     * THIS RUNS ON THE REQUEST PATH AND MUST NOT THROW. A resolver is application code the
+     * package cannot see, so anything it does other than returning a positive int -- throwing,
+     * returning null, a string, a negative -- falls back rather than propagating. An
+     * extension point that can break tracking is worse than no extension point.
+     */
+    private function siteId(): int
+    {
+        $resolver = CallableResolver::resolve(ConfigFacade::get('matomo-analytics.site_id_resolver'));
+
+        if ($resolver === null) {
+            return $this->connection->siteId;
+        }
+
+        try {
+            $resolved = $resolver();
+        } catch (Throwable) {
+            return $this->connection->siteId;
+        }
+
+        return is_int($resolved) && $resolved > 0 ? $resolved : $this->connection->siteId;
+    }
+
+    /**
      * @return array<string, scalar>
      */
     public function build(Hit $hit, Request $request): array
     {
         $base = [
-            'idsite' => $this->connection->siteId,
+            'idsite' => $this->siteId(),
             'rec' => 1,
             'apiv' => 1,
             'send_image' => 0,
@@ -90,7 +119,7 @@ final readonly class PayloadBuilder
         }
 
         $payload = [
-            'idsite' => $this->connection->siteId,
+            'idsite' => $this->siteId(),
             'rec' => 1,
             'recMode' => Config::int('matomo-analytics.ai_chatbots.rec_mode', 1),
             'send_image' => 0,
