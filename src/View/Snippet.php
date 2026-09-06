@@ -61,11 +61,11 @@ final readonly class Snippet
             '})();',
         ]);
 
-        $script = '<script'.$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
+        $script = '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
 
         $library = Config::nullableString('matomo-analytics.web_vitals.library');
         if ($library !== null) {
-            return '<script'.$this->nonceAttribute($nonce).' defer src="'.e($library).'"></script>'."\n".$script;
+            return '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).' defer src="'.e($library).'"></script>'."\n".$script;
         }
 
         return $script;
@@ -286,9 +286,34 @@ final readonly class Snippet
         return $nonce !== null && $nonce !== '' ? ' nonce="'.e($nonce).'"' : '';
     }
 
+    /**
+     * Keeps a tag from being re-executed on every client-side navigation.
+     *
+     * Livewire's navigate plugin re-runs every <script> in the body it swaps in, unless the
+     * tag carries this attribute AND the plugin has already seen that tag's hash. Both
+     * snippets here register listeners on `document`, which survives the swap — so a re-run
+     * never replaces the old registration, it adds another one beside it.
+     *
+     * For the tracker that means a second bootstrap and another matomo.js insert per hop; for
+     * web vitals it means every metric is reported once per hop the session has made, which
+     * scales an app's published Core Web Vitals with its navigation depth. Neither errors.
+     *
+     * The hash ignores `data-csrf`, `nonce` and `aria-hidden`, so a per-request CSP nonce does
+     * not defeat it. Everything else these snippets emit comes from configuration and is
+     * therefore identical between two pages of one app. Where it is NOT — a per-page site id,
+     * say — the hash differs, Livewire re-runs the tag, and the new configuration applies:
+     * the attribute degrades toward today's behavior rather than into a stale tracker.
+     *
+     * Outside Livewire it is an inert data attribute.
+     */
+    private function runOnceAttribute(): string
+    {
+        return ' data-navigate-once';
+    }
+
     private function wrap(string $javascript, ?string $nonce): string
     {
-        $html = '<script'.$this->nonceAttribute($nonce).'>'."\n".$javascript."\n".'</script>';
+        $html = '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$javascript."\n".'</script>';
 
         if (Config::bool('matomo-analytics.js.dns_prefetch', true)) {
             $html = '<link rel="dns-prefetch" href="'.e($this->connection->host).'">'."\n".$html;

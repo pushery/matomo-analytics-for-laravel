@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.1] - 2026-09-06
+
+### Fixed
+
+- Both `@matomoScript` and `@matomoWebVitals` now mark their `<script>` tags `data-navigate-once`, so a client-side navigation no longer re-runs them. Livewire's navigate plugin re-executes every script in the body it swaps in, and both snippets register listeners on `document`, which survives that swap — so each hop left the previous registration in place and added another beside it. Measured in a consuming application at 11 listeners added and 0 removed per navigation, against two other libraries on the same page that tore down cleanly. For Web Vitals the consequence reached the data: with N sets of observers on a metric, N beacons were sent for it, so an application's published Core Web Vitals scaled with how deeply a session had browsed — silently, and biased upward, because deep sessions weighed more than shallow ones. For the tracker it meant another `matomo.js` insert and another set of `_paq` configuration commands per hop. Livewire hashes the tag to decide whether it has run it, and exempts `nonce` from that hash, so a per-request CSP nonce does not defeat the marker; where a tag genuinely differs between two pages the hash differs too and it runs again, which is the behavior that was wanted there anyway. Outside Livewire the attribute is inert.
+
 ## [0.28.0] - 2026-09-05
 
 ### Added
@@ -1380,7 +1386,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.2...v0.28.0
 [0.27.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.0...v0.27.1
