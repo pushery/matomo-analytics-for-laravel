@@ -386,7 +386,7 @@ return [
     'middleware' => [
         'auto' => false,            // auto-register on the 'web' group
         'only_get' => true,         // only GET requests
-        'only_successful' => true,  // only 2xx responses
+        'only_successful' => true,  // only delivered pages: 2xx and 304
         'skip_livewire' => true,    // skip Livewire update requests
         'strip_query' => false,     // drop the query string from the tracked URL
 

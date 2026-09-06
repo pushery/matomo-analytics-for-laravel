@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.2] - 2026-09-06
+
+### Fixed
+
+- `TrackPageViews` counts a `304 Not Modified` again. `only_successful` was implemented as `Response::isSuccessful()`, which is strictly 200-299, so a 304 was dropped — and a 304 is a delivered page: the reader has it, the server only declined to resend the bytes. On any site with cache validators that is the second and every later view of a page, so return visits stopped being counted at all. The hole only became reachable in 0.28.0, when tracking moved to `terminate()`: before that a consuming application could order an ETag middleware behind the tracker so it still saw the untouched 200, and `terminate()` runs after the whole stack, where the status is always final. A redirect is still not counted, deliberately — it delivers no page, and the page it lands on is tracked on its own request, so counting both would record two page views for one page. `TrackSiteSearch` keeps its own wider rule for the opposite reason: a search happened whatever the response rendered, including a redirect straight to a single hit. Both edges now have arms, so the difference between the two middlewares cannot be flattened by mistake. The shipped `config/matomo-analytics.php` comment and two documentation tables said "2xx only" and have been corrected.
+
 ## [0.28.1] - 2026-09-06
 
 ### Fixed
@@ -1386,7 +1392,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...HEAD
+[0.28.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...v0.28.2
 [0.28.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.2...v0.28.0
 [0.27.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.1...v0.27.2
