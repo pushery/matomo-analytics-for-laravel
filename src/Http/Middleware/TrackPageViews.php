@@ -122,7 +122,23 @@ final readonly class TrackPageViews
             return true;
         }
 
-        return Config::bool('matomo-analytics.middleware.only_successful', true) && ! $response->isSuccessful();
+        // A DELIVERED PAGE IS 2xx OR 304 -- and `isSuccessful()` alone is strictly 200-299.
+        //
+        // A 304 means the reader has the page; the server only declined to resend the bytes.
+        // Dropping it lost the second and every later view of every cached page, which on a
+        // site with cache validators is most of the traffic. The hole only became reachable in
+        // 0.28: tracking moved to `terminate()`, which runs after the whole stack, so a
+        // consumer can no longer order an ETag middleware behind the tracker to keep the 200.
+        //
+        // NOT `>= 400`, though `TrackSiteSearch` uses that and the difference looks like an
+        // inconsistency worth flattening. It is not. A redirect delivers no page: the browser
+        // follows it and the TARGET is tracked on its own request, so counting the 3xx as well
+        // would record two page views for one page. Site search asks a different question --
+        // the search HAPPENED, whatever the response rendered -- so counting a redirect there
+        // is right and counting one here is not. Both directions are pinned by arms.
+        return Config::bool('matomo-analytics.middleware.only_successful', true)
+            && ! $response->isSuccessful()
+            && $response->getStatusCode() !== Response::HTTP_NOT_MODIFIED;
     }
 
     private function title(Request $request, Response $response): string
