@@ -4,11 +4,21 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.3] - 2026-09-07
+
+### Changed
+
+- **The bundled AI-crawler list is refreshed, 164 tokens to 172.** The new entries are `Diffbot-User`, `DoubaoBot`, `ERNIEBot`, `Kimi-SearchBot`, `MistralAI-Index`, `MistralAI-Training`, `OAI-AdsBot` and `QwenBot`; nothing was removed. Two of them are the same vendor splitting one agent into separate index and training identities, which is worth knowing if you allow one and not the other. Traffic from these agents was being counted as ordinary visits and no longer is, so a site with meaningful AI-crawler traffic will see a small drop in visit counts rather than a change in behavior.
+
+### Fixed
+
+- **Core Web Vitals collection works again under `php artisan route:cache`, which is to say in production.** The named rate limiter the beacon endpoint throttles on was registered inside `routes/matomo-analytics.php`, and `loadRoutesFrom()` is a bare `require` that Laravel skips outright once the route table has been compiled — so in any deploy that caches its routes the registration never ran, while the compiled table went on carrying the `throttle:` middleware that names it. Every beacon answered 500 with `MissingRateLimiterException`, and the measurement in it was discarded. One consuming site logged 334 occurrences in the hours after its deploy; every LCP and CLS it collected in that window is gone, and its error page filled with identical entries of the kind a real outage disappears into. Registration moves to `MatomoAnalyticsServiceProvider::boot()`, which runs whether routes are cached or not; the `throttle:` attachment stays in the routes file, where being compiled into the table is exactly what makes it survive. It is registered unconditionally now and reads its configuration per request rather than at boot, because the route table and the provider are compiled at two different moments: an installation that switches `web_vitals.throttle` off — or on — without rebuilding the route cache would otherwise reopen the same 500 from the other side. An opt-out answers an unlimited limit instead. Everything on 0.27.0 through 0.28.2 is affected; 0.26.x and earlier are not, because they used the inline `throttle:<max>,<minutes>` form, which carries its parameters in the compiled string and has no registration to lose. The switch to a named limiter that introduced this is still right and stays — only a named limiter can key on the address this package resolves itself, rather than on `$request->ip()`, which behind a CDN is the proxy and puts every visitor in one bucket.
+
 ## [0.28.2] - 2026-09-06
 
 ### Fixed
 
-- `TrackPageViews` counts a `304 Not Modified` again. `only_successful` was implemented as `Response::isSuccessful()`, which is strictly 200-299, so a 304 was dropped — and a 304 is a delivered page: the reader has it, the server only declined to resend the bytes. On any site with cache validators that is the second and every later view of a page, so return visits stopped being counted at all. The hole only became reachable in 0.28.0, when tracking moved to `terminate()`: before that a consuming application could order an ETag middleware behind the tracker so it still saw the untouched 200, and `terminate()` runs after the whole stack, where the status is always final. A redirect is still not counted, deliberately — it delivers no page, and the page it lands on is tracked on its own request, so counting both would record two page views for one page. `TrackSiteSearch` keeps its own wider rule for the opposite reason: a search happened whatever the response rendered, including a redirect straight to a single hit. Both edges now have arms, so the difference between the two middlewares cannot be flattened by mistake. The shipped `config/matomo-analytics.php` comment and two documentation tables said "2xx only" and have been corrected.
+- `TrackPageViews` counts a `304 Not Modified` again. `only_successful` was implemented as `Response::isSuccessful()`, which is strictly 200-299, so a 304 was dropped — and a 304 is a delivered page: the reader has it, the server only declined to resend the bytes. On any site with cache validators that is the second and every later view of a page, so return visits stopped being counted at all. The hole only became reachable in 0.27.0, when tracking moved to `terminate()`: before that a consuming application could order an ETag middleware behind the tracker so it still saw the untouched 200, and `terminate()` runs after the whole stack, where the status is always final. (This sentence shipped saying 0.28.0 and was wrong by one minor. Corrected against the tree rather than against the neighboring entry: `git log -S 'function terminate'` finds one commit, `1ef1323`, and `git tag --contains` puts it first in v0.27.0 — `v0.26.0` carries no `terminate()` at all. The 0.27.0 entry two sections down described the move correctly all along, so the two contradicted each other on the same page.) A redirect is still not counted, deliberately — it delivers no page, and the page it lands on is tracked on its own request, so counting both would record two page views for one page. `TrackSiteSearch` keeps its own wider rule for the opposite reason: a search happened whatever the response rendered, including a redirect straight to a single hit. Both edges now have arms, so the difference between the two middlewares cannot be flattened by mistake. The shipped `config/matomo-analytics.php` comment and two documentation tables said "2xx only" and have been corrected.
 
 ## [0.28.1] - 2026-09-06
 
@@ -1392,7 +1402,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...HEAD
+[0.28.3]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...v0.28.3
 [0.28.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...v0.28.2
 [0.28.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.27.2...v0.28.0
