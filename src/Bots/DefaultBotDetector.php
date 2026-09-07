@@ -101,10 +101,15 @@ final class DefaultBotDetector implements BotDetector
     /**
      * A COMPILE-TIME token list, lowercased once for the whole process.
      *
-     * 164 `mb_strtolower()` CALLS PER HIT, ON VALUES THAT CANNOT CHANGE. The lowering sits
-     * inside the match loop, and `AiCrawlers::TOKENS` has 164 entries — measured at 0.0035ms
-     * per hit, about 4% of `track()`, spent turning the same constants into the same strings
-     * over and over.
+     * ONE `mb_strtolower()` CALL PER TOKEN PER HIT, ON VALUES THAT CANNOT CHANGE. The lowering
+     * sat inside the match loop over `AiCrawlers::TOKENS` — 0.0035ms per hit, about 4% of
+     * `track()`, spent turning the same constants into the same strings over and over.
+     *
+     * AND THE SIZE OF THAT LIST IS DELIBERATELY NOT WRITTEN DOWN HERE. This paragraph said
+     * "164 entries" twice, and it was wrong the day the upstream sync landed eight more — a
+     * comment that names the size of a list a BOT maintains is a claim nobody re-checks, and it
+     * goes stale on a schedule. The cost is one call per token, which is the part that does not
+     * move. `AiCrawlersTest` holds the rule with a derived arm.
      *
      * Only the CONSTANTS go through here. A configured list (`bots.allow`, `bots.deny`, a
      * custom chatbot list) is read from config on every call and is short, and memoizing it

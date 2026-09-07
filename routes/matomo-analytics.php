@@ -2,13 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use MatomoAnalytics\Http\Controllers\WebVitalsController;
 use MatomoAnalytics\MatomoAnalyticsServiceProvider;
-use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 
 // Core Web Vitals ingest endpoint. The route is always registered (so toggling the
@@ -35,15 +31,17 @@ $webVitals = Route::post(
 //
 // Registered as a NAMED limiter rather than `throttle:<max>,<minutes>`, because the key is
 // only reachable that way. The configured "requests,minutes" shape is unchanged.
+//
+// ONLY THE ATTACHMENT IS HERE. THE REGISTRATION IS IN THE PROVIDER, AND THAT IS NOT A STYLE
+// CHOICE. This file is loaded by `loadRoutesFrom()`, a bare `require` that Laravel skips
+// outright once `php artisan route:cache` has compiled the route table — so a
+// `RateLimiter::for()` written here runs on a developer machine and never in a production
+// deploy, while the compiled table goes on carrying the `throttle:` name below. From v0.27.0
+// to v0.28.2 that is exactly what shipped, and every beacon into a route-cached installation
+// answered 500. What stays here is the line that has to: the middleware name is compiled INTO
+// the cached table, which is precisely why it survives and the registration did not.
 $throttle = Config::nullableStringOrShipped('matomo-analytics.web_vitals.throttle');
 if ($throttle !== null) {
-    [$max, $minutes] = array_pad(array_map(trim(...), explode(',', $throttle, 2)), 2, '1');
-
-    RateLimiter::for(MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER, static fn (Request $request): Limit => Limit::perMinutes(
-        max(1, (int) $minutes),
-        max(1, (int) $max),
-    )->by(ClientIp::resolve($request) ?? 'matomo-analytics:unknown-client'));
-
     $webVitals->middleware('throttle:'.MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER);
 }
 
