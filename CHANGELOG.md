@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.4] - 2026-09-08
+
+### Changed
+
+- **`matomo:work` pauses through Laravel's `Sleep` helper instead of calling `sleep()`.** In production it is the same call. What it buys is that the interval between flushes became an assertable value rather than an elapsed one: the shipped default of 60 seconds had no test that could reach it, because telling 60 from 59 meant waiting a real second, and every arm in the suite therefore set `flush_interval` explicitly and read past the default. It is also useful on your side — `Sleep::fake()` in your own tests now intercepts the worker's pause, so a test that drives `matomo:work` no longer has to wait through it. That is the whole of what this version changes for an installed package. Everything else that moved since 0.28.3 is repository maintenance — test coverage, working notes — and none of it is installed or shipped.
+
 ## [0.28.3] - 2026-09-07
 
 ### Changed
@@ -1402,7 +1408,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...HEAD
+[0.28.4]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...v0.28.3
 [0.28.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...v0.28.2
 [0.28.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.0...v0.28.1
