@@ -4,6 +4,18 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.5] - 2026-09-09
+
+### Fixed
+
+- The delivery documentation worked from a `batch.size` of 50 in two capacity figures; the
+  shipped default is 200. One of them sat 61 lines below the correct block on the same page.
+  It is a figure carried into a calculation rather than looked up, so a plan built on it came
+  out a factor of four short and looked plausible.
+- The `opt_out` configuration example omitted its `privacy` level. A missing key falls back to
+  the shipped default rather than failing, so following that example produced a configuration
+  that looked set while consent went on being ignored.
+
 ## [0.28.4] - 2026-09-08
 
 ### Changed
@@ -1408,7 +1420,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...HEAD
+[0.28.5]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...v0.28.3
 [0.28.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.1...v0.28.2
