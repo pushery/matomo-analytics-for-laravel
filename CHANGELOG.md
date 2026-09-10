@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.6] - 2026-09-10
+
+### Changed
+
+- **The manifest now declares the four PHP extensions the shipped code calls** — `ext-ctype`, `ext-filter`, `ext-hash` and `ext-mbstring`. Nothing about the code changed.
+
+  **Nothing changes for an install that already worked, and that is worth stating plainly rather than leaving you to check:** all four were already required transitively by this package's own direct dependencies — `ext-ctype` through `illuminate/support`, `ext-filter` through `illuminate/http`, `illuminate/routing` and `illuminate/support`, `ext-hash` through `illuminate/auth`, `illuminate/cookie` and `illuminate/routing`, and `ext-mbstring` through `illuminate/console` and `illuminate/support`. Every PHP that could resolve this package therefore already had them.
+
+  What changes is where the requirement is written. A transitive guarantee is a property of somebody else's manifest: nothing that reads ours can see it, `composer check-platform-reqs` included, and it can be narrowed upstream without a signal here. A contract test now holds both directions, so a declared extension cannot outlive its call site either.
+
 ## [0.28.5] - 2026-09-09
 
 ### Fixed
@@ -1421,6 +1431,7 @@ half that makes it work was not.
 -->
 
 [Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...HEAD
+[0.28.6]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.2...v0.28.3
