@@ -25,7 +25,11 @@
     },
     "require": {
         "php": "^8.4",
+        "ext-ctype": "*",
+        "ext-filter": "*",
+        "ext-hash": "*",
         "ext-json": "*",
+        "ext-mbstring": "*",
         "guzzlehttp/guzzle": "^7.0 || ^8.0",
         "illuminate/auth": "^12.0 || ^13.0",
         "illuminate/bus": "^12.0 || ^13.0",
