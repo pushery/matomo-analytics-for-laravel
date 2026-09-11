@@ -4,6 +4,18 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.7] - 2026-09-11
+
+### Changed
+
+- **The buffered payload is stored as `jsonb` on PostgreSQL.** Run `php artisan migrate` after updating; a migration retypes the column on an existing install, and it does nothing on MySQL or SQLite.
+
+  The payload is a map of Matomo tracking parameters. The array cast writes it and reads it back, and the flush rebuilds a query string out of the array — nothing reads its bytes, compares two encodings of the same map, or depends on key order, which is the one thing `json` can do that `jsonb` cannot. `jsonb` parses once on write instead of on every read, stores smaller, and is the type a containment or key lookup could use. It is also what every consumer's database audit asks for: SQLens reports the column as `PG.L6.JSON_NOT_JSONB` in each of their reports.
+
+  The migration refuses a configured `batch.table` that is not a bare identifier, and it does so BEFORE it checks whether the table exists. That order is the whole of the guard: the other way round `Schema::hasTable()` answers false for any name that is not a real table, so a hostile one takes the quiet exit and the refusal can never run. Nothing changes for a configured name that is an identifier, which is every name Laravel can create a table under.
+
+  **Two findings from the same audit are decisions and stay**, now with an arm each so that changing them has to be deliberate. `claimed_at`, `created_at` and `failed_at` are `timestamp without time zone` because MySQL's `TIMESTAMP` shifts with the session time zone and ends in 2038, and `timestamptz` has no MySQL counterpart — a shared definition would hand MySQL that defect back. `id` is `$table->id()`, Laravel's own serial: an identity column is the better PostgreSQL default, and adopting it here would make this package's tables differ from every other table in the application for a property no read path touches.
+
 ## [0.28.6] - 2026-09-10
 
 ### Changed
@@ -1430,7 +1442,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...HEAD
+[0.28.7]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.6...v0.28.7
 [0.28.6]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.3...v0.28.4

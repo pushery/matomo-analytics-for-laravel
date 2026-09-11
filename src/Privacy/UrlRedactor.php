@@ -37,8 +37,8 @@ final class UrlRedactor
      * every branch to a parameter boundary, and `[^&#]*` stops at the next one, so no branch
      * can consume the separator another branch needs.
      *
-     * The early return is the bigger win in practice: a URL with no `?` cannot match `[?&]`
-     * at all, and most page views have no query string.
+     * The early return is the bigger win, and not only a shortcut: most page views have no `?`,
+     * and without one `[?&]` could still match an `&` in the path, where there is no parameter.
      */
     private function redactQueryParams(string $url, string $replacement): string
     {
