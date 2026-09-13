@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.8] - 2026-09-13
+
+### Fixed
+
+- **The scheduled flush and dead-letter prune run once per tick, not once per server.** Both were guarded against overlapping runs but not against a second application server: the overlap lock is released as soon as a run finishes, so a flush done on one node let the next node flush the same buffer in the same minute, and the daily prune ran once per node. Both events now carry `onOneServer()`, which takes a lock per event and tick. That lock needs a cache store shared between your servers; on `file` or `array` every server takes its own, and nothing reports it. A `configureSchedule()` callback can still switch it off.
+
 ## [0.28.7] - 2026-09-11
 
 ### Changed
@@ -1442,7 +1448,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.8...HEAD
+[0.28.8]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.6...v0.28.7
 [0.28.6]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.4...v0.28.5
