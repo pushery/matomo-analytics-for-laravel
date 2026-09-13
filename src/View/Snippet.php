@@ -6,6 +6,7 @@ namespace MatomoAnalytics\View;
 
 use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Connection;
+use MatomoAnalytics\Http\Middleware\TrackPageViews;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -95,6 +96,48 @@ final readonly class Snippet
      *
      * Returns '' when tracking is inactive, exactly like the other parts.
      */
+    /**
+     * A page that was delivered out of a speculation-rules prefetch reports itself, once.
+     *
+     * THE SERVER CANNOT SEE THIS PAGE VIEW AT ALL, AND THAT IS WHY THERE IS A SCRIPT HERE.
+     * The prefetch request is skipped by {@see TrackPageViews}
+     * on purpose — the pointer resting on a link is not a visit — and the navigation that
+     * follows makes no request, because the browser already holds the bytes. Skipping alone
+     * would therefore trade a page view too many for a page view missing.
+     *
+     * `deliveryType` is the browser's own answer to "where did this document come from", and
+     * `navigational-prefetch` is the only value this beacons on: an ordinary load has already
+     * been counted server-side, and beaconing it too would double every view on the site. An
+     * engine that does not report `deliveryType` sends nothing, which is the behavior before
+     * this existed.
+     *
+     * Run on DOMContentLoaded for the same reason as the Web Vitals glue above it, plus one of
+     * its own: `document.title` is read here, and in `<head>` — where a consumer will put this
+     * directive next to the tracker — the title element may not be parsed yet.
+     */
+    public function prefetchPageView(?string $nonce = null): string
+    {
+        if (! Config::bool('matomo-analytics.enabled', false) || ! Config::bool('matomo-analytics.prefetch_beacon.enabled', false)) {
+            return '';
+        }
+
+        $path = $this->js(URL::to(Config::string('matomo-analytics.prefetch_beacon.path', 'matomo-analytics/page-view')));
+
+        $glue = implode("\n", [
+            '(function(){',
+            '  var start=function(){',
+            '    if(!performance.getEntriesByType){return;}',
+            '    var nav=performance.getEntriesByType("navigation")[0];',
+            '    if(!nav||nav.deliveryType!=="navigational-prefetch"){return;}',
+            '    try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({url:location.href,title:document.title})],{type:"application/json"}));}catch(e){}',
+            '  };',
+            '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',
+            '})();',
+        ]);
+
+        return '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
+    }
+
     public function noscript(): string
     {
         return $this->active() ? $this->noscriptPixel() : '';

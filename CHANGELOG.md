@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-09-13
+
+### Added
+
+- **A page the browser served out of a Speculation Rules prefetch can report itself.** Skipping the prefetch alone would trade a page view too many for a page view missing: when the reader does click, the browser renders the page from bytes it already holds and the server hears nothing. Opt into `prefetch_beacon` and `@matomoPrefetchPageView` renders a small inline script that asks the browser where the document came from and beacons a page view **only** when the answer is `navigational-prefetch` — an ordinary load has already been counted server-side, and an engine that does not report `deliveryType` sends nothing. The endpoint accepts only a URL on your own origin, bounds the title, falls back to the path when none is sent, and runs the hit through the normal gate; it is throttled on the visitor's real address and answers 404 while the feature is off. The directive takes a CSP nonce like the others.
+
+### Fixed
+
+- **A Speculation Rules prefetch no longer counts as a page view.** `TrackPageViews` skipped a `wire:navigate` prefetch but not one from `<script type="speculationrules">`, which is an ordinary GET with a full 200 HTML body — so with `eagerness: moderate`, where Chrome fetches as soon as the pointer rests on a link, a reader hovering a menu counted a view for every link they passed over. A request whose `Sec-Purpose` or `Purpose` header carries `prefetch` is now skipped; the match is on the token, so a prerender (`prefetch;prerender`) is covered too. `middleware.skip_prefetch` switches it back off.
+
 ## [0.28.8] - 2026-09-13
 
 ### Fixed
@@ -1448,7 +1458,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.8...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.8...v0.29.0
 [0.28.8]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.6...v0.28.7
 [0.28.6]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.5...v0.28.6

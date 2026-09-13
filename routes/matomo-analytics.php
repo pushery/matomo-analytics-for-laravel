@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use MatomoAnalytics\Http\Controllers\PrefetchPageViewController;
 use MatomoAnalytics\Http\Controllers\WebVitalsController;
 use MatomoAnalytics\MatomoAnalyticsServiceProvider;
 use MatomoAnalytics\Support\Config;
@@ -55,4 +56,23 @@ if ($throttle !== null) {
 $middleware = Config::stringList('matomo-analytics.web_vitals.middleware');
 if ($middleware !== []) {
     $webVitals->middleware($middleware);
+}
+
+// The page-view beacon for a page the browser served out of a speculation-rules prefetch.
+// Same shape as the route above and for the same reasons — always registered so toggling the
+// feature needs no route-cache rebuild, the controller 404s while it is off, throttled through
+// a NAMED limiter registered in the provider (a `RateLimiter::for()` written here would not
+// survive `route:cache`), and in no middleware group, because sendBeacon carries no CSRF token.
+$prefetchPageView = Route::post(
+    Config::string('matomo-analytics.prefetch_beacon.path', 'matomo-analytics/page-view'),
+    PrefetchPageViewController::class,
+)->name('matomo-analytics.prefetch-page-view');
+
+if (Config::nullableStringOrShipped('matomo-analytics.prefetch_beacon.throttle') !== null) {
+    $prefetchPageView->middleware('throttle:'.MatomoAnalyticsServiceProvider::PREFETCH_BEACON_LIMITER);
+}
+
+$beaconMiddleware = Config::stringList('matomo-analytics.prefetch_beacon.middleware');
+if ($beaconMiddleware !== []) {
+    $prefetchPageView->middleware($beaconMiddleware);
 }

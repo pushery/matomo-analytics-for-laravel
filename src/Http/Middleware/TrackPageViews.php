@@ -122,6 +122,29 @@ final readonly class TrackPageViews
             return true;
         }
 
+        // SPECULATION RULES ARE THE SAME HAZARD WITH A DIFFERENT HEADER, AND THE BROWSER SAYS
+        // SO ITSELF. A prefetch from `<script type="speculationrules">` is an ordinary GET with
+        // a full 200 HTML body — every other test here passes it — and Chrome marks it with
+        // `Sec-Purpose: prefetch`. With `eagerness: moderate` that request is sent when the
+        // POINTER RESTS ON A LINK, so a reader who hovers a menu and clicks nothing counted a
+        // page view for every link they passed over. Measured in a consumer with Playwright
+        // Chromium against its own test server.
+        //
+        // `Purpose: prefetch` is checked beside it because that is the header Chrome sent
+        // before `Sec-Purpose` was specified, and some proxies and older engines still send
+        // it. The match is on the token rather than on equality: a PRERENDER announces itself
+        // as `Sec-Purpose: prefetch;prerender`, and a prerendered page has exactly the same
+        // problem — the bytes are fetched now and may never be looked at.
+        //
+        // AND SKIPPING IT ALONE WOULD TRADE ONE WRONG NUMBER FOR ANOTHER, which is why this
+        // ships with {@see \MatomoAnalytics\View\Snippet::prefetchPageView()}. When the
+        // reader does click, the page is served FROM the prefetch and the server hears nothing
+        // at all — so without the beacon the view is simply missing. `prefetch-beacon.md` is
+        // the page that says so.
+        if (Config::bool('matomo-analytics.middleware.skip_prefetch', true) && $this->isPrefetch($request)) {
+            return true;
+        }
+
         // A DELIVERED PAGE IS 2xx OR 304 -- and `isSuccessful()` alone is strictly 200-299.
         //
         // A 304 means the reader has the page; the server only declined to resend the bytes.
@@ -139,6 +162,17 @@ final readonly class TrackPageViews
         return Config::bool('matomo-analytics.middleware.only_successful', true)
             && ! $response->isSuccessful()
             && $response->getStatusCode() !== Response::HTTP_NOT_MODIFIED;
+    }
+
+    /**
+     * Whether the browser announced this request as speculative.
+     *
+     * Both headers are read as a list of tokens, because `Sec-Purpose` is specified as one:
+     * `prefetch;prerender` is a prerender, and it is speculative for the same reason.
+     */
+    private function isPrefetch(Request $request): bool
+    {
+        return array_any(['Sec-Purpose', 'Purpose'], fn (string $header): bool => str_contains(strtolower((string) $request->headers->get($header, '')), 'prefetch'));
     }
 
     private function title(Request $request, Response $response): string

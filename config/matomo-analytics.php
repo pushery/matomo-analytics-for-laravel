@@ -388,6 +388,7 @@ return [
         'only_get' => true,         // only GET requests
         'only_successful' => true,  // only delivered pages: 2xx and 304
         'skip_livewire' => true,    // skip Livewire update requests
+        'skip_prefetch' => true,    // skip a speculative request (Sec-Purpose/Purpose: prefetch)
         'strip_query' => false,     // drop the query string from the tracked URL
 
         // Stamp the server generation time (pf_srv = "Serverzeit") onto the tracked page view
@@ -499,7 +500,29 @@ return [
     ],
 
     /*
-    | The web-vitals route is registered outside every middleware group, because the
+    |--------------------------------------------------------------------------
+    | Prefetched page views (opt-in)
+    |--------------------------------------------------------------------------
+    |
+    | `middleware.skip_prefetch` keeps a speculation-rules prefetch from counting as a
+    | page view — the pointer resting on a link is not a visit. But when the reader then
+    | DOES click, the browser serves the page out of that prefetch and the server never
+    | hears about it, so the view would be missing instead of doubled.
+    |
+    | When enabled, @matomoPrefetchPageView closes that half: the page reports itself,
+    | once, and only when the browser says it was delivered from a prefetch. The beacon
+    | goes through the normal gate, and a URL from another origin is refused.
+    */
+
+    'prefetch_beacon' => [
+        'enabled' => false,
+        'path' => 'matomo-analytics/page-view',
+        'throttle' => '60,1', // route throttle "requests,minutes"; null to disable
+        'middleware' => [],   // extra route middleware; see the note below
+    ],
+
+    /*
+    | The web-vitals and prefetch-beacon routes are registered outside every middleware group, because the
     | browser beacons it with sendBeacon() and that carries no CSRF token. The consequence
     | is that no session is started on this path, so the gate's `track_authenticated` and
     | `except_abilities` rules see a guest there regardless of who is logged in. Name
