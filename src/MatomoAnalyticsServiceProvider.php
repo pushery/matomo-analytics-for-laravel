@@ -321,6 +321,14 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             ? $event->runInBackground()
             : $event;
 
+        // ONE SERVER PER TICK, for both commands and in this one place. The scheduler fires on every
+        // application server, and withoutOverlapping() does not stop that: its lock is released the moment
+        // a run finishes, so a flush done on one node let the next node flush the same buffer in the same
+        // minute, and the daily prune ran once per node. onOneServer() takes a lock per event AND tick.
+        // That lock needs a cache store shared between the servers; on `file` or `array` every server takes
+        // its own and nothing reports it, which the commands reference says.
+        $event->onOneServer();
+
         // LAST, so a consumer's callback can override anything decided above it — including
         // the background preference. It is their scheduler; the package's defaults are a
         // starting point, and a seam that cannot reach the setting next to it is half a seam.
