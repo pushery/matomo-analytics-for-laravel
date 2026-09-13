@@ -64,6 +64,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     /** The named rate limiter the Web Vitals route uses — see routes/matomo-analytics.php. */
     public const string WEB_VITALS_LIMITER = 'matomo-analytics-web-vitals';
 
+    /** The named limiter the prefetch page-view beacon throttles on. */
+    public const string PREFETCH_BEACON_LIMITER = 'matomo-analytics-prefetch-beacon';
+
     public static bool $runsMigrations = true;
 
     /**
@@ -141,7 +144,8 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'matomo-analytics');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'matomo-analytics');
-        $this->registerWebVitalsRateLimiter();
+        $this->registerBeaconRateLimiter(self::WEB_VITALS_LIMITER, 'matomo-analytics.web_vitals.throttle');
+        $this->registerBeaconRateLimiter(self::PREFETCH_BEACON_LIMITER, 'matomo-analytics.prefetch_beacon.throttle');
         $this->loadRoutesFrom(__DIR__.'/../routes/matomo-analytics.php');
 
         if (self::$runsMigrations) {
@@ -161,7 +165,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register the named limiter the Web Vitals route throttles on.
+     * Register the named limiter a beacon route throttles on.
      *
      * IT LIVED IN THE ROUTES FILE FROM v0.27.0, WHICH MADE IT INERT IN EVERY PRODUCTION THAT
      * CACHES ITS ROUTES. `loadRoutesFrom()` is a bare `require` guarded by `routesAreCached()`,
@@ -179,11 +183,16 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * consumer who switches the throttle off, or on, without rebuilding the route cache gets a
      * compiled `throttle:` middleware and no limiter behind it. An opt-out answers
      * `Limit::none()` instead, which is a limiter the cached middleware can find.
+     *
+     * TAKES ITS NAME AND ITS CONFIG KEY, because there are two of these now and the defect
+     * above is one a second copy would inherit silently. Web Vitals was the first; the prefetch
+     * page-view beacon has the same shape, the same CSRF-less entry and the same need for a key
+     * that survives a CDN.
      */
-    private function registerWebVitalsRateLimiter(): void
+    private function registerBeaconRateLimiter(string $limiter, string $configKey): void
     {
-        RateLimiter::for(self::WEB_VITALS_LIMITER, static function (Request $request): Limit {
-            $throttle = Config::nullableStringOrShipped('matomo-analytics.web_vitals.throttle');
+        RateLimiter::for($limiter, static function (Request $request) use ($configKey): Limit {
+            $throttle = Config::nullableStringOrShipped($configKey);
 
             if ($throttle === null) {
                 return Limit::none();
@@ -233,6 +242,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         Blade::directive('matomoNoscript', static fn (): string => "<?php echo {$resolve}->noscript(); ?>");
         Blade::directive('matomoOptOut', static fn (): string => "<?php echo {$resolve}->optOut(); ?>");
         Blade::directive('matomoWebVitals', static fn (string $expression): string => "<?php echo {$resolve}->webVitals({$expression}); ?>");
+        // Takes a nonce like the others, because it renders an inline script and a consumer
+        // running a strict CSP has to be able to name it.
+        Blade::directive('matomoPrefetchPageView', static fn (string $expression): string => "<?php echo {$resolve}->prefetchPageView({$expression}); ?>");
     }
 
     private function registerScheduledFlush(): void
