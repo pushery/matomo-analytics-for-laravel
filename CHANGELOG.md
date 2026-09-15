@@ -4,6 +4,13 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1] - 2026-09-15
+
+### Changed
+
+- **Two comments in `ReportClient` are reworded.** Nothing a consumer calls, receives or configures changes.
+- **The AI crawler list recognizes two more bots from ai.robots.txt:** `InstantAIGuruBot` and `ZipchatBot`. No entry was dropped, and neither name appears inside a common browser's user agent, so no human visit is counted as a bot.
+
 ## [0.29.0] - 2026-09-13
 
 ### Added
@@ -1458,7 +1465,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.8...v0.29.0
 [0.28.8]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.6...v0.28.7
