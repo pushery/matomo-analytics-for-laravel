@@ -16,7 +16,7 @@ use MatomoAnalytics\Reporting\ReportQuery;
  * of get(), and the two are separated by a comment rather than by two interfaces.
  *
  * IMPLEMENTING THIS IS STILL A FIVE-METHOD JOB. `use ResolvesCommonReports` supplies
- * every shortcut from get() alone -- the trait declares get() abstract for exactly
+ * every shortcut from get() alone -- it declares get() abstract for exactly
  * that reason -- so an implementer writes the protocol and one use statement. Both
  * shipped implementations do precisely that.
  *
@@ -64,7 +64,7 @@ interface ReportClient
     // ---------------------------------------------------------------------------------
     // Curated shortcuts. Each is one call to get() with a fixed Matomo method name, and
     // ResolvesCommonReports implements all of them. FacadeContractLockstepTest holds this
-    // list, the trait and the facade's @method block against each other: the drift this
+    // list, the concern above and the facade's @method block against each other: the drift this
     // section repairs was invisible for as long as nothing compared the three.
     // ---------------------------------------------------------------------------------
 
