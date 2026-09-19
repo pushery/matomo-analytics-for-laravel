@@ -70,7 +70,7 @@ return [
     'token' => env('MATOMO_TOKEN'),
     'tracker_path' => env('MATOMO_TRACKER_PATH', 'matomo.php'),
     'js_path' => env('MATOMO_JS_PATH', 'matomo.js'),
-    'timeout' => env('MATOMO_TIMEOUT', 5),
+    'timeout' => filter_var(env('MATOMO_TIMEOUT', 5), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 5,
 
     /*
     |--------------------------------------------------------------------------
@@ -136,7 +136,7 @@ return [
         // fewer requests for less than half a megabyte.
         'size' => env('MATOMO_BATCH_SIZE', 200),
         'flush_interval' => env('MATOMO_BATCH_INTERVAL', 60),
-        'max_per_flush' => 2000,
+        'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 2000,
         'stale_after_minutes' => 15,
         'redis_connection' => env('MATOMO_BATCH_REDIS', 'default'),
         'table' => 'matomo_tracking_buffer',
@@ -147,7 +147,7 @@ return [
         // HTTP 4xx is dead-lettered at once). Nothing is lost — replay re-queues it.
         // The consecutive-failure count lives in the cache, so batch mode needs a
         // persistent (non-array) cache store for this escalation to survive across runs.
-        'max_attempts' => env('MATOMO_BATCH_MAX_ATTEMPTS', 25),
+        'max_attempts' => filter_var(env('MATOMO_BATCH_MAX_ATTEMPTS', 25), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 25,
         'dead_letter' => [
             'enabled' => true,
             'table' => 'matomo_dead_letters',
@@ -189,13 +189,13 @@ return [
 
     'resilience' => [
         'never_throw' => true,
-        'connect_timeout' => 2,
+        'connect_timeout' => filter_var(env('MATOMO_CONNECT_TIMEOUT', 2), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 2,
         'reporting' => [
-            'report_after_attempts' => 3,
+            'report_after_attempts' => filter_var(env('MATOMO_REPORT_AFTER_ATTEMPTS', 3), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 3,
             'channel' => env('MATOMO_REPORT_CHANNEL', 'report'),
             'level' => 'warning',
             'transient_level' => null,
-            'throttle_minutes' => 15,
+            'throttle_minutes' => filter_var(env('MATOMO_REPORT_THROTTLE_MINUTES', 15), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 15,
         ],
     ],
 
@@ -212,7 +212,7 @@ return [
 
     'reporting' => [
         'path' => env('MATOMO_REPORTING_PATH', 'index.php'),
-        'timeout' => env('MATOMO_REPORTING_TIMEOUT', 10),
+        'timeout' => filter_var(env('MATOMO_REPORTING_TIMEOUT', 10), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 10,
         'default_period' => env('MATOMO_REPORTING_PERIOD', 'day'),
         'default_date' => env('MATOMO_REPORTING_DATE', 'today'),
 
@@ -494,7 +494,7 @@ return [
         'path' => 'matomo-analytics/web-vitals',
         'category' => 'Web Vitals',
         'metrics' => ['LCP', 'CLS', 'INP', 'FCP', 'TTFB'],
-        'throttle' => '60,1', // route throttle "requests,minutes"; null to disable
+        'throttle' => env('MATOMO_WEB_VITALS_THROTTLE', '60,1'), // "requests,minutes"; null to disable
         'middleware' => [],   // extra route middleware; see the note below
         'library' => null,    // optional <script src> for web-vitals; null = app provides it
     ],
@@ -517,7 +517,7 @@ return [
     'prefetch_beacon' => [
         'enabled' => false,
         'path' => 'matomo-analytics/page-view',
-        'throttle' => '60,1', // route throttle "requests,minutes"; null to disable
+        'throttle' => env('MATOMO_PREFETCH_BEACON_THROTTLE', '60,1'), // "requests,minutes"; null to disable
         'middleware' => [],   // extra route middleware; see the note below
     ],
 

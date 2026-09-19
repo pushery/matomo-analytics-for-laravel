@@ -93,7 +93,7 @@ body:
       options:
         - label: I have searched existing issues and this is not a duplicate.
           required: true
-        - label: I am using a supported version (PHP ^8.4, Laravel ^13).
+        - label: I am using a supported version (PHP ^8.4, Laravel ^12 or Laravel ^13).
           required: true
         - label: This is not a security vulnerability (those are reported privately, see SECURITY.md).
           required: true
