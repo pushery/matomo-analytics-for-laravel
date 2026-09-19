@@ -4,6 +4,17 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-09-19
+
+### Changed
+
+- **Nine hardening keys can be set from the environment, and every numeric one is validated before it is trusted.** `batch.max_per_flush`, `resilience.connect_timeout`, `resilience.reporting.report_after_attempts`, `resilience.reporting.throttle_minutes` and the two public-endpoint rate limits (`web_vitals.throttle`, `prefetch_beacon.throttle`) were reachable only by publishing the config — and publishing freezes every OTHER default in the same file, including one this package tightens later. They now read `MATOMO_BATCH_MAX_PER_FLUSH`, `MATOMO_CONNECT_TIMEOUT`, `MATOMO_REPORT_AFTER_ATTEMPTS`, `MATOMO_REPORT_THROTTLE_MINUTES`, `MATOMO_WEB_VITALS_THROTTLE` and `MATOMO_PREFETCH_BEACON_THROTTLE`. The numeric keys — including `timeout`, `reporting.timeout` and `batch.max_attempts`, which already read the environment — go through `filter_var(…, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE)` and fall back to the shipped default, never to `0`: a cast would turn a typo in `.env` into a **zero** ceiling, which for most of these means no ceiling at all. Every default is unchanged, so an installation that sets none of them behaves exactly as before.
+- **The dev toolchain carries `laravel/mcp` and `laravel/boost`.** They sit in `require-dev`, so nothing a consumer installs, calls or configures changes, and a Renovate rule keeps their constraints following each release. `laravel/ai` was briefly there too and is a `suggest` instead: it is only ever called by a judge-backed eval, this package writes none, and it requires `aws/aws-sdk-php` for a provider nothing here calls — 67 MB and 3512 files in every checkout and every CI lane. Still nothing a consumer installs either way; the entry is corrected rather than followed by a second one, because both movements land in the same unreleased section and a reader should not have to net them out.
+
+### Fixed
+
+- **The bug-report form no longer tells a Laravel 12 user they are unsupported.** Its checkbox asked a reporter to confirm "PHP ^8.4, Laravel ^13" while `composer.json` has declared `illuminate/support: ^12.0 || ^13.0` throughout. The form ships to the public mirror and is where every bug report starts, so the first thing a reporter on the older major read was that this package excludes them -- and it never did. It now names both majors, and a new arm holds the form and the manifest to each other, so raising or widening either floor cannot leave the form behind again.
+
 ## [0.29.1] - 2026-09-15
 
 ### Changed
@@ -1465,7 +1476,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.8...v0.29.0
 [0.28.8]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.28.7...v0.28.8

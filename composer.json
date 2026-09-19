@@ -55,6 +55,9 @@
     },
     "require-dev": {
         "larastan/larastan": "3.11.0",
+        "laravel/ai": "^0.11.2",
+        "laravel/boost": "^2.9",
+        "laravel/mcp": "^1.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
@@ -71,6 +74,7 @@
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
+        "laravel/ai": "Required only to score evals with a real judge. Not a dev dependency: it requires aws/aws-sdk-php for a provider this package never calls, which is 67 MB and 3512 files in every checkout and every CI lane of a package that writes no judge-backed eval at all.",
         "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
         "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
     },
