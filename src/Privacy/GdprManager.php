@@ -48,10 +48,23 @@ final class GdprManager implements GdprClient
 
     /**
      * @return array<string, bool|int>|null Matomo's counts, plus `local_buffer`,
-     *                                      `local_dead_letters` and `local_segment_understood`
+     *                                      `local_dead_letters`, `local_segment_understood`,
+     *                                      `local_buffer_searched` and `local_queue_searched`
      */
     public function forget(string $segment, int|string|null $site = null): ?array
     {
+        // Matomo is not the only place this person's hits are: the buffer holds built payloads
+        // and the dead letters hold whole batches for up to thirty days, `cip`, `ua`, `url`,
+        // `urlref` and `uid` included, in the application's own stores. They are reported under
+        // their own keys rather than folded into Matomo's counts, because the two are different
+        // systems, and `local_segment_understood` says whether this half could run at all.
+        //
+        // The local half runs first. A flush that ran between the two halves would otherwise
+        // deliver the person's buffered hits to Matomo after Matomo had erased them. Erased here
+        // first, they cannot be delivered, and whatever a flush had already claimed reaches
+        // Matomo before the lookup below, which then finds and erases it with the rest.
+        $local = (new LocalHitPurge)->forget($segment);
+
         $visits = $this->descriptorsFor($segment, $site);
 
         if (! is_array($visits)) {
@@ -64,21 +77,12 @@ final class GdprManager implements GdprClient
             return null;
         }
 
-        // MATOMO IS NOT THE ONLY PLACE THIS PERSON'S HITS ARE. `matomo_tracking_buffer`
-        // holds one built payload per row and `matomo_dead_letters` holds whole batches for up
-        // to thirty days — `cip`, `ua`, `url`, `urlref`, `uid` — in the CONSUMER's own
-        // database. Erasing only at Matomo let an operator report a request fulfilled while
-        // the same person's address and user agent sat in their own tables.
-        //
-        // Reported under its own keys rather than folded into Matomo's counts: the two are
-        // different systems, and `local_segment_understood` says whether this half ran at all
-        // — a segment expression this package will not evaluate is a real answer, not a zero.
-        $local = (new LocalHitPurge)->forget($segment);
-
         return array_merge($counts, [
             'local_buffer' => $local['buffer'],
             'local_dead_letters' => $local['dead_letters'],
             'local_segment_understood' => $local['matched'],
+            'local_buffer_searched' => $local['buffer_searched'],
+            'local_queue_searched' => $local['queue_searched'],
         ]);
     }
 
@@ -126,6 +130,11 @@ final class GdprManager implements GdprClient
      * Find the data subject and reduce the matching rows to {idsite, idvisit}
      * descriptors. Returns null on a failed lookup, [] when nothing matched.
      *
+     * The two ends of the API spell the keys differently: `findDataSubjects` answers with
+     * Matomo's visit columns, `idSite` and `idVisit`, and `deleteDataSubjects` and
+     * `exportDataSubjects` take descriptors keyed `idsite` and `idvisit`. Both spellings are
+     * read here, so a row is never dropped for its casing.
+     *
      * @return list<array{idsite: int, idvisit: int}>|null
      */
     private function descriptorsFor(string $segment, int|string|null $site): ?array
@@ -137,8 +146,11 @@ final class GdprManager implements GdprClient
 
         $visits = [];
         foreach ($found as $row) {
-            if (isset($row['idsite'], $row['idvisit']) && is_numeric($row['idsite']) && is_numeric($row['idvisit'])) {
-                $visits[] = ['idsite' => (int) $row['idsite'], 'idvisit' => (int) $row['idvisit']];
+            $idSite = $row['idSite'] ?? $row['idsite'] ?? null;
+            $idVisit = $row['idVisit'] ?? $row['idvisit'] ?? null;
+
+            if (is_numeric($idSite) && is_numeric($idVisit)) {
+                $visits[] = ['idsite' => (int) $idSite, 'idvisit' => (int) $idVisit];
             }
         }
 

@@ -54,14 +54,14 @@
         "symfony/http-kernel": "^7.0 || ^8.0"
     },
     "require-dev": {
-        "larastan/larastan": "3.11.0",
+        "larastan/larastan": "3.12.2",
         "laravel/ai": "^0.11.2",
         "laravel/boost": "^2.9",
         "laravel/mcp": "^1.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
-        "orchestra/testbench": "^10.0 || ^11.0",
+        "orchestra/testbench": "^11.0",
         "pestphp/pest": "^5.0",
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.0",
@@ -69,8 +69,8 @@
         "pestphp/pest-plugin-phpstan": "5.2.1",
         "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "phpstan/phpstan": "2.2.13",
-        "rector/rector": "2.6.6",
+        "phpstan/phpstan": "2.2.14",
+        "rector/rector": "2.6.7",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
@@ -104,8 +104,8 @@
         "format:test": "pint --test",
         "rector": "rector process",
         "rector:test": "rector process --dry-run",
-        "mutate": "pest --mutate --everything --covered-only --path=src --min=96",
-        "mutate:detect": "pest --mutate --everything --covered-only --path=src --parallel --processes=4 --min=96",
+        "mutate": "@php -d pcov.directory=src vendor/bin/pest --mutate --everything --covered-only --path=src --min=96",
+        "mutate:detect": "@php -d pcov.directory=src vendor/bin/pest --mutate --everything --covered-only --path=src --parallel --processes=4 --min=96",
         "qa": [
             "@format:test",
             "@rector:test",

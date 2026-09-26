@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Buffer;
 
-use MatomoAnalytics\Contracts\HitBuffer;
+use MatomoAnalytics\Contracts\ErasableHitBuffer;
+use MatomoAnalytics\Privacy\DataSubject;
 
 /**
  * In-memory buffer for tests and single-process use. Bound as a singleton so
  * pushes and claims share state within a request.
  */
-final class ArrayHitBuffer implements HitBuffer
+final class ArrayHitBuffer implements ErasableHitBuffer
 {
     /**
      * @var list<array<string, scalar>>
@@ -60,5 +61,20 @@ final class ArrayHitBuffer implements HitBuffer
         unset($this->claimed[$batch->ref]);
 
         $this->pending = [...$restored, ...$this->pending];
+    }
+
+    public function erase(DataSubject $subject): int
+    {
+        $kept = array_values(array_filter($this->pending, static fn (array $payload): bool => ! $subject->owns($payload)));
+        $removed = count($this->pending) - count($kept);
+        $this->pending = $kept;
+
+        foreach ($this->claimed as $ref => $payloads) {
+            $kept = array_values(array_filter($payloads, static fn (array $payload): bool => ! $subject->owns($payload)));
+            $removed += count($payloads) - count($kept);
+            $this->claimed[$ref] = $kept;
+        }
+
+        return $removed;
     }
 }

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
 
-// POSTGRESQL'S `json` KEEPS THE TEXT IT WAS HANDED, and this column has no use for that.
+// PostgreSQL's `json` keeps the text it was handed, and this column has no use for that.
 //
 // The payload is a map of Matomo tracking parameters, `array<string, scalar>`. The array cast
 // writes it and reads it back, and the flush rebuilds a query string out of the array. Nothing
@@ -15,10 +15,10 @@ use MatomoAnalytics\Support\Config;
 // is the one thing `json` can do that `jsonb` cannot. `jsonb` parses once on write instead of
 // on every read, stores smaller, and is the type a containment or key lookup could use later.
 //
-// It is also reported in every consumer's audit: SQLens raises `PG.L6.JSON_NOT_JSONB` against
-// this column, and a finding nobody can act on is a finding in every report forever.
+// SQLens reports the `json` type of this column as `PG.L6.JSON_NOT_JSONB` in every consumer's
+// audit, and a finding nobody can act on would stay in every report.
 //
-// THE OTHER TWO FINDINGS FROM THAT AUDIT ARE DECISIONS, AND THEY STAY.
+// The other two findings of that audit are decisions, and they stay.
 //
 // `claimed_at`, `created_at` and `failed_at` are `timestamp without time zone` on purpose. The
 // migration two files up moved them there FROM `timestamp` because MySQL's `TIMESTAMP` shifts
@@ -32,7 +32,7 @@ use MatomoAnalytics\Support\Config;
 // better default in PostgreSQL, and rewriting it here would make this package's tables differ
 // from every other table in the application for a property nothing in the claim path reads.
 //
-// POSTGRESQL ONLY. MySQL's `json` is already binary and has no second type; SQLite stores text
+// PostgreSQL only. MySQL's `json` is already binary and has no second type; SQLite stores text
 // either way. A migration that ran this unconditionally would fail every non-Postgres install.
 return new class extends Migration
 {
@@ -54,7 +54,7 @@ return new class extends Migration
 
         $table = Config::string('matomo-analytics.batch.table', 'matomo_tracking_buffer');
 
-        // The name is validated BEFORE the existence check, and the order is the whole point.
+        // The name is validated before the existence check, and the order is the whole point.
         // The other way round the refusal below is unreachable: `Schema::hasTable()` answers
         // false for any name that is not a real table, so a hostile one would take the quiet
         // exit and the guard would never run — a check that cannot fire, which reads in a
@@ -78,10 +78,12 @@ return new class extends Migration
     }
 
     /**
-     * The table name as an identifier, refusing anything that is not a bare one.
+     * The table name as an identifier, refusing a configured name that is not a bare one.
      *
      * The name is configuration rather than input, but it reaches DDL either way, and "it
-     * cannot be hostile" is an assumption rather than a guard.
+     * cannot be hostile" is an assumption rather than a guard. `Schema::hasTable()` and
+     * `hasColumn()` add the connection's table prefix themselves and a raw statement does not,
+     * so the prefix is added here, quoted the way the autovacuum migration quotes it.
      */
     private function quoted(string $table): string
     {
@@ -89,6 +91,6 @@ return new class extends Migration
             throw new RuntimeException("refusing to retype the payload column of an unexpected table name: {$table}");
         }
 
-        return '"'.$table.'"';
+        return '"'.str_replace('"', '""', Schema::getConnection()->getTablePrefix().$table).'"';
     }
 };

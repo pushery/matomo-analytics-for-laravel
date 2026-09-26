@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Config as ConfigFacade;
  */
 final class Config
 {
+    /** The throttle both beacon keys ship with, `config/matomo-analytics.php` beside `env()`. */
+    public const string SHIPPED_THROTTLE = '60,1';
+
     /** The package's own config namespace, i.e. the published file's basename. */
     private const string NAMESPACE = 'matomo-analytics';
 
@@ -39,28 +42,37 @@ final class Config
     }
 
     /**
-     * A nullable string that still has a floor when the key is simply not there.
+     * A beacon throttle as `[requests, minutes]`, or null when it is switched off.
      *
-     * `nullableString()` cannot tell "the operator switched this off" from "this key is
-     * absent", and for `web_vitals.throttle` those two mean opposite things: the first is a
-     * deliberate `null`, the second is a consumer whose published config predates the key —
-     * or who trimmed it — and who then runs an unauthenticated POST endpoint with no rate
-     * limit at all. It was the one security-relevant read in the package with no floor
-     * underneath it; `string()`, `int()` and `bool()` all carry an explicit default and
-     * `stringList()` already falls back to the shipped file.
+     * Off is only ever said on purpose, as `null` or `'off'`. An absent key, an empty value (a
+     * `.env` line left blank reads as `''`, which the default of `env()` does not replace), `true`,
+     * `false` or anything else that is not a throttle gets the one the package ships, so no slip in
+     * the configuration leaves an unauthenticated endpoint without a rate limit. A number is that
+     * many requests a minute, and `"requests,minutes"` is the full form, each floored at one.
      *
-     * PRESENCE is the discriminator, not emptiness: `has()` is true for a key declared as
-     * null, so an explicit opt-out is honored and an absent key gets what the package ships.
+     * @return array{int, int}|null
      */
-    public static function nullableStringOrShipped(string $key): ?string
+    public static function throttle(string $key): ?array
     {
-        if (ConfigFacade::has($key)) {
-            return self::nullableString($key);
+        $value = ConfigFacade::has($key) ? ConfigFacade::get($key) : self::shipped($key);
+
+        if ($value === null || (is_string($value) && strcasecmp(trim($value), 'off') === 0)) {
+            return null;
         }
 
-        $shipped = self::shipped($key);
+        if (is_int($value)) {
+            return [max(1, $value), 1];
+        }
 
-        return is_string($shipped) && $shipped !== '' ? $shipped : null;
+        if (! is_string($value) || trim($value) === '') {
+            // The shipped file reads the same environment, so a blank line blanks it as well.
+            $shipped = self::shipped($key);
+            $value = is_string($shipped) && trim($shipped) !== '' ? $shipped : self::SHIPPED_THROTTLE;
+        }
+
+        [$max, $minutes] = array_pad(array_map(trim(...), explode(',', $value, 2)), 2, '1');
+
+        return [max(1, (int) $max), max(1, (int) $minutes)];
     }
 
     public static function int(string $key, int $default = 0): int

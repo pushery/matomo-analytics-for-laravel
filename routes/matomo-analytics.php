@@ -16,33 +16,23 @@ $webVitals = Route::post(
     WebVitalsController::class,
 )->name('matomo-analytics.web-vitals');
 
-// THE THROTTLE HAS A FLOOR UNDER IT. This read used to be `nullableString()`, which
-// cannot tell "the operator switched it off" from "the key is not there" — and those mean
-// opposite things here. A consumer whose published config predates the key, or who trimmed
-// it, got `null` and therefore an unauthenticated POST endpoint with no rate limit at all.
-// An explicit `'throttle' => null` still switches it off; an absent key now gets what the
-// package ships.
+// The throttle is switched off only on purpose, by an explicit `null` or `'off'`. An absent key,
+// a blank `.env` line or a value that is not a throttle gets the one the package ships
+// (`Config::throttle()`), because this is an unauthenticated POST endpoint.
 //
-// AND IT IS KEYED ON THE PACKAGE'S OWN CLIENT IP, NOT ON `$request->ip()`. Laravel's throttle
-// resolves its key from the request's IP, which is the proxy's address behind a CDN unless the
-// application has configured TrustProxies — so every visitor of such an installation shares
-// one bucket, and the limit meant to bound one abuser bounds everybody instead. This package
-// already resolves the real address through `ip_header` for `cip` and `except_ips`; the
-// throttle now uses the same answer.
+// It is keyed on the client address this package resolves, not on `$request->ip()`. Laravel's
+// throttle keys on the request's IP, which is the proxy's address behind a CDN unless the
+// application trusts its proxies, so every visitor would share one bucket. The package resolves
+// the real address through `ip_header` for `cip` and `except_ips`, and the throttle uses the same
+// answer. That key is only reachable through a named limiter rather than
+// `throttle:<max>,<minutes>`; the configured "requests,minutes" shape is unchanged.
 //
-// Registered as a NAMED limiter rather than `throttle:<max>,<minutes>`, because the key is
-// only reachable that way. The configured "requests,minutes" shape is unchanged.
-//
-// ONLY THE ATTACHMENT IS HERE. THE REGISTRATION IS IN THE PROVIDER, AND THAT IS NOT A STYLE
-// CHOICE. This file is loaded by `loadRoutesFrom()`, a bare `require` that Laravel skips
-// outright once `php artisan route:cache` has compiled the route table — so a
-// `RateLimiter::for()` written here runs on a developer machine and never in a production
-// deploy, while the compiled table goes on carrying the `throttle:` name below. From v0.27.0
-// to v0.28.2 that is exactly what shipped, and every beacon into a route-cached installation
-// answered 500. What stays here is the line that has to: the middleware name is compiled INTO
-// the cached table, which is precisely why it survives and the registration did not.
-$throttle = Config::nullableStringOrShipped('matomo-analytics.web_vitals.throttle');
-if ($throttle !== null) {
+// Only the attachment is here, and the limiter is registered in the provider. This file is loaded
+// by `loadRoutesFrom()`, which Laravel skips once `php artisan route:cache` has compiled the route
+// table, so a `RateLimiter::for()` written here would never run in a cached deploy while the
+// compiled table carries the `throttle:` name below. The middleware name is compiled into the
+// cached table, which is why it lives here.
+if (Config::throttle('matomo-analytics.web_vitals.throttle') !== null) {
     $webVitals->middleware('throttle:'.MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER);
 }
 
@@ -68,7 +58,7 @@ $prefetchPageView = Route::post(
     PrefetchPageViewController::class,
 )->name('matomo-analytics.prefetch-page-view');
 
-if (Config::nullableStringOrShipped('matomo-analytics.prefetch_beacon.throttle') !== null) {
+if (Config::throttle('matomo-analytics.prefetch_beacon.throttle') !== null) {
     $prefetchPageView->middleware('throttle:'.MatomoAnalyticsServiceProvider::PREFETCH_BEACON_LIMITER);
 }
 

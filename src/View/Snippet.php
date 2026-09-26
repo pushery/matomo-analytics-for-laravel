@@ -7,6 +7,7 @@ namespace MatomoAnalytics\View;
 use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
+use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -176,10 +177,10 @@ final readonly class Snippet
             $commands[] = "_paq.push(['disableCookies']);";
         }
 
-        $consent = Config::string('matomo-analytics.privacy.consent', 'none');
-        if ($consent === 'full') {
+        $consent = ConsentMode::resolve();
+        if ($consent === ConsentMode::FULL) {
             $commands[] = "_paq.push(['requireConsent']);";
-        } elseif ($consent === 'cookie') {
+        } elseif ($consent === ConsentMode::COOKIE) {
             $commands[] = "_paq.push(['requireCookieConsent']);";
         }
 

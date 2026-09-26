@@ -109,6 +109,10 @@ final class DeadLetterStore
      * streaming changes nothing about the crash semantics: it only stops the command from
      * holding rows it has already finished with.
      *
+     * Only the rows parked when the read begins. A replayed batch that fails again at once,
+     * inline on a sync queue connection, is parked under a new and higher id, and reading on
+     * into it would replay it again in the same run, as often as it failed.
+     *
      * @return Generator<int, array{id: int, payloads: list<array<string, scalar>>}>
      */
     public function take(?int $limit = null): Generator
@@ -122,7 +126,13 @@ final class DeadLetterStore
             return;
         }
 
-        foreach (DB::table($this->table())->orderBy('id')->lazyById() as $row) {
+        $last = DB::table($this->table())->max('id');
+
+        if (! is_numeric($last)) {
+            return;
+        }
+
+        foreach (DB::table($this->table())->where('id', '<=', (int) $last)->orderBy('id')->lazyById() as $row) {
             $raw = is_string($row->payloads ?? null) ? $row->payloads : ''; // @pest-mutate-ignore: EmptyStringToNotEmpty
 
             yield [
@@ -160,11 +170,9 @@ final class DeadLetterStore
      * something filters on age (a retention window)". This is that day.
      *
      * A row whose `failed_at` is NULL is never pruned, and that comes from SQL rather than
-     * from a clause here: `NULL < x` evaluates to UNKNOWN, not TRUE, so such a row simply
-     * never matches. An explicit `whereNotNull()` stood here first and was removed after its
-     * own red probe passed — with the clause deleted the behavior was identical, which is the
-     * definition of a branch no run can enter. It would have survived every mutant forever
-     * while reading like a safeguard.
+     * from a clause here: `NULL < x` evaluates to UNKNOWN, not TRUE, so such a row never
+     * matches. An explicit `whereNotNull()` would change nothing about which rows go, and it
+     * would read like a safeguard the query depends on, so there is none.
      *
      * The guarantee is worth keeping tested even though it is the database's: a later rewrite
      * that coalesces the column, or filters the other way round, would start deleting rows

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\Support\BeaconOrigin;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Tracking\CustomParameters;
 use MatomoAnalytics\Tracking\Event;
@@ -45,6 +46,11 @@ final class WebVitalsController
             // exactly this — it throws the Symfony exception Laravel's handler renders
             // as a 404, which arrives here through illuminate/http either way.
             throw new NotFoundHttpException;
+        }
+
+        // The origin of the REQUEST, which the sending page cannot write, before the payload it can.
+        if (! BeaconOrigin::isOwn($request)) {
+            return new Response(status: Response::HTTP_FORBIDDEN);
         }
 
         $metric = $request->input('metric');
@@ -90,15 +96,13 @@ final class WebVitalsController
      * is also why `except_routes` could not protect these events: the gate had only the
      * beacon's own path to match, and no exclusion list names that.
      *
-     * AND THE VALUE IS UNAUTHENTICATED CLIENT INPUT ON A PUBLIC ENDPOINT. A form-encoded
-     * cross-origin POST is CORS-simple and needs no preflight, so any page anywhere can make
-     * its own visitors beacon this route — measured at HTTP 204 with the event recorded.
-     * Trusting the URL would let that page choose which of this application's pages the
-     * poisoned measurement is filed under.
+     * THE VALUE IS WRITTEN BY THE PAGE THAT SENDS THE BEACON, so it names a page and proves
+     * nothing about the sender. {@see BeaconOrigin} decides whether a page of this application
+     * sent the request, from the request's own origin, before this is read.
      *
-     * So only this application's own origin is accepted, compared on scheme, host and port.
-     * A URL from anywhere else is DROPPED rather than refused: the beacon is still a real
-     * measurement from a real visitor, and the fallback is exactly the old behavior.
+     * Only this application's own origin is accepted here as well, compared on scheme, host and
+     * port. A URL from anywhere else is DROPPED rather than refused: the measurement came from
+     * one of our pages, and the fallback files it under the beacon's own URL.
      */
     private function pageUrl(Request $request): ?string
     {

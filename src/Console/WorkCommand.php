@@ -108,14 +108,13 @@ final class WorkCommand extends Command
                 break;
             }
 
-            // `Sleep::for()` RATHER THAN `sleep()`, AND THE REASON IS THAT THE INTERVAL WAS
-            // OTHERWISE UNMEASURABLE. Every arm in the suite sets `flush_interval`, so the
-            // `60` in the default above was never the answer, and no test could tell 60 from
-            // 59 — the only observable difference is a wall-clock second, which is not a price
-            // a suite should pay. The nightly's survivor list carried both mutants on that
-            // literal for exactly that reason. Laravel's helper makes the duration an
-            // assertable value instead of an elapsed one, so the default can be held without
-            // waiting for it. In production it calls the same `sleep()`.
+            // `Sleep::for()` rather than `sleep()`, because the interval is otherwise
+            // unmeasurable. Every arm in the suite sets `flush_interval`, so the `60` in the
+            // default above is never exercised, and no test could tell 60 from 59: the only
+            // observable difference is a wall-clock second, which is not a price a suite should
+            // pay. Laravel's helper makes the duration an assertable value instead of an
+            // elapsed one, so the default can be held without waiting for it. In production it
+            // calls the same `sleep()`.
             Sleep::for($interval)->seconds();
         }
 

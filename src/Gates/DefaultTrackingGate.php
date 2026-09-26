@@ -15,6 +15,7 @@ use MatomoAnalytics\Contracts\TrackingGate;
 use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\ConsoleRequest;
 use MatomoAnalytics\Tracking\Hit;
 use Symfony\Component\HttpFoundation\IpUtils;
 
@@ -148,6 +149,12 @@ final readonly class DefaultTrackingGate implements TrackingGate
         $ips = Config::stringList('matomo-analytics.tracking.except_ips');
         if ($ips === []) {
             return false; // @pest-mutate-ignore: RemoveEarlyReturn
+        }
+
+        // The 127.0.0.1 of the request Laravel invents for a console process is nobody's
+        // address, and matching it against the list would drop every hit a job or command sends.
+        if (ConsoleRequest::isSynthetic($request)) {
+            return false;
         }
 
         $ip = ClientIp::resolve($request);

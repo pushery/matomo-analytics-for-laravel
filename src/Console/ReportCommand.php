@@ -19,9 +19,9 @@ final class ReportCommand extends Command
 
     public function handle(ReportClient $reports): int
     {
-        $method = $this->argument('method');
+        $method = $this->stringArgument('method');
 
-        $data = $reports->get(is_string($method) ? $method : '', $this->params());
+        $data = $reports->get($method, $this->params());
 
         if ($data === null) {
             $this->error($reports->lastError() ?? 'Matomo reporting returned no data.');
@@ -49,5 +49,20 @@ final class ReportCommand extends Command
         }
 
         return $params;
+    }
+
+    /**
+     * A required argument, read as the string it always is.
+     *
+     * By name through a parameter, so the check stays a check on every Laravel this package
+     * supports: with the package booted, Larastan types a call with a literal name from the
+     * signature as a string, and on the Laravel 12 leg it types the same call as anything a
+     * console input can hold. A name it cannot resolve reads the same on both.
+     */
+    private function stringArgument(string $name): string
+    {
+        $value = $this->argument($name);
+
+        return is_string($value) ? $value : '';
     }
 }

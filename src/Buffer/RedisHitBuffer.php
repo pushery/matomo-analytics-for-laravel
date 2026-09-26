@@ -10,8 +10,10 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Redis as RedisFacade;
 use Illuminate\Support\Str;
-use MatomoAnalytics\Contracts\HitBuffer;
+use MatomoAnalytics\Contracts\ErasableHitBuffer;
 use MatomoAnalytics\Exceptions\BufferEvictableException;
+use MatomoAnalytics\Exceptions\BufferUnavailableException;
+use MatomoAnalytics\Privacy\DataSubject;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
 use Redis as PhpRedis;
@@ -24,10 +26,19 @@ use Throwable;
  * sorted set keyed by claim time, so a crashed flush (which never acks/releases)
  * is reclaimed on a later claim instead of being orphaned — nothing is lost.
  */
-final class RedisHitBuffer implements HitBuffer
+final class RedisHitBuffer implements ErasableHitBuffer
 {
+    /** How many entries one LRANGE reads while an erasure searches a list. */
+    private const int ERASE_PAGE = 1000;
+
     /** One CONFIG GET per process, not one per hit — see reportEvictionPolicyOnce(). */
     private static bool $evictionChecked = false;
+
+    /**
+     * @param  string  $key  the list the hits wait in, which also names the processing lists and
+     *                       their set; `matomo:load-sim` runs on a key of its own
+     */
+    public function __construct(private readonly string $key = 'matomo-analytics:buffer') {}
 
     public function push(array $payload): void
     {
@@ -62,6 +73,8 @@ final class RedisHitBuffer implements HitBuffer
             $connection->command('del', [$processing]);
             $connection->command('zrem', [$this->processingSet(), $processing]);
 
+            $this->refuseWithoutLmove($connection);
+
             return BufferBatch::empty();
         }
 
@@ -91,6 +104,63 @@ final class RedisHitBuffer implements HitBuffer
         $connection->command('zrem', [$this->processingSet(), $batch->ref]);
     }
 
+    public function erase(DataSubject $subject): int
+    {
+        $connection = $this->connection();
+        $removed = $this->eraseFrom($connection, $this->key(), $subject);
+
+        // The processing lists are read after the queue, so a batch claimed while the queue
+        // was being searched is searched here instead of being missed in both places.
+        $claimed = $connection->command('zrange', [$this->processingSet(), 0, -1]);
+
+        foreach (array_filter(is_array($claimed) ? $claimed : [], is_string(...)) as $processing) {
+            $removed += $this->eraseFrom($connection, $processing, $subject);
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Remove every entry of one list that the subject owns, and return how many went.
+     *
+     * The list is read a page at a time, so memory stays bounded whatever its length, and the
+     * matching entries are removed by value afterwards. LREM with a count of 0 removes every
+     * copy of an entry, and every copy of an entry the subject owns belongs to the subject.
+     */
+    private function eraseFrom(Connection $connection, string $list, DataSubject $subject): int
+    {
+        $owned = [];
+
+        for ($start = 0; ; $start += self::ERASE_PAGE) {
+            $page = $connection->command('lrange', [$list, $start, $start + self::ERASE_PAGE - 1]);
+            $entries = array_values(array_filter(is_array($page) ? $page : [], is_string(...)));
+
+            foreach ($entries as $entry) {
+                if (! in_array($entry, $owned, true) && $subject->owns(Json::decode($entry))) {
+                    $owned[] = $entry;
+                }
+            }
+
+            if (count($entries) < self::ERASE_PAGE) {
+                break;
+            }
+        }
+
+        $removed = 0;
+
+        foreach ($owned as $entry) {
+            // phpredis takes LREM's value before its count, the reverse of the Redis protocol
+            // order Predis follows; `PhpRedisConnection::lrem()` accepts the protocol order and
+            // swaps the two.
+            $count = $connection instanceof PhpRedisConnection
+                ? $connection->lrem($list, 0, $entry)
+                : $connection->command('lrem', [$list, 0, $entry]);
+            $removed += is_int($count) ? $count : 0;
+        }
+
+        return $removed;
+    }
+
     /**
      * Move any processing list whose claim is older than stale_after back to the
      * queue and forget it — recovering the in-flight items of a crashed flush.
@@ -116,6 +186,35 @@ final class RedisHitBuffer implements HitBuffer
             $this->drainBackToQueue($connection, $processing);
             $connection->command('del', [$processing]);
             $connection->command('zrem', [$this->processingSet(), $processing]);
+        }
+    }
+
+    /**
+     * Throws when a claim found nothing because the server cannot move a hit at all.
+     *
+     * `LMOVE` arrived in Redis 6.2. An older server answers it with an error, and the client hands
+     * that back as `false`, its answer for an empty list as well, so the claim alone cannot tell
+     * the two apart. A queue that still holds hits after an empty claim is the one case worth a
+     * question, and the question goes to the server, because the ordinary reason for it is a hit
+     * pushed between the claim and the count, which is no outage.
+     */
+    private function refuseWithoutLmove(Connection $connection): void
+    {
+        $length = $connection->command('llen', [$this->key()]);
+
+        if (! is_int($length) || $length < 1) {
+            return;
+        }
+
+        // One entry per name asked about: the command's details, or `false` (phpredis) and `null`
+        // (Predis) for a command the server does not know.
+        $known = $connection->command('command', ['info', 'lmove']);
+
+        if (is_array($known) && ! is_array($known[0] ?? null)) {
+            throw new BufferUnavailableException(sprintf(
+                'The Matomo Redis buffer holds %d hit(s) it cannot claim: the server does not know LMOVE, which the redis batch driver needs (Redis 6.2 or later).',
+                $length,
+            ));
         }
     }
 
@@ -274,7 +373,7 @@ final class RedisHitBuffer implements HitBuffer
 
     private function key(): string
     {
-        return 'matomo-analytics:buffer';
+        return $this->key;
     }
 
     private function processingSet(): string

@@ -14,6 +14,7 @@ use MatomoAnalytics\Buffer\DeadLetterStore;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
+use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Support\Config;
 use Throwable;
 
@@ -54,6 +55,7 @@ final class TestConnectionCommand extends Command
         }
 
         $this->reportConfigDrift();
+        $this->reportUnrecognizedConsent();
         $this->reportPlaintextHost();
         $this->reportRedisEvictionPolicy();
         $this->reportRedisPersistence();
@@ -216,10 +218,19 @@ final class TestConnectionCommand extends Command
         // Separate blocks rather than one, because the two stores fail independently: a Redis
         // buffer being unreachable says nothing about whether the dead-letter table can be
         // read, and one shared catch would hide the second number behind the first.
+        //
+        // NOT FAILING IS NOT THE SAME AS SAYING NOTHING. A store that could not be read used to
+        // count as empty, so with the buffer's Redis down this command printed "Matomo OK" and
+        // not a word about the buffer, while every hit the application tracked failed to go in.
         if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
             try {
                 $waiting = App::make(HitBuffer::class)->size();
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $this->warn(sprintf(
+                    'Buffer (%s) could not be read: %s',
+                    Config::string('matomo-analytics.batch.driver', 'database'),
+                    $this->describe($e),
+                ));
                 $waiting = 0;
             }
 
@@ -234,7 +245,9 @@ final class TestConnectionCommand extends Command
 
         try {
             $dead = App::make(DeadLetterStore::class)->count();
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            $this->warn('Dead letters could not be counted: '.$this->describe($e));
+
             return;
         }
 
@@ -244,6 +257,37 @@ final class TestConnectionCommand extends Command
                 $dead,
             ));
         }
+    }
+
+    /**
+     * Name a `privacy.consent` value the JS tracker does not know.
+     *
+     * Such a value is read as `full`, which fails closed: the tracker waits for consent rather
+     * than tracking without asking. It also records nothing until the application grants that
+     * consent, and an operator who meant `none` sees tracking stop with no reason given. This
+     * line is the reason.
+     */
+    private function reportUnrecognizedConsent(): void
+    {
+        $value = ConsentMode::unrecognized();
+
+        if ($value === null) {
+            return;
+        }
+
+        $this->warn(sprintf(
+            'matomo-analytics.privacy.consent is %s, which is none of none, cookie or full. The JS tracker reads it as full: it requires consent and records nothing until your consent layer grants it.',
+            $value,
+        ));
+    }
+
+    /**
+     * An exception as one line for the console: its class and message, with any password in
+     * a connection URL masked.
+     */
+    private function describe(Throwable $e): string
+    {
+        return $e::class.': '.preg_replace('#(//[^/:@\s]+):[^/@\s]+@#', '$1:***@', $e->getMessage());
     }
 
     private function reportPlaintextHost(): void

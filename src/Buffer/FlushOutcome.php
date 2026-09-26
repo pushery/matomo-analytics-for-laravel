@@ -25,12 +25,13 @@ final readonly class FlushOutcome
         public int $delivered,
         public int $deadLettered,
         public bool $unavailable = false,
+        public bool $deadLetterUnavailable = false,
     ) {}
 
     /**
      * A run that is not moving hits and should say so.
      *
-     * Two shapes, and deliberately narrower than "any batch was dead-lettered". A single
+     * Three shapes, and deliberately narrower than "any batch was dead-lettered". A single
      * poison batch among thousands of delivered hits is the dead-letter queue doing its job,
      * and reporting failure for it would train the reader to ignore the signal.
      *
@@ -40,10 +41,15 @@ final readonly class FlushOutcome
      *   to return but an empty batch, an empty batch is how the flusher learns the buffer is
      *   drained, and so the command printed `Flushed 0 Matomo hit(s).` and exited zero every
      *   minute over hits that were still sitting in the file.
+     * - A batch Matomo refused could not be dead-lettered, because the store has no table. It
+     *   stays at the head of the buffer, so every run sends it once and stops before anything
+     *   behind it.
      */
     public function isStuck(): bool
     {
-        return $this->unavailable || ($this->delivered === 0 && $this->deadLettered > 0);
+        return $this->unavailable
+            || $this->deadLetterUnavailable
+            || ($this->delivered === 0 && $this->deadLettered > 0);
     }
 
     /**
@@ -59,6 +65,10 @@ final readonly class FlushOutcome
     {
         if ($this->unavailable) {
             return 'The buffer could not be read — check the batch driver and that its store is reachable and writable.';
+        }
+
+        if ($this->deadLetterUnavailable) {
+            return 'A batch Matomo refused could not be dead-lettered and was kept in the buffer, ahead of every hit behind it — run the package migrations to create the dead-letter table.';
         }
 
         if ($this->delivered === 0 && $this->deadLettered > 0) {

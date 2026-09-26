@@ -11,14 +11,17 @@ use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\ConsoleRequest;
 use MatomoAnalytics\Tracking\Hit;
 use Throwable;
 
 /**
  * Turns a Hit plus the originating request into a flat Matomo Tracking API
  * parameter array: site id, visitor id, real request context (url/referrer/ua/
- * lang) and — only when a token is configured — the real client IP (cip) and the
- * exact hit time (cdt), which Matomo only honors with token_auth.
+ * lang), the hit time (cdt) and — only when a token is configured — the real
+ * client IP (cip), which Matomo honors only with token_auth. The hit time needs a
+ * token only once it is more than a day old; HttpSender drops it from such a hit
+ * when there is none.
  */
 final readonly class PayloadBuilder
 {
@@ -64,23 +67,14 @@ final readonly class PayloadBuilder
             'rec' => 1,
             'apiv' => 1,
             'send_image' => 0,
-            '_id' => $this->visitorId->resolve($request),
             'url' => $request->fullUrl(),
         ];
 
-        $referrer = $request->headers->get('referer');
-        if (is_string($referrer) && $referrer !== '') {
-            $base['urlref'] = $referrer;
-        }
-
-        $userAgent = $request->userAgent();
-        if ($userAgent !== null && $userAgent !== '') {
-            $base['ua'] = $userAgent;
-        }
-
-        $language = $request->headers->get('accept-language');
-        if (is_string($language) && $language !== '') {
-            $base['lang'] = $language;
+        // A console process has no visitor, only the request Laravel invents for it, and every
+        // job and command would share that one: Symfony's user agent, 127.0.0.1, and a visitor
+        // id derived from both. Such a hit carries only what its caller put on it.
+        if (! ConsoleRequest::isSynthetic($request)) {
+            $base = [...$base, ...$this->visitor($request)];
         }
 
         $userId = $this->userId($request);
@@ -88,15 +82,44 @@ final readonly class PayloadBuilder
             $base['uid'] = $userId;
         }
 
+        $base['cdt'] = gmdate('Y-m-d H:i:s');
+
+        return $this->redactUrls(array_merge($base, $hit->toParams()));
+    }
+
+    /**
+     * What a request says about the visitor behind it: the visitor id, the referrer, the user
+     * agent, the language and, with a token, the address.
+     *
+     * @return array<string, scalar>
+     */
+    private function visitor(Request $request): array
+    {
+        $visitor = ['_id' => $this->visitorId->resolve($request)];
+
+        $referrer = $request->headers->get('referer');
+        if (is_string($referrer) && $referrer !== '') {
+            $visitor['urlref'] = $referrer;
+        }
+
+        $userAgent = $request->userAgent();
+        if ($userAgent !== null && $userAgent !== '') {
+            $visitor['ua'] = $userAgent;
+        }
+
+        $language = $request->headers->get('accept-language');
+        if (is_string($language) && $language !== '') {
+            $visitor['lang'] = $language;
+        }
+
         if ($this->connection->token !== null) {
             $ip = $this->clientIp($request);
             if ($ip !== null) {
-                $base['cip'] = $ip;
+                $visitor['cip'] = $ip;
             }
-            $base['cdt'] = gmdate('Y-m-d H:i:s');
         }
 
-        return $this->redactUrls(array_merge($base, $hit->toParams()));
+        return $visitor;
     }
 
     /**
@@ -174,7 +197,14 @@ final readonly class PayloadBuilder
         return $ip !== null ? $this->maybeAnonymize($ip) : null;
     }
 
-    private function maybeAnonymize(string $ip): string
+    /**
+     * The address to send as `cip`, or null to send none.
+     *
+     * With `anonymize_ip` on, a value that is not an address is not sent: the setting promises
+     * that the full address never leaves this application, and a value that cannot be masked
+     * cannot be held to that promise.
+     */
+    private function maybeAnonymize(string $ip): ?string
     {
         if (! Config::bool('matomo-analytics.anonymize_ip', true)) {
             return $ip;
@@ -200,13 +230,13 @@ final readonly class PayloadBuilder
      * REJECTION IS `inet_pton` RATHER THAN `filter_var`, and the difference is one class:
      * a zone id. `filter_var` refuses `fe80::1%eth0`, so it used to leave here VERBATIM — a
      * whole link-local address surviving the setting that exists to cut it. It is an address
-     * with an interface qualifier, not a non-address, and it is now masked like one. The
-     * contract the paragraph above states is unchanged: what is not an address is handed back.
+     * with an interface qualifier, not a non-address, and it is now masked like one. What is
+     * not an address is not sent at all.
      *
      * The `is_string` arms are the declared `string|false` of the calls, not a second opinion
      * about the input.
      */
-    private function anonymizeIpv6(string $ip): string
+    private function anonymizeIpv6(string $ip): ?string
     {
         // THE ZONE ID IS STRIPPED HERE RATHER THAN LEFT TO `inet_pton`, because whether it
         // accepts one is a LIBC question. It does on glibc and on macOS; it does not on musl,
@@ -220,10 +250,9 @@ final readonly class PayloadBuilder
         $packed = inet_pton($ip);
 
         if (! is_string($packed) || strlen($packed) !== 16) {
-            // The forwarding header this can come from (`ip_header`) is whatever a proxy
-            // put there, so anything that is not an address is handed back untouched
-            // rather than sliced into something that resembles one.
-            return $ip;
+            // Not an address, so nothing can be masked, and a value sent whole could carry the
+            // address the setting exists to cut.
+            return null;
         }
 
         // Ten zero bytes then `ff ff`: the packed form of `::ffff:0:0/96`, the range RFC 4291
@@ -247,24 +276,25 @@ final readonly class PayloadBuilder
             // carries no dot, so it used to fall through to the 48-bit mask and collapse to
             // `::` while `::ffff:192.0.2.1` kept its network.
             $mapped = inet_ntop(substr($packed, 12));
+            $masked = is_string($mapped) ? $this->anonymizeIpv4($mapped) : null;
 
-            return is_string($mapped) ? '::ffff:'.$this->anonymizeIpv4($mapped) : $ip;
+            return $masked === null ? null : '::ffff:'.$masked;
         }
 
         $anonymized = inet_ntop(substr($packed, 0, 6).str_repeat("\0", 10));
 
-        return is_string($anonymized) ? $anonymized : $ip;
+        return is_string($anonymized) ? $anonymized : null;
     }
 
-    private function anonymizeIpv4(string $ip): string
+    private function anonymizeIpv4(string $ip): ?string
     {
-        $octets = explode('.', $ip);
-        if (count($octets) === 4) {
-            $octets[3] = '0';
-
-            return implode('.', $octets);
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return null;
         }
 
-        return $ip;
+        $octets = explode('.', $ip);
+        $octets[3] = '0';
+
+        return implode('.', $octets);
     }
 }

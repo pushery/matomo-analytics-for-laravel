@@ -167,8 +167,11 @@ final class MatomoReports implements ReportClient
      */
     private function bulkUrl(string|array $request): string
     {
+        // The caller chooses the method and the report's parameters, never the site or the
+        // envelope, the same as `body()` holds for `get()`: the token usually sees every site of
+        // the instance. `module`, `format` and `token_auth` belong to the bulk request itself.
         $method = is_string($request) ? $request : (string) ($request['method'] ?? '');
-        $params = is_string($request) ? [] : array_diff_key($request, ['method' => true]);
+        $params = is_string($request) ? [] : array_diff_key($request, ['method' => true, 'module' => true, 'format' => true, 'token_auth' => true]);
 
         return http_build_query(array_merge(
             [
@@ -178,6 +181,7 @@ final class MatomoReports implements ReportClient
                 'idSite' => $this->connection->siteId,
             ],
             $params,
+            ['idSite' => $this->connection->siteId],
         ));
     }
 

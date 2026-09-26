@@ -25,10 +25,11 @@ return [
     | `host` is the base URL, e.g. https://analytics.example.com or
     | https://your-instance.matomo.cloud.
     | `token` (token_auth) is server-side only; it is required for the real
-    | client IP (cip), an accurate hit time (cdt) and bulk authorization. In queue
-    | and batch mode a token is effectively required for correct timestamps: without
-    | it Matomo times each hit at receipt, which — especially after a queued retry or a
-    | dead-letter replay — can be minutes to hours after the event actually happened.
+    | client IP (cip) and bulk authorization. The hit time (cdt) goes with every hit,
+    | and Matomo takes it without a token while it is less than a day old. A hit
+    | delivered later than that — after a long retry or a dead-letter replay — keeps
+    | its time only with a token; without one it is sent without the time and
+    | recorded when it arrives.
     |
     | Only MATOMO_HOST is read. MATOMO_URL used to be accepted as a fallback and
     | is not any more: it is not this package's key, so applications that already
@@ -128,7 +129,8 @@ return [
         // draining 2000 hits against a Matomo answering in 20ms took 1021ms at 50, 276ms
         // at 200 and 125ms at 500 — the same hits, the same connection, 8x apart. These
         // are round trips rather than handshakes; the shared cURL handler already reuses
-        // one TCP connection for a whole flush.
+        // one TCP connection for a whole flush (on a PHP with curl; without it, each
+        // request opens its own).
         //
         // It is ALSO the memory knob, which the old comment did not say: a claimed batch
         // is held in memory at roughly 2.3 KB per hit, so 200 costs about 460 KB and 500
@@ -138,6 +140,9 @@ return [
         'flush_interval' => env('MATOMO_BATCH_INTERVAL', 60),
         'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 2000,
         'stale_after_minutes' => 15,
+
+        // The `redis` driver moves hits with LMOVE, which needs Redis 6.2 or later. On an older
+        // server a flush ends marked unavailable and names the missing command.
         'redis_connection' => env('MATOMO_BATCH_REDIS', 'default'),
         'table' => 'matomo_tracking_buffer',
         'path' => env('MATOMO_BATCH_PATH'),
@@ -166,9 +171,9 @@ return [
             //  2. An old dead letter is not merely stale, it is misleading to replay.
             //     `cdt` is stamped when the payload is BUILT, so a replayed batch carries
             //     its original timestamp — and Matomo refuses a `cdt` older than about a
-            //     day unless the request carries `token_auth`. Without a token the hit is
-            //     recorded at today's date instead, which quietly moves month-old visits
-            //     into the current report.
+            //     day unless the request carries `token_auth`. Without a token such a hit
+            //     is sent without its time and recorded at today's date instead, which
+            //     quietly moves month-old visits into the current report.
             //
             // 30 days is far beyond any realistic diagnosis window and well short of the
             // point where the table becomes a problem. Set it to `0` if you would rather
@@ -193,8 +198,8 @@ return [
         'reporting' => [
             'report_after_attempts' => filter_var(env('MATOMO_REPORT_AFTER_ATTEMPTS', 3), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 3,
             'channel' => env('MATOMO_REPORT_CHANNEL', 'report'),
-            'level' => 'warning',
-            'transient_level' => null,
+            'level' => 'warning',             // a PSR-3 level; any other is read as warning
+            'transient_level' => null,        // a PSR-3 level for retry notes, or null for none
             'throttle_minutes' => filter_var(env('MATOMO_REPORT_THROTTLE_MINUTES', 15), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 15,
         ],
     ],
@@ -254,20 +259,29 @@ return [
     // On by default, and the truncation happens HERE — in this application, before
     // the hit is sent. That is the answer to the question an EU deployment actually
     // asks: the full address never leaves your server. (Matomo can also anonymize
-    // server-side; that is its own setting and independent of this one.) Turn this
-    // off deliberately if you have a basis to store full addresses.
+    // server-side; that is its own setting and independent of this one.) A value that
+    // is not an address cannot be truncated, so it is not sent at all. Turn this off
+    // deliberately if you have a basis to store full addresses.
     'anonymize_ip' => true,
 
     // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
-    // Cloudflare). A forwarding header is a CHAIN — `X-Forwarded-For` carries
-    // `client, proxy1, proxy2` — and the first address in it is the client; a port,
-    // brackets and a zone id are stripped for the same reason. A value holding no
-    // address at all is passed on untouched.
-    // SECURITY: the header is trusted WITHOUT VERIFICATION, so only set this when
-    // the origin is reachable EXCLUSIVELY through the trusted proxy. If the origin is
-    // directly reachable, a client can spoof it (poisoning cip / bypassing except_ips) —
-    // prefer leaving this null and configuring Laravel's TrustProxies + $request->ip().
+    // Cloudflare, or the standard `Forwarded`, read by its `for` parameter). A forwarding
+    // header can be a chain, and it is read from the right: each proxy appends the address
+    // it received the request from to whatever the request already carried, so the left
+    // entries are the client's own invention and only the appended ones can be believed.
+    // A port, brackets and a zone id are stripped; a header that names no address counts
+    // as absent.
+    // Security: the header is trusted without verification, so only set this when the
+    // origin is reachable exclusively through the trusted proxy. If the origin is directly
+    // reachable, a client can spoof it (poisoning cip / bypassing except_ips): prefer
+    // leaving this null and configuring Laravel's TrustProxies + $request->ip().
     'ip_header' => env('MATOMO_IP_HEADER'),
+
+    // How many trusted proxies append to `ip_header`. The client is that many entries
+    // from the right: 1 behind a single proxy, 2 behind a CDN in front of a load
+    // balancer that both append. A single-value header such as CF-Connecting-IP is
+    // unaffected.
+    'ip_header_trusted_hops' => filter_var(env('MATOMO_IP_HEADER_TRUSTED_HOPS', 1), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 1,
 
     /*
     |--------------------------------------------------------------------------
@@ -308,7 +322,7 @@ return [
     'privacy' => [
         'honor_dnt' => true,   // skip on DNT:1 / Sec-GPC:1
         'cookieless' => true,  // JS: disableCookies before trackPageView
-        'consent' => 'none',   // none|cookie|full
+        'consent' => 'none',   // none|cookie|full; any other value is read as full
 
         // Server-side opt-out: the gate skips tracking when this first-party cookie
         // is present. Set/clear it with MatomoAnalytics\Privacy\OptOut::enable()/disable()
@@ -494,7 +508,7 @@ return [
         'path' => 'matomo-analytics/web-vitals',
         'category' => 'Web Vitals',
         'metrics' => ['LCP', 'CLS', 'INP', 'FCP', 'TTFB'],
-        'throttle' => env('MATOMO_WEB_VITALS_THROTTLE', '60,1'), // "requests,minutes"; null to disable
+        'throttle' => env('MATOMO_WEB_VITALS_THROTTLE', '60,1'), // "requests,minutes" or a count a minute; null or "off" to disable
         'middleware' => [],   // extra route middleware; see the note below
         'library' => null,    // optional <script src> for web-vitals; null = app provides it
     ],
@@ -517,7 +531,7 @@ return [
     'prefetch_beacon' => [
         'enabled' => false,
         'path' => 'matomo-analytics/page-view',
-        'throttle' => env('MATOMO_PREFETCH_BEACON_THROTTLE', '60,1'), // "requests,minutes"; null to disable
+        'throttle' => env('MATOMO_PREFETCH_BEACON_THROTTLE', '60,1'), // "requests,minutes" or a count a minute; null or "off" to disable
         'middleware' => [],   // extra route middleware; see the note below
     ],
 

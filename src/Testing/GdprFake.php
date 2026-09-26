@@ -24,6 +24,19 @@ final class GdprFake implements Fake, GdprClient
     /** @var array<string, int> */
     private array $deleted = [];
 
+    /**
+     * What forget() reports for the local half: by default, that it ran and found nothing.
+     *
+     * @var array{local_buffer: int, local_dead_letters: int, local_segment_understood: bool, local_buffer_searched: bool, local_queue_searched: bool}
+     */
+    private array $local = [
+        'local_buffer' => 0,
+        'local_dead_letters' => 0,
+        'local_segment_understood' => true,
+        'local_buffer_searched' => true,
+        'local_queue_searched' => true,
+    ];
+
     private ?string $lastError = null;
 
     private bool $mutationsFail = false;
@@ -46,6 +59,28 @@ final class GdprFake implements Fake, GdprClient
     public function stubDeleted(array $counts): self
     {
         $this->deleted = $counts;
+
+        return $this;
+    }
+
+    /**
+     * Stub the local half of forget(): rows removed from the buffer and the dead letters, whether
+     * the segment could be evaluated here, and whether the buffer and the queue were searched.
+     */
+    public function stubLocal(
+        int $buffer = 0,
+        int $deadLetters = 0,
+        bool $segmentUnderstood = true,
+        bool $bufferSearched = true,
+        bool $queueSearched = true,
+    ): self {
+        $this->local = [
+            'local_buffer' => $buffer,
+            'local_dead_letters' => $deadLetters,
+            'local_segment_understood' => $segmentUnderstood,
+            'local_buffer_searched' => $bufferSearched,
+            'local_queue_searched' => $queueSearched,
+        ];
 
         return $this;
     }
@@ -84,7 +119,8 @@ final class GdprFake implements Fake, GdprClient
             $this->lastError = $this->mutationError;
         }
 
-        return $this->lastError !== null ? null : $this->deleted;
+        // The same shape the real client returns: Matomo's counts, then the local half.
+        return $this->lastError !== null ? null : array_merge($this->deleted, $this->local);
     }
 
     public function export(string $segment, int|string|null $site = null): ?array
