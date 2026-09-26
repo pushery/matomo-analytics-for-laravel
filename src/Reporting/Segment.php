@@ -10,7 +10,8 @@ use Stringable;
 /**
  * Fluent builder for a Matomo segment definition string, e.g.
  * `deviceType==smartphone;visitCount>1`. Expressions are joined with `;` (AND)
- * or `,` (OR); values are left verbatim for the HTTP transport to URL-encode.
+ * or `,` (OR). A value is matched exactly as given: it is encoded once for each of
+ * the three times Matomo decodes it, so none of its characters is read as syntax.
  * Immutable: each call returns a new instance.
  *
  *   Segment::where('deviceType', '==', 'smartphone')->andWhere('visitCount', '>', 1);
@@ -19,6 +20,9 @@ final readonly class Segment implements Stringable
 {
     /** @var list<string> */
     private const array OPERATORS = ['==', '!=', '<=', '>=', '<', '>', '=@', '!@', '=^', '=$'];
+
+    /** Characters Matomo reads as syntax: separators, their escape, operators, codes and a line break. */
+    private const string SYNTAX = ";,\\=!<>@^\$%+\n";
 
     /**
      * @param  list<array{glue: string, expression: string}>  $parts
@@ -62,6 +66,12 @@ final readonly class Segment implements Stringable
             throw new InvalidArgumentException("Unsupported Matomo segment operator [{$operator}].");
         }
 
-        return $dimension.$operator.$value;
+        if ($dimension === '' || strpbrk($dimension, self::SYNTAX) !== false) {
+            throw new InvalidArgumentException("Matomo segment dimension [{$dimension}] is not a segment name.");
+        }
+
+        // Matomo decodes the whole definition, then each condition, then the value, and splits
+        // the definition after the first decoding (`SegmentReader` takes the same steps).
+        return $dimension.$operator.rawurlencode(rawurlencode(rawurlencode((string) $value)));
     }
 }

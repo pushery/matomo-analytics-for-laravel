@@ -18,7 +18,11 @@ final class ClientIp
         if ($header !== null) {
             $forwarded = $request->headers->get($header);
             if (is_string($forwarded) && $forwarded !== '') {
-                return self::normalize($forwarded) ?? $forwarded;
+                // A header that names no address is treated like an absent one. Its text is not
+                // an identity: passed on, every invented value would get a rate-limit bucket, a
+                // `cip` and a visitor id of its own.
+                return self::normalize($forwarded, max(1, Config::int('matomo-analytics.ip_header_trusted_hops', 1)))
+                    ?? $request->ip();
             }
         }
 
@@ -28,50 +32,62 @@ final class ClientIp
     /**
      * The client address a forwarding header names, or null when it names none.
      *
-     * THIS USED TO RETURN THE HEADER VERBATIM, AND `X-Forwarded-For` IS A CHAIN BY
-     * DEFINITION. One hop looks like an address and two do not, so every consumer downstream
-     * silently stopped working the moment a CDN or a load balancer was put in front — the
-     * ordinary deployment, and the one `ip_header` exists for. Both consumers failed in the
-     * direction that keeps data rather than the one that drops it:
+     * READ FROM THE RIGHT. A proxy APPENDS the address it received the request from to whatever
+     * `X-Forwarded-For` the request already carried: nginx's `$proxy_add_x_forwarded_for`, an AWS
+     * load balancer in its default mode and Cloudflare all do. So the entries on the left are
+     * whatever the client chose to send, and only the ones the trusted proxies appended can be
+     * believed. With one trusted proxy that is the last entry; `ip_header_trusted_hops` names how
+     * many append, and the client is that many entries from the right. A chain shorter than that
+     * is read from its first entry, the nearest thing to a client it holds.
      *
-     *   `anonymize_ip`  `maybeAnonymize()` branches on a colon, a two-hop v4 chain has none,
-     *                   and `anonymizeIpv4()` hands back anything that is not four octets.
-     *                   So the FULL visitor address went to Matomo while the setting was on
-     *                   and the docs promised it never leaves the application.
-     *   `except_ips`    `IpUtils::checkIp('10.1.2.3, 198.51.100.7', ['10.0.0.0/8'])` is
-     *                   false, so a team's own exclusion list quietly covered nobody.
+     * A single-value header (CF-Connecting-IP, X-Real-IP) is a chain of one, so its one entry is
+     * both ends. `Forwarded` is a chain of the same kind, read by the `for` parameter of a hop.
      *
-     * A port, a bracket pair and a zone id get the same treatment for the same reason: each
-     * is a well-formed way to write an address next to something that is not part of it, and
-     * `filter_var` refuses all three — which is what put them on the leaking path.
-     *
-     * The result is validated, and a value that yields no address leaves the caller with the
-     * header untouched. So this can only ever replace a non-address with an address: the
-     * "whatever a proxy put there is handed back rather than sliced into something that
-     * RESEMBLES an address" contract that `anonymizeIpv6()` documents is kept exactly.
+     * A port, a bracket pair and a zone id are stripped: each is a well-formed way to write an
+     * address next to something that is not part of it, and `filter_var` refuses all three.
      */
-    private static function normalize(string $header): ?string
+    private static function normalize(string $header, int $hops): ?string
     {
-        $first = trim(explode(',', $header, 2)[0]);
+        $entries = array_values(array_filter(
+            array_map(trim(...), explode(',', $header)),
+            static fn (string $entry): bool => $entry !== '',
+        ));
 
-        if (str_starts_with($first, '[')) {
+        if ($entries === []) {
+            return null;
+        }
+
+        $entry = $entries[max(0, count($entries) - $hops)];
+
+        // `Forwarded` (RFC 7239) writes a hop as `for=…;proto=…;by=…` and quotes an address that
+        // carries brackets or a port. Its `for` parameter is the client of that hop, and a hop
+        // without one names no address.
+        if (str_contains($entry, '=')) {
+            if (preg_match('/(?:^|;)\s*for\s*=\s*"?([^";]*)/i', $entry, $for) !== 1) {
+                return null;
+            }
+
+            $entry = trim($for[1]);
+        }
+
+        if (str_starts_with($entry, '[')) {
             // `[2001:db8::1]:443` — the brackets exist precisely to tell the port from an
             // address that is itself full of colons.
-            $close = strpos($first, ']');
-            $first = $close === false ? substr($first, 1) : substr($first, 1, $close - 1);
-        } elseif (substr_count($first, ':') === 1) {
+            $close = strpos($entry, ']');
+            $entry = $close === false ? substr($entry, 1) : substr($entry, 1, $close - 1);
+        } elseif (substr_count($entry, ':') === 1) {
             // Exactly one colon is `host:port`. Two or more is an unbracketed IPv6, where no
             // port can be told from the address — and none is written without brackets.
-            $first = substr($first, 0, (int) strpos($first, ':'));
+            $entry = strstr($entry, ':', true) ?: $entry;
         }
 
         // A zone id (`fe80::1%eth0`) names an interface on the machine that wrote it, which
         // is meaningless anywhere else and is not part of the address.
-        $percent = strpos($first, '%');
+        $percent = strpos($entry, '%');
         if ($percent !== false) {
-            $first = substr($first, 0, $percent);
+            $entry = substr($entry, 0, $percent);
         }
 
-        return filter_var($first, FILTER_VALIDATE_IP) === false ? null : $first;
+        return filter_var($entry, FILTER_VALIDATE_IP) === false ? null : $entry;
     }
 }

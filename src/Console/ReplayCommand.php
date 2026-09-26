@@ -55,7 +55,7 @@ final class ReplayCommand extends Command
             // the entire queue" — the widest possible action arrived at by silently
             // misreading a typo. A retention window is the one option here where a wrong
             // value is unrecoverable.
-            if (! is_string($olderThan) || ! ctype_digit($olderThan) || (int) $olderThan < 1) {
+            if (! ctype_digit($olderThan) || (int) $olderThan < 1) {
                 $this->error('--prune-older-than needs a whole number of days, 1 or greater.');
 
                 return self::FAILURE;

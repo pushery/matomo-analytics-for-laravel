@@ -21,7 +21,7 @@ final class InstallCommand extends Command
         // (as this command used to) sends the reader off to configure a package
         // that then stays silent, with nothing telling them why.
         $this->info('Set MATOMO_ENABLED=true in your .env — the package ships dormant and tracks nobody until you do.');
-        $this->info('Then set MATOMO_HOST and MATOMO_SITE_ID (add MATOMO_TOKEN for the real client IP, exact hit time, and batch delivery).');
+        $this->info('Then set MATOMO_HOST and MATOMO_SITE_ID (add MATOMO_TOKEN for the real client IP and batch delivery).');
 
         return self::SUCCESS;
     }

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Transport;
 
 use Closure;
+use DateTimeImmutable;
+use DateTimeZone;
 use GuzzleHttp\Handler\CurlHandler;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\Sender;
@@ -20,6 +23,16 @@ use MatomoAnalytics\Contracts\Sender;
  */
 final class HttpSender implements Sender
 {
+    /**
+     * How old a hit time may be for Matomo to take it from a request without a token, in seconds.
+     *
+     * Matomo accepts a custom timestamp from an unauthenticated request while it is younger than
+     * `tracking_requests_require_authentication_when_custom_timestamp_newer_than`, a day by
+     * default, and refuses the request otherwise. An hour less than that leaves room for the
+     * clocks of the two hosts to differ.
+     */
+    private const int UNAUTHENTICATED_TIMESTAMP_WINDOW = 82800;
+
     /**
      * The Guzzle handler every send goes through, built once.
      *
@@ -38,9 +51,19 @@ final class HttpSender implements Sender
      */
     private ?Closure $handler;
 
+    /**
+     * Whether PHP has curl, the only way to share a handle between sends.
+     *
+     * Guzzle runs without curl and only suggests the extension, and this package does not
+     * require it. Where curl is missing, the handler is left to Guzzle, which falls back to PHP
+     * streams: hits still go out, each on a connection of its own.
+     */
+    private readonly bool $curl;
+
     public function __construct(
         private readonly Connection $connection,
         ?callable $handler = null,
+        ?bool $curl = null,
     ) {
         // Injectable so a test can watch it: the property that matters is that CONSECUTIVE
         // sends go through the SAME handler, and that is invisible from the outside unless
@@ -50,12 +73,20 @@ final class HttpSender implements Sender
         // object becomes one through the first-class callable syntax, which is the same
         // object underneath.
         $this->handler = $handler === null ? null : $handler(...);
+
+        // Injectable for the same reason: every machine that runs the suite has curl, so the
+        // path without it would otherwise run nowhere before a consumer's.
+        $this->curl = $curl ?? extension_loaded('curl');
     }
 
     public function send(array $payloads): SendResult
     {
         if ($payloads === []) {
             return SendResult::success();
+        }
+
+        if ($this->connection->token === null) {
+            $payloads = array_map($this->withoutStaleTimestamp(...), $payloads);
         }
 
         $response = count($payloads) === 1
@@ -67,6 +98,28 @@ final class HttpSender implements Sender
         }
 
         return $this->readEnvelope($response);
+    }
+
+    /**
+     * The payload without a hit time Matomo would refuse from a request that carries no token.
+     *
+     * A hit that waited longer than the window, in a long retry or a dead-letter replay, goes
+     * out without `cdt` and is recorded when it arrives: a late hit rather than a refused one.
+     * A time in any form other than the one PayloadBuilder writes is left for Matomo to judge.
+     *
+     * @param  array<string, scalar>  $payload
+     * @return array<string, scalar>
+     */
+    private function withoutStaleTimestamp(array $payload): array
+    {
+        $cdt = $payload['cdt'] ?? null;
+        $at = is_string($cdt) ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $cdt, new DateTimeZone('UTC')) : false;
+
+        if ($at !== false && Date::now()->getTimestamp() - $at->getTimestamp() >= self::UNAUTHENTICATED_TIMESTAMP_WINDOW) {
+            unset($payload['cdt']);
+        }
+
+        return $payload;
     }
 
     /**
@@ -139,22 +192,25 @@ final class HttpSender implements Sender
 
     private function request(): PendingRequest
     {
-        return Http::connectTimeout($this->connection->connectTimeout)
+        $request = Http::connectTimeout($this->connection->connectTimeout)
             ->timeout($this->connection->timeout)
             ->withOptions(['version' => 1.1])
             // A 307 OR 308 KEEPS THE METHOD AND THE BODY, AND THE TOKEN IS IN THE BODY.
             // Guzzle's `RedirectMiddleware` hands back an empty modifier set for any status
             // above 302, so the POST is replayed verbatim at whatever host the Location names.
             // Its cross-origin stripping covers `Authorization` and `Cookie` — headers — and
-            // this token is a form field, so it travelled. Measured end to end: a 307 sent
+            // this token is a form field, so it traveled. Measured end to end: a 307 sent
             // `token_auth` to a foreign host, and `protocols` allowed the downgrade to http.
             //
             // The trigger is a RESPONSE FROM THE MATOMO HOST, which on Matomo Cloud is a third
             // party — and the same token is an admin token, because the GDPR deletion path
             // requires one. A redirect is not an expected state here, so it is refused rather
             // than sanitized.
-            ->withoutRedirecting()
-            ->setHandler($this->handler());
+            ->withoutRedirecting();
+
+        $handler = $this->handler();
+
+        return $handler instanceof Closure ? $request->setHandler($handler) : $request;
     }
 
     /**
@@ -164,9 +220,16 @@ final class HttpSender implements Sender
      * handle it is given again — which is the entire mechanism. Guzzle's default handler is
      * built fresh inside `HandlerStack::create(null)` on every request, so the default is a
      * new handle and a new connection each time.
+     *
+     * Without curl there is no handle to share, and `CurlHandler` would fail on its first
+     * `curl_exec()`. Null leaves the choice to Guzzle, and an injected handler still wins.
      */
-    private function handler(): Closure
+    private function handler(): ?Closure
     {
+        if (! $this->curl) {
+            return $this->handler;
+        }
+
         return $this->handler ??= new CurlHandler()->__invoke(...);
     }
 }

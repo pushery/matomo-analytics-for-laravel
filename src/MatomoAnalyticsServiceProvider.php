@@ -8,8 +8,13 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -192,15 +197,15 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     private function registerBeaconRateLimiter(string $limiter, string $configKey): void
     {
         RateLimiter::for($limiter, static function (Request $request) use ($configKey): Limit {
-            $throttle = Config::nullableStringOrShipped($configKey);
+            $throttle = Config::throttle($configKey);
 
             if ($throttle === null) {
                 return Limit::none();
             }
 
-            [$max, $minutes] = array_pad(array_map(trim(...), explode(',', $throttle, 2)), 2, '1');
+            [$max, $minutes] = $throttle;
 
-            return Limit::perMinutes(max(1, (int) $minutes), max(1, (int) $max))
+            return Limit::perMinutes($minutes, $max)
                 ->by(ClientIp::resolve($request) ?? 'matomo-analytics:unknown-client');
         });
     }
@@ -351,15 +356,47 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         return $event;
     }
 
+    /**
+     * Hand the collected hits off at the end of each unit of work.
+     *
+     * THE CALLBACK ASKS THE CONTAINER IT IS CALLED IN, NOT THE ONE THIS PROVIDER BOOTED IN.
+     * Octane clones the application for every request and terminates the clone, and the scoped
+     * Tracker that collected the request's hits lives only there. A callback asking `$this->app`
+     * found nothing resolved on the original and flushed nothing, so in the default `queue`
+     * mode no server-side hit left an Octane worker. `Application::terminate()` runs its
+     * callbacks through `call()`, which injects the container being terminated.
+     *
+     * A QUEUE WORKER DOES NOT TERMINATE BETWEEN JOBS, and it forgets scoped instances before
+     * each one, so a job's hits went with its Tracker and only the last job's reached the end of
+     * the process. A job hands its hits off as it finishes, processed or failed. A SyncJob is
+     * left out: it runs inside a request, whose own termination hands off, and a flush there
+     * would put the dispatch back on the request path.
+     */
     private function registerTerminatingFlush(): void
     {
-        $this->app->terminating(function (): void {
-            if ($this->app->resolved(Tracker::class)) {
-                /** @var Tracker $tracker */
-                $tracker = $this->app->make(Tracker::class);
-                $tracker->flush();
-            }
+        $this->app->terminating(static function (Container $app): void {
+            self::flushTracker($app);
         });
+
+        $app = $this->app;
+
+        $app->make(Dispatcher::class)->listen(
+            [JobProcessed::class, JobExceptionOccurred::class],
+            static function (JobProcessed|JobExceptionOccurred $event) use ($app): void {
+                if (! $event->job instanceof SyncJob) {
+                    self::flushTracker($app);
+                }
+            },
+        );
+    }
+
+    private static function flushTracker(Container $app): void
+    {
+        if ($app->resolved(Tracker::class)) {
+            /** @var Tracker $tracker */
+            $tracker = $app->make(Tracker::class);
+            $tracker->flush();
+        }
     }
 
     private function registerPublishing(): void

@@ -16,7 +16,7 @@ interface GdprClient
      * Find the visits matching a segment (the data subject).
      *
      * @param  int|string|null  $site  idSite; null = the configured site, "all" = every site
-     * @return list<array<array-key, mixed>>|null matching visit rows (each with idsite/idvisit), or null on failure
+     * @return list<array<array-key, mixed>>|null matching visit rows as Matomo returns them (each with idSite/idVisit), or null on failure
      */
     public function findDataSubjects(string $segment, int|string|null $site = null): ?array;
 
@@ -24,11 +24,14 @@ interface GdprClient
      * Find the data subject by segment and erase every matching visit.
      *
      * The counts carry Matomo's own storage areas, plus this package's local stores under
-     * `local_buffer` and `local_dead_letters`, plus `local_segment_understood` — a boolean
-     * saying whether the local half could evaluate the segment at all, which is a different
-     * answer from "nothing matched".
+     * `local_buffer` and `local_dead_letters`, plus three booleans. `local_segment_understood`
+     * says whether the local half could evaluate the segment at all, which is a different
+     * answer from "nothing matched". `local_buffer_searched` is false when the application bound
+     * a buffer that cannot erase (one implementing `HitBuffer` but not `ErasableHitBuffer`).
+     * `local_queue_searched` is false in the `queue` mode, where hits still waiting in the queue,
+     * and jobs that ran out of attempts in `failed_jobs`, cannot be searched from here.
      *
-     * @return array<string, bool|int>|null deletion counts keyed by storage area, [] if nothing matched, null on failure
+     * @return array<string, bool|int>|null Matomo's deletion counts keyed by storage area (none when Matomo matched nothing), then the local keys above; null on failure
      */
     public function forget(string $segment, int|string|null $site = null): ?array;
 

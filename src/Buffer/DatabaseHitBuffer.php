@@ -8,15 +8,17 @@ use DateTimeInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use MatomoAnalytics\Contracts\HitBuffer;
+use MatomoAnalytics\Contracts\ErasableHitBuffer;
+use MatomoAnalytics\Privacy\DataSubject;
 use MatomoAnalytics\Support\Config;
 
 /**
  * Portable, durable buffer backed by a database table. Claims are token-stamped
  * and auto-reclaim stale rows (e.g. from a crashed flush), so nothing is lost.
  */
-final class DatabaseHitBuffer implements HitBuffer
+final class DatabaseHitBuffer implements ErasableHitBuffer
 {
     public function push(array $payload): void
     {
@@ -84,7 +86,13 @@ final class DatabaseHitBuffer implements HitBuffer
      */
     private function attemptClaim(int $limit, string $ref, DateTimeInterface $stale): ?BufferBatch
     {
+        // BOTH READS GO TO THE WRITE CONNECTION. Laravel sends a query builder SELECT to the read
+        // connection unless a transaction is open or `sticky` is set and this request has
+        // written. On a connection with a `read` replica and no `sticky`, the read-back below
+        // asked a replica that had not seen the UPDATE yet, came back with nothing, and the
+        // empty batch was acked: the claimed rows were deleted unsent.
         $ids = DB::table($this->table())
+            ->useWritePdo()
             ->where(function (Builder $query) use ($stale): void {
                 $query->whereNull('claimed_at')->orWhere('claimed_at', '<', $stale);
             })
@@ -119,7 +127,7 @@ final class DatabaseHitBuffer implements HitBuffer
 
         $payloads = [];
         $rows = 0;
-        foreach (DB::table($this->table())->where('claimed_by', $ref)->orderBy('id')->pluck('payload') as $row) {
+        foreach (DB::table($this->table())->useWritePdo()->where('claimed_by', $ref)->orderBy('id')->pluck('payload') as $row) {
             $rows++;
             $decoded = is_string($row) ? Json::decode($row) : null;
             if ($decoded !== null) {
@@ -141,6 +149,31 @@ final class DatabaseHitBuffer implements HitBuffer
             'claimed_at' => null,
             'claimed_by' => null,
         ]);
+    }
+
+    public function erase(DataSubject $subject): int
+    {
+        $table = $this->table();
+
+        // An installation that skipped the migrations has no buffer here, and nothing to erase.
+        if (! Schema::hasTable($table)) {
+            return 0;
+        }
+
+        $removed = 0;
+
+        // The decoded payload is compared rather than the stored JSON matched as text: a
+        // substring match would delete a row whose URL merely mentions the value, and a JSON
+        // path is not portable across the engines this package supports. Pages keyed by id keep
+        // memory bounded however large the table is, and deleting a row behind the page never
+        // moves one the next page has yet to read. Claimed rows are included.
+        foreach (DB::table($table)->select(['id', 'payload'])->lazyById() as $row) {
+            if (is_string($row->payload ?? null) && $subject->owns(Json::decode($row->payload))) {
+                $removed += DB::table($table)->where('id', $row->id)->delete();
+            }
+        }
+
+        return $removed;
     }
 
     private function table(): string

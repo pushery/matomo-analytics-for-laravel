@@ -4,103 +4,100 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Privacy;
 
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Buffer\Json;
+use MatomoAnalytics\Contracts\ErasableHitBuffer;
+use MatomoAnalytics\Contracts\HitBuffer;
+use MatomoAnalytics\Reporting\SegmentReader;
 use MatomoAnalytics\Support\Config;
 
 /**
- * Erases a data subject's hits from the tables THIS application holds.
+ * Erases a data subject's hits from the tables this application holds.
  *
- * GDPR ERASURE REACHED MATOMO AND NOTHING ELSE, and this package keeps whole hits of its
- * own. `matomo_tracking_buffer` holds one built payload per row and `matomo_dead_letters`
- * holds whole batches for up to thirty days — `cip`, `ua`, `url`, `urlref`, `_id`, `uid`, all
- * of it, in the CONSUMER's database. So an operator could run `MatomoGdpr::forget(...)`, be
- * handed deletion counts, report the request fulfilled, and leave the same person's IP and
- * user agent sitting in their own tables. The documentation says "erases every matching
- * visit"; `reference/database.md` did not mention that these tables hold personal data at all.
+ * Matomo's erasure does not reach them, and they hold whole hits: `matomo_tracking_buffer` one
+ * built payload per row, `matomo_dead_letters` whole batches for up to thirty days, with `cip`,
+ * `ua`, `url`, `urlref`, `_id` and `uid`, in the application's own database.
  *
- * IT MATCHES TWO SEGMENT FORMS AND REFUSES THE REST, ON PURPOSE. A Matomo segment is an
- * expression evaluated by Matomo against ITS schema; re-implementing that here against stored
- * payloads would be a guess, and a wrong guess deletes somebody else's data. So exactly the
- * two unambiguous forms are honored — `userId==<value>` against the payload's `uid`, and
- * `visitIp==<value>` against its `cip` — and anything else is reported as NOT purged rather
- * than silently treated as nothing to do.
+ * Two segment forms are acted on, each as the only condition: `userId==<value>` against the
+ * payload's `uid`, and `visitIp==<value>` against its `cip`. Any other segment is an expression
+ * Matomo evaluates against its own schema, and evaluating it here against stored payloads could
+ * erase somebody else's data, so it is reported as not purged rather than as nothing to do.
+ *
+ * The buffer searched is the one the application writes to: the `HitBuffer` binding, which is
+ * the configured driver unless the application bound a store of its own. Every driver this
+ * package ships can erase; a store that cannot is reported as not searched. Neither is the
+ * queue of the `queue` mode, where a request's hits wait as a queued job until a worker sends
+ * them and a job that runs out of attempts stays in `failed_jobs`.
  */
 final readonly class LocalHitPurge
 {
     /**
-     * @return array{buffer: int, dead_letters: int, matched: bool} rows removed, and whether
-     *                                                              the segment was one this can act on
+     * Erase the subject's hits from the buffer and the dead letters.
+     *
+     * `matched` is false when the segment is not one of the two forms this can act on;
+     * `buffer_searched` is false when the application's buffer cannot erase; and
+     * `queue_searched` is false in the `queue` mode, where hits waiting in the queue cannot be
+     * searched from here.
+     *
+     * @return array{buffer: int, dead_letters: int, matched: bool, buffer_searched: bool, queue_searched: bool}
      */
     public function forget(string $segment): array
     {
-        $criterion = $this->criterion($segment);
+        $subject = $this->subject($segment);
 
-        if ($criterion === null) {
-            return ['buffer' => 0, 'dead_letters' => 0, 'matched' => false];
+        if (! $subject instanceof DataSubject) {
+            return ['buffer' => 0, 'dead_letters' => 0, 'matched' => false, 'buffer_searched' => false, 'queue_searched' => false];
         }
 
-        [$key, $value] = $criterion;
+        $buffer = $this->buffer();
+        $erasable = $buffer instanceof ErasableHitBuffer;
 
         return [
-            'buffer' => $this->purgeBuffer($key, $value),
-            'dead_letters' => $this->purgeDeadLetters($key, $value),
+            'buffer' => $erasable ? $buffer->erase($subject) : 0,
+            'dead_letters' => $this->purgeDeadLetters($subject),
             'matched' => true,
+            'buffer_searched' => $erasable,
+            'queue_searched' => Config::string('matomo-analytics.mode', 'queue') !== 'queue',
         ];
     }
 
     /**
-     * The payload key and value a segment names, or null when it names something this cannot
-     * evaluate without guessing.
-     *
-     * @return array{0: string, 1: string}|null
+     * The buffer the application writes to, typed as the contract: an application can bind a
+     * store of its own in place of the configured driver.
      */
-    private function criterion(string $segment): ?array
+    private function buffer(): HitBuffer
     {
-        // `==` only. A negation, a comparison or a boolean expression describes a SET, and
-        // deleting by a set this class inferred is exactly the mistake worth refusing.
-        if (preg_match('/^\s*(userId|visitIp)\s*==\s*(.+?)\s*$/', $segment, $found) !== 1) {
+        return App::make(HitBuffer::class);
+    }
+
+    /**
+     * The data subject a segment names, or null when the segment is not one of the two forms.
+     *
+     * The segment is read with Matomo's own steps, so both systems erase the same person:
+     * `userId==John+Doe` names `John Doe` in both, and `alice+news@example.com` is named by
+     * `userId==alice%25252Bnews%252540example.com`, a value encoded once for each of the three
+     * times Matomo decodes it.
+     */
+    private function subject(string $segment): ?DataSubject
+    {
+        $groups = SegmentReader::read($segment);
+
+        // One condition, compared with `==`. A negation, a comparison or a boolean expression
+        // describes a set, and deleting by a set this class inferred could erase somebody else.
+        if ($groups === null || count($groups) !== 1 || count($groups[0]) !== 1 || $groups[0][0]['operator'] !== '==') {
             return null;
         }
 
-        // A composite expression describes a SET, and deleting by a set this class inferred is
-        // the mistake the whole method refuses. `preg_quote` is not enough there: the pattern
-        // above would happily take everything after `==` as one value.
-        if (str_contains($segment, ';') || str_contains($segment, ',')) {
-            return null;
-        }
-
-        $value = rawurldecode($found[2]);
-
-        return [$found[1] === 'userId' ? 'uid' : 'cip', $value];
+        return match ($groups[0][0]['dimension']) {
+            'userId' => new DataSubject('uid', $groups[0][0]['value']),
+            'visitIp' => new DataSubject('cip', $groups[0][0]['value']),
+            default => null,
+        };
     }
 
-    private function purgeBuffer(string $key, string $value): int
-    {
-        $table = Config::string('matomo-analytics.batch.table', 'matomo_tracking_buffer');
-
-        if (! Schema::hasTable($table)) {
-            return 0;
-        }
-
-        $removed = 0;
-
-        // Read and compare the DECODED payload rather than matching the stored JSON as text.
-        // A substring match would delete a row whose URL merely mentions the address, and a
-        // JSON path is not portable across the engines this package supports.
-        foreach (DB::table($table)->select(['id', 'payload'])->orderBy('id')->cursor() as $row) {
-            $payload = is_string($row->payload ?? null) ? Json::decode($row->payload) : null;
-
-            if ($payload !== null && ($payload[$key] ?? null) === $value) {
-                $removed += DB::table($table)->where('id', $row->id)->delete();
-            }
-        }
-
-        return $removed;
-    }
-
-    private function purgeDeadLetters(string $key, string $value): int
+    private function purgeDeadLetters(DataSubject $subject): int
     {
         $table = Config::string('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
 
@@ -113,7 +110,7 @@ final readonly class LocalHitPurge
         // A dead letter holds a BATCH, so the subject's hits are removed from it and the row
         // is rewritten; a row left empty is deleted. Dropping the whole row would erase other
         // people's undelivered hits to satisfy one person's request.
-        foreach (DB::table($table)->select(['id', 'payloads'])->orderBy('id')->cursor() as $row) {
+        foreach (DB::table($table)->select(['id', 'payloads'])->lazyById() as $row) {
             if (! is_string($row->payloads ?? null)) {
                 continue;
             }
@@ -129,9 +126,7 @@ final readonly class LocalHitPurge
                     continue;
                 }
 
-                $payload = Json::decode($line);
-
-                if ($payload !== null && ($payload[$key] ?? null) === $value) {
+                if ($subject->owns(Json::decode($line))) {
                     $dropped++;
 
                     continue;

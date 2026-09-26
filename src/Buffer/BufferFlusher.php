@@ -34,6 +34,8 @@ final readonly class BufferFlusher
 
     private const int STOP = 2;
 
+    private const int UNPARKED = 3;
+
     public function __construct(
         private HitBuffer $buffer,
         private Sender $sender,
@@ -110,6 +112,20 @@ final readonly class BufferFlusher
             }
 
             if ($batch->isEmpty()) {
+                // Claimed, and not one row came back, readable or not. Nothing was decoded and
+                // dropped here: the claim could not read its own rows, and acking would delete
+                // hits nobody has sent. They are released for a later run, and this one ends
+                // marked unavailable.
+                if ($batch->skipped === 0) {
+                    $this->buffer->release($batch);
+                    $this->reporter->report(
+                        new BufferUnavailableException('The Matomo buffer claimed hits and read none of them back; they were released, not deleted.'),
+                        ['stage' => 'flush'],
+                    );
+
+                    return new FlushOutcome($delivered, $deadLettered, unavailable: true);
+                }
+
                 $this->buffer->ack($batch);
                 $processed += $size;
 
@@ -119,6 +135,14 @@ final readonly class BufferFlusher
             $outcome = $this->deliver($batch);
             if ($outcome === self::STOP) {
                 break;
+            }
+
+            // A batch the dead-letter store could not take went back to the head of the buffer,
+            // where the next claim of this very loop would find it again: one poison batch sent
+            // once per round until max_per_flush, and nothing behind it ever sent. The run ends
+            // here instead, and says why.
+            if ($outcome === self::UNPARKED) {
+                return new FlushOutcome($delivered, $deadLettered, deadLetterUnavailable: true);
             }
 
             $count = count($batch->payloads);
@@ -188,9 +212,8 @@ final readonly class BufferFlusher
 
         if ($permanent) {
             $this->reporter->report($e, ['stage' => 'flush']);
-            $this->deadLetter($batch, 1, $e);
 
-            return self::DEAD_LETTERED;
+            return $this->deadLetter($batch, 1, $e);
         }
 
         $attempts = $this->failures->increment();
@@ -202,9 +225,8 @@ final readonly class BufferFlusher
             // queue silently whenever report_after_attempts is set above max_attempts.
             $this->reporter->report($e, ['stage' => 'flush']);
             $this->failures->reset();
-            $this->deadLetter($batch, $attempts, $e);
 
-            return self::DEAD_LETTERED;
+            return $this->deadLetter($batch, $attempts, $e);
         }
 
         // Pre-escalation transient failure: honor report_after_attempts (like the queue
@@ -218,20 +240,29 @@ final readonly class BufferFlusher
         return self::STOP;
     }
 
-    private function deadLetter(BufferBatch $batch, int $attempts, Throwable $e): void
+    /**
+     * Park the batch in the dead-letter store, or keep it in the buffer when the store cannot
+     * take it: DEAD_LETTERED for the first, UNPARKED for the second.
+     */
+    private function deadLetter(BufferBatch $batch, int $attempts, Throwable $e): int
     {
         // Record first, then ack: if recording throws, the batch stays claimed and
         // is reclaimed as stale later, so a dead-letter write failure never loses hits.
         //
         // A write that could not happen gets the same treatment as one that threw. `record()`
-        // now answers false when there is no table to write to, and acking on that answer
-        // would drop the batch to make room for a row that was never written. Releasing it
-        // instead puts the hits back at the head of the buffer, where the next flush finds
-        // them — the outage is still an outage, but it is not also a loss.
+        // answers false when there is no table to write to, and acking on that answer would
+        // drop the batch to make room for a row that was never written. Releasing it instead
+        // puts the hits back at the head of the buffer: the outage is still an outage, but it
+        // is not also a loss. The caller ends the run on UNPARKED, or its next claim would
+        // take the same batch straight back.
         if (! $this->deadLetters->record($batch->payloads, $attempts, $e->getMessage())) {
             $this->buffer->release($batch);
+            $this->reporter->report(
+                new BufferUnavailableException('The Matomo dead-letter store could not take a failed batch, so it was kept in the buffer; run the package migrations to create the dead-letter table.'),
+                ['stage' => 'flush'],
+            );
 
-            return;
+            return self::UNPARKED;
         }
 
         $this->buffer->ack($batch);
@@ -255,5 +286,7 @@ final readonly class BufferFlusher
             EventFacade::dispatch(new TrackingFailed($e));
             EventFacade::dispatch(new HitsDeadLettered(count($batch->payloads), $attempts));
         }
+
+        return self::DEAD_LETTERED;
     }
 }

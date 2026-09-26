@@ -19,12 +19,25 @@ use Throwable;
  */
 final class Reporter
 {
+    /** The levels a PSR-3 logger accepts; `Log::log()` throws on any other. */
+    private const array LEVELS = ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'];
+
     public function shouldReport(int $attempt): bool
     {
         return $attempt >= Config::int('matomo-analytics.resilience.reporting.report_after_attempts', 3);
     }
 
     /**
+     * Report a failure, and never throw while doing it.
+     *
+     * Every caller reaches this from a catch block whose promise is that tracking cannot break
+     * the host, and a report that throws breaks that promise one frame later. The likeliest
+     * way is the ordinary setup of one Redis, or one database, behind both the queue and the
+     * cache: the dispatch fails, and the throttle's `Cache::add()` fails the same way. So the
+     * throttle lets the report through when it cannot be asked, an unknown log level falls
+     * back to `warning`, and anything still failing ends here: there is no channel left to
+     * report it on.
+     *
      * @param  array<string, scalar>  $context
      */
     public function report(Throwable $e, array $context = []): void
@@ -38,26 +51,42 @@ final class Reporter
             return;
         }
 
-        Log::log(
-            Config::string('matomo-analytics.resilience.reporting.level', 'warning'),
-            'Matomo tracking failed: '.$e->getMessage(),
-            $context,
-        );
+        try {
+            Log::log(
+                $this->level(Config::string('matomo-analytics.resilience.reporting.level', 'warning'), 'warning'),
+                'Matomo tracking failed: '.$e->getMessage(),
+                $context,
+            );
 
-        if ($channel === 'report') {
-            // NOT the report() helper: that one is Foundation-only, and this package
-            // requires illuminate components rather than laravel/framework. The helper
-            // does exactly this — resolve the handler and call report on it.
-            App::make(ExceptionHandler::class)->report($e);
+            if ($channel === 'report') {
+                // NOT the report() helper: that one is Foundation-only, and this package
+                // requires illuminate components rather than laravel/framework. The helper
+                // does exactly this — resolve the handler and call report on it.
+                App::make(ExceptionHandler::class)->report($e);
+            }
+        } catch (Throwable) {
+            // The log or the application's handler failed, and neither has anywhere to go.
         }
     }
 
     public function recordTransient(Throwable $e): void
     {
         $level = Config::nullableString('matomo-analytics.resilience.reporting.transient_level');
-        if ($level !== null) {
-            Log::log($level, 'Matomo tracking retrying: '.$e->getMessage());
+        if ($level === null) {
+            return;
         }
+
+        try {
+            Log::log($this->level($level, 'info'), 'Matomo tracking retrying: '.$e->getMessage());
+        } catch (Throwable) {
+            // Same as report(): a retry note that cannot be written is not worth an exception.
+        }
+    }
+
+    /** The configured level when a logger accepts it, the fallback when it would throw. */
+    private function level(string $configured, string $fallback): string
+    {
+        return in_array($configured, self::LEVELS, true) ? $configured : $fallback;
     }
 
     private function passesThrottle(Throwable $e): bool
@@ -69,7 +98,13 @@ final class Reporter
 
         $key = 'matomo-analytics:report:'.md5($e::class.'|'.$this->signature($e->getMessage()));
 
-        return Cache::add($key, true, Date::now()->addMinutes($minutes));
+        // A throttle that cannot be asked lets the report through: reporting once too often
+        // is recoverable, and throwing from here is not.
+        try {
+            return Cache::add($key, true, Date::now()->addMinutes($minutes));
+        } catch (Throwable) {
+            return true;
+        }
     }
 
     /**

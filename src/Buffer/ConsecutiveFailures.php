@@ -14,14 +14,18 @@ use Illuminate\Support\Facades\Date;
  */
 final class ConsecutiveFailures
 {
-    private const string KEY = 'matomo-analytics:flush:consecutive-failures';
-
     /** Whether this instance has already cleared the counter — see reset(). */
     private bool $cleared = false;
 
+    /**
+     * @param  string  $key  the cache key of the count; `matomo:load-sim` keeps its own apart
+     *                       from the application's, whose count a simulated flush would reset
+     */
+    public function __construct(private readonly string $key = 'matomo-analytics:flush:consecutive-failures') {}
+
     public function current(): int
     {
-        $value = Cache::get(self::KEY);
+        $value = Cache::get($this->key);
 
         if (is_int($value)) {
             return $value;
@@ -56,11 +60,11 @@ final class ConsecutiveFailures
         // A day is arbitrary and safe to be arbitrary: `reset()` deletes the key on every
         // success, and a counter that survives a full day of uninterrupted failure has
         // long since tripped `batch.max_attempts`.
-        Cache::add(self::KEY, 0, Date::now()->addDay());
+        Cache::add($this->key, 0, Date::now()->addDay());
 
         $this->cleared = false;
 
-        $next = Cache::increment(self::KEY);
+        $next = Cache::increment($this->key);
 
         return is_int($next) ? $next : $this->current();
     }
@@ -94,6 +98,6 @@ final class ConsecutiveFailures
 
         $this->cleared = true;
 
-        Cache::forget(self::KEY);
+        Cache::forget($this->key);
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\Support\BeaconOrigin;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Tracking\PageView;
 use MatomoAnalytics\View\Snippet;
@@ -43,6 +44,11 @@ final class PrefetchPageViewController
             throw new NotFoundHttpException;
         }
 
+        // The origin of the REQUEST, which the sending page cannot write, before the `url` it can.
+        if (! BeaconOrigin::isOwn($request)) {
+            return new Response(status: Response::HTTP_FORBIDDEN);
+        }
+
         $url = $this->ownUrl($request->input('url'));
 
         // A URL IS REQUIRED HERE, WHILE THE WEB VITALS BEACON TREATS ONE IT CANNOT VOUCH FOR
@@ -61,12 +67,11 @@ final class PrefetchPageViewController
     }
 
     /**
-     * The beaconed URL, but only when it is one this application will vouch for.
+     * The beaconed URL, but only when it names a page of this application.
      *
-     * A form-encoded cross-origin POST is CORS-simple and needs no preflight, so any page
-     * anywhere can make its own visitors beacon this route. Trusting the URL would let that
-     * page choose which of this application's pages the invented view is filed under — and a
-     * page view carries no measurement to look wrong, so nothing downstream would notice.
+     * This is the page the view is filed under, not a check on who sent it: the sending page
+     * writes this field, so it proves nothing about the sender. {@see BeaconOrigin} answers that,
+     * from the request's own origin, before this is read.
      *
      * Compared on scheme, host and port, the same three parts {@see WebVitalsController} holds
      * its own payload to.

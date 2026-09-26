@@ -66,9 +66,9 @@ final class TrackManager implements Tracker
             $decision = $this->gate->decide($request, $hit);
             if (! $decision->allowed) {
                 // `deniedReason()` rather than a null check on the property: a denial always
-                // carries a reason (private constructor, `deny(string)`), so the old
-                // `$decision->reason !== null` was a condition no run could make false — a
-                // permanently surviving mutant, and a reader's reason to believe otherwise.
+                // carries a reason (private constructor, `deny(string)`), so a
+                // `$decision->reason !== null` check would be a condition no input can make
+                // false, and a reader's reason to believe otherwise.
                 if (Config::bool('matomo-analytics.events', true)) {
                     EventFacade::dispatch(new VisitorExcluded($decision->deniedReason()));
                 }

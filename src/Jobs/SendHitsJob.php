@@ -8,6 +8,7 @@ use DateTimeInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config as ConfigFacade;
@@ -178,13 +179,27 @@ final class SendHitsJob implements ShouldQueue
             throw $e;
         }
 
-        if ($this->attempts() < $this->tries()) {
+        if ($this->attempts() < $this->tries() && $this->canRunAgain()) {
             $this->release($this->backoffFor($this->attempts()));
 
             return;
         }
 
         $this->exhaust($deadLetters, $e);
+    }
+
+    /**
+     * Whether release() would bring this batch back for another attempt.
+     *
+     * On the `sync` connection, and on `deferred` and `background`, which run their jobs through
+     * the same SyncJob, a job runs inline and once: SyncJob::release() sets a flag and requeues
+     * nothing, and attempts() answers 1 every time. A job handled directly, with no queue job
+     * behind it, has nothing to release through at all. A release there dropped the batch with
+     * nothing parked and nothing reported, so such a batch takes the exhausted path at once.
+     */
+    private function canRunAgain(): bool
+    {
+        return $this->job !== null && ! $this->job instanceof SyncJob;
     }
 
     /**
@@ -241,7 +256,7 @@ final class SendHitsJob implements ShouldQueue
             //
             // THIS SENTENCE USED TO END "the batch path has dispatched both all along",
             // AND THE BATCH PATH HAD NEVER DISPATCHED `TrackingFailed` AT ALL. A comment
-            // asserting a neighbour's behavior is a claim nothing checks, and this one sent
+            // asserting a neighbor's behavior is a claim nothing checks, and this one sent
             // three readers past the defect: the config file, the provider and the 0.24.0
             // changelog all repeated it. `BufferFlusher::deadLetter()` dispatches both now.
             EventFacade::dispatch(new TrackingFailed($e));

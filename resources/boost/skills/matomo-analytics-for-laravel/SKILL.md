@@ -117,7 +117,9 @@ use MatomoAnalytics\Facades\MatomoReports;
 $visits = MatomoReports::visitsSummary(['period' => 'day', 'date' => 'today']);
 ```
 
-Reading requires `MATOMO_TOKEN`; tracking does not.
+Reading requires `MATOMO_TOKEN`. Tracking works without it, but only a token lets
+the package send the visitor's IP address (`cip`); without one, Matomo records the
+address of your server for every server-side hit.
 
 ## Testing in the consuming application
 
@@ -147,8 +149,11 @@ follow the same shape.
 ## Anti-Patterns
 
 - Do not wrap tracking calls in `if (app()->isProduction())`. The tracking gate
-  already covers environments, bots, Do-Not-Track, consent, and opt-out — adding
+  already covers environments, bots, Do-Not-Track and the opt-out cookie — adding
   a second gate in application code hides why a hit was dropped.
+- Do not assume the gate asks for consent. `privacy.consent` only drives the
+  JavaScript tracker; for server-side hits, plug your consent check into
+  `tracking.gate`, the hook that lets the application refuse a hit.
 - Do not call the Matomo HTTP API directly alongside this package. Wrap the hit in
   `CustomParameters::for($hit)->param('_rcn', 'newsletter')` and pass it to
   `Matomo::track()`, so the gate, the URL redaction and the delivery mode still

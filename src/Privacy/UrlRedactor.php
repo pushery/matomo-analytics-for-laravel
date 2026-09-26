@@ -33,16 +33,21 @@ final class UrlRedactor
      * per hit across the two URLs a payload carries.
      *
      * The names go into one alternation instead. Each match is independent of the others, so
-     * the combined pattern finds exactly what the sequence of patterns found: `[?&]` anchors
+     * the combined pattern finds exactly what the sequence of patterns found: `[?&#]` anchors
      * every branch to a parameter boundary, and `[^&#]*` stops at the next one, so no branch
      * can consume the separator another branch needs.
      *
-     * The early return is the bigger win, and not only a shortcut: most page views have no `?`,
-     * and without one `[?&]` could still match an `&` in the path, where there is no parameter.
+     * The parameters start at the first `?` or `#`, and the fragment is read like the query:
+     * OAuth, OpenID Connect and magic-link flows carry their token there
+     * (`#access_token=…&token_type=bearer`), and the beacons send the page's whole address.
+     * Scheme, host and path are left out of the pattern, so an `&` in a path is never read as a
+     * parameter, and most page views have neither character and return at once.
      */
     private function redactQueryParams(string $url, string $replacement): string
     {
-        if (! str_contains($url, '?')) {
+        $start = strcspn($url, '?#');
+
+        if ($start === strlen($url)) {
             return $url;
         }
 
@@ -60,16 +65,16 @@ final class UrlRedactor
 
         // Match `name=` and the array forms `name[]=` / `name[0]=`, so a bracketed
         // key does not let the value slip through unredacted.
-        $pattern = '/([?&](?:'.implode('|', $names).')(?:\[[^\]&#]*\])?=)[^&#]*/i';
+        $pattern = '/([?&#](?:'.implode('|', $names).')(?:\[[^\]&#]*\])?=)[^&#]*/i';
 
         $result = preg_replace_callback(
             $pattern,
             /** @param array<int, string> $matches */
             static fn (array $matches): string => $matches[1].rawurlencode($replacement),
-            $url,
+            substr($url, $start),
         );
 
-        return is_string($result) ? $result : $url;
+        return is_string($result) ? substr($url, 0, $start).$result : $url;
     }
 
     private function redactPatterns(string $url, string $replacement): string
