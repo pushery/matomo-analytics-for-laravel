@@ -55,7 +55,7 @@
     },
     "require-dev": {
         "larastan/larastan": "3.12.2",
-        "laravel/ai": "^0.11.2",
+        "laravel/ai": "^1.0",
         "laravel/boost": "^2.9",
         "laravel/mcp": "^1.0",
         "laravel/pao": "^1.1",
@@ -74,7 +74,6 @@
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
-        "laravel/ai": "Required only to score evals with a real judge. Not a dev dependency: it requires aws/aws-sdk-php for a provider this package never calls, which is 67 MB and 3512 files in every checkout and every CI lane of a package that writes no judge-backed eval at all.",
         "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
         "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
     },
@@ -93,7 +92,7 @@
     },
     "scripts": {
         "test": "pest",
-        "test:coverage": "@php -d pcov.directory=. vendor/bin/pest --coverage --min=100",
+        "test:coverage": "@php -d pcov.directory=. -d pcov.exclude='~/(vendor|tests|workbench)/~' vendor/bin/pest --coverage --min=100",
         "test:type-coverage": "pest --type-coverage --min=100",
         "test:browser": "pest tests/Browser",
         "test:integration": "pest tests/Integration",
