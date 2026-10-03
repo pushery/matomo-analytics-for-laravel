@@ -49,11 +49,14 @@ So the package stays inert in local and CI environments on its own, and you
 should not add conditionals around it for that. Verify a real connection with
 `php artisan matomo:test`, which names whichever of the three is holding it back.
 
-Publish everything at once, or only the configuration file:
+Publish everything at once, or one part of it:
 
 ```bash
-php artisan vendor:publish --tag="matomo-analytics"
-php artisan vendor:publish --tag="matomo-analytics-config"
+php artisan vendor:publish --tag="matomo-analytics"             # all of the below
+php artisan vendor:publish --tag="matomo-analytics-config"      # config/matomo-analytics.php
+php artisan vendor:publish --tag="matomo-analytics-migrations"  # the batch buffer and dead-letter tables
+php artisan vendor:publish --tag="matomo-analytics-views"       # the privacy-policy view
+php artisan vendor:publish --tag="matomo-analytics-lang"        # the translations
 ```
 
 Every option in `config/matomo-analytics.php` is documented inline.

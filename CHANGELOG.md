@@ -4,6 +4,14 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.1] - 2026-10-03
+
+### Fixed
+
+- **`laravel/ai` is no longer listed under `suggest`.** Nothing in the package uses it at runtime: it serves this repository's own tests and stays a development dependency. The entry for 0.30.0 said the reverse, that it had moved from the development dependencies to `suggest`, and the suggestion shipped on the package page with that reason.
+- **A zero or negative number in one of seven `MATOMO_*` limits falls back to its default instead of taking effect.** `MATOMO_TIMEOUT`, `MATOMO_CONNECT_TIMEOUT`, `MATOMO_REPORTING_TIMEOUT`, `MATOMO_BATCH_MAX_PER_FLUSH`, `MATOMO_BATCH_MAX_ATTEMPTS`, `MATOMO_REPORT_AFTER_ATTEMPTS` and `MATOMO_REPORT_THROTTLE_MINUTES` took `0` and `-3` as set, and Laravel's HTTP client hands a timeout of `0` to Guzzle, where it means waiting without any limit. Each of them is read with a floor of `1` now, and a value below it lands on the shipped default, the way a value that is not a number already did.
+- **The Boost skill names all five publish tags.** It listed `matomo-analytics` and `matomo-analytics-config` only, so an agent did not learn that the migrations, the privacy-policy view and the translations can each be published on their own, with `matomo-analytics-migrations`, `matomo-analytics-views` and `matomo-analytics-lang`.
+
 ## [0.31.0] - 2026-09-26
 
 ### Fixed
@@ -1513,7 +1521,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.29.0...v0.29.1

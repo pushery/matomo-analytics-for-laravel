@@ -71,7 +71,7 @@ return [
     'token' => env('MATOMO_TOKEN'),
     'tracker_path' => env('MATOMO_TRACKER_PATH', 'matomo.php'),
     'js_path' => env('MATOMO_JS_PATH', 'matomo.js'),
-    'timeout' => filter_var(env('MATOMO_TIMEOUT', 5), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 5,
+    'timeout' => filter_var(env('MATOMO_TIMEOUT', 5), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 5,
 
     /*
     |--------------------------------------------------------------------------
@@ -138,7 +138,7 @@ return [
         // fewer requests for less than half a megabyte.
         'size' => env('MATOMO_BATCH_SIZE', 200),
         'flush_interval' => env('MATOMO_BATCH_INTERVAL', 60),
-        'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 2000,
+        'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 2000,
         'stale_after_minutes' => 15,
 
         // The `redis` driver moves hits with LMOVE, which needs Redis 6.2 or later. On an older
@@ -152,7 +152,7 @@ return [
         // HTTP 4xx is dead-lettered at once). Nothing is lost — replay re-queues it.
         // The consecutive-failure count lives in the cache, so batch mode needs a
         // persistent (non-array) cache store for this escalation to survive across runs.
-        'max_attempts' => filter_var(env('MATOMO_BATCH_MAX_ATTEMPTS', 25), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 25,
+        'max_attempts' => filter_var(env('MATOMO_BATCH_MAX_ATTEMPTS', 25), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 25,
         'dead_letter' => [
             'enabled' => true,
             'table' => 'matomo_dead_letters',
@@ -194,13 +194,13 @@ return [
 
     'resilience' => [
         'never_throw' => true,
-        'connect_timeout' => filter_var(env('MATOMO_CONNECT_TIMEOUT', 2), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 2,
+        'connect_timeout' => filter_var(env('MATOMO_CONNECT_TIMEOUT', 2), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 2,
         'reporting' => [
-            'report_after_attempts' => filter_var(env('MATOMO_REPORT_AFTER_ATTEMPTS', 3), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 3,
+            'report_after_attempts' => filter_var(env('MATOMO_REPORT_AFTER_ATTEMPTS', 3), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 3,
             'channel' => env('MATOMO_REPORT_CHANNEL', 'report'),
             'level' => 'warning',             // a PSR-3 level; any other is read as warning
             'transient_level' => null,        // a PSR-3 level for retry notes, or null for none
-            'throttle_minutes' => filter_var(env('MATOMO_REPORT_THROTTLE_MINUTES', 15), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 15,
+            'throttle_minutes' => filter_var(env('MATOMO_REPORT_THROTTLE_MINUTES', 15), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 15,
         ],
     ],
 
@@ -217,7 +217,7 @@ return [
 
     'reporting' => [
         'path' => env('MATOMO_REPORTING_PATH', 'index.php'),
-        'timeout' => filter_var(env('MATOMO_REPORTING_TIMEOUT', 10), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 10,
+        'timeout' => filter_var(env('MATOMO_REPORTING_TIMEOUT', 10), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 10,
         'default_period' => env('MATOMO_REPORTING_PERIOD', 'day'),
         'default_date' => env('MATOMO_REPORTING_DATE', 'today'),
 
