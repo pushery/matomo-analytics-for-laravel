@@ -73,6 +73,14 @@ final class TestConnectionCommand extends Command
         if ($result->failed()) {
             $this->error(sprintf('Matomo returned HTTP %d at %s.', $result->status, $connection->trackingUrl()));
 
+            if ($result->status === 400) {
+                $this->line(sprintf('Matomo answers 400 for a site id it does not know: check MATOMO_SITE_ID (%d).', $connection->siteId));
+
+                if ($connection->token !== null) {
+                    $this->line('It does the same for a token without write access to that site, because every hit carries the visitor IP: check MATOMO_TOKEN.');
+                }
+            }
+
             return self::FAILURE;
         }
 
@@ -448,11 +456,18 @@ final class TestConnectionCommand extends Command
     }
 
     /**
+     * The test hit, asking of the token what every real hit asks of it.
+     *
+     * With a token, a hit carries the visitor IP as `cip`, and Matomo takes that only from a
+     * token with write access to the site; from any other it refuses the hit with a 400. A test
+     * hit without `cip` would pass on a token every real hit fails on. Its address is one reserved
+     * for documentation (RFC 5737), so the test visit names nobody's.
+     *
      * @return array<string, scalar>
      */
     private function probe(Connection $connection): array
     {
-        return [
+        $probe = [
             'idsite' => $connection->siteId,
             'rec' => 1,
             'apiv' => 1,
@@ -461,5 +476,11 @@ final class TestConnectionCommand extends Command
             'url' => $connection->host.'/matomo-analytics/connection-test',
             '_id' => '00000000000000aa',
         ];
+
+        if ($connection->token !== null) {
+            $probe['cip'] = '192.0.2.1';
+        }
+
+        return $probe;
     }
 }

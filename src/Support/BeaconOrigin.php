@@ -43,7 +43,8 @@ final class BeaconOrigin
      *
      * This is the page a hit is filed under, not a check on who sent it: the sending page writes
      * the field, so it proves nothing about the sender, and isOwn() answers that from the
-     * request's own origin. Compared on scheme, host and port.
+     * request's own origin. Compared on scheme, host and port the way isOwn() compares an
+     * `Origin`: case-insensitively, with the scheme's default port filled in.
      */
     public static function pageUrl(mixed $url): ?string
     {
@@ -51,18 +52,7 @@ final class BeaconOrigin
             return null;
         }
 
-        $parts = parse_url($url);
-        $own = parse_url(URL::to('/'));
-
-        if (! is_array($parts) || ! is_array($own)) {
-            return null;
-        }
-
-        $same = ($parts['scheme'] ?? null) === ($own['scheme'] ?? null)
-            && ($parts['host'] ?? null) === ($own['host'] ?? null)
-            && ($parts['port'] ?? null) === ($own['port'] ?? null);
-
-        return $same ? $url : null;
+        return self::sameOrigin($url, URL::to('/')) ? $url : null;
     }
 
     private static function sameOrigin(string $origin, string $own): bool

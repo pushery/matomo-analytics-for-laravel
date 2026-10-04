@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\Tracking\SiteSearch;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -53,14 +54,48 @@ final readonly class TrackSiteSearch
      */
     public function terminate(Request $request, Response $response): void
     {
-        if (! $request->isMethod('GET') || $response->getStatusCode() >= 400) {
+        if (! self::answers($request, $response)) {
             return;
         }
 
-        $keys = $request->attributes->get(self::KEYS);
-        $keywordKey = is_array($keys) && is_string($keys[0] ?? null) ? $keys[0] : 'q';
-        $categoryKey = is_array($keys) && is_string($keys[1] ?? null) ? $keys[1] : null;
+        [$keywordKey, $categoryKey] = self::keys($request);
 
         $this->tracker->searchFromRequest($request, $keywordKey, $categoryKey);
+    }
+
+    /**
+     * Whether this middleware records a search for the request, which the page view of the same
+     * request then leaves to it. Read before the search is tracked: the route's middleware
+     * terminates in the order it was listed, so the page view can come first.
+     *
+     * @internal
+     */
+    public static function searches(Request $request, Response $response): bool
+    {
+        if (! $request->attributes->has(self::KEYS) || ! self::answers($request, $response)) {
+            return false;
+        }
+
+        [$keywordKey, $categoryKey] = self::keys($request);
+
+        return SiteSearch::fromRequest($request, $keywordKey, $categoryKey) instanceof SiteSearch;
+    }
+
+    private static function answers(Request $request, Response $response): bool
+    {
+        return $request->isMethod('GET') && $response->getStatusCode() < 400;
+    }
+
+    /**
+     * @return array{0: string, 1: string|null}
+     */
+    private static function keys(Request $request): array
+    {
+        $keys = $request->attributes->get(self::KEYS);
+
+        return [
+            is_array($keys) && is_string($keys[0] ?? null) ? $keys[0] : 'q',
+            is_array($keys) && is_string($keys[1] ?? null) ? $keys[1] : null,
+        ];
     }
 }

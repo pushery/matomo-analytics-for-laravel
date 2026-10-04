@@ -11,6 +11,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobProcessed;
@@ -162,6 +163,11 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         }
 
         $this->commands([AnnotateCommand::class, FlushCommand::class, ForgetCommand::class, InstallCommand::class, LoadSimCommand::class, ReplayCommand::class, ReportCommand::class, TestConnectionCommand::class, WorkCommand::class]);
+
+        // The opt-out and consent cookies matomo.js writes are plain text, and `EncryptCookies`
+        // turns a cookie it cannot decrypt into null before the tracking gate could read it.
+        EncryptCookies::except([DefaultTrackingGate::MATOMO_OPT_OUT_COOKIE, DefaultTrackingGate::MATOMO_CONSENT_COOKIE]);
+
         $this->registerMiddleware();
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();

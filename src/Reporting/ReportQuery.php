@@ -78,6 +78,13 @@ final class ReportQuery
         return $this;
     }
 
+    /**
+     * Keep the rows whose label, or `$column`, matches `$pattern`.
+     *
+     * Matomo reads the pattern as a regular expression and ignores case, so `.`, `(` and `[` are
+     * operators: pass `preg_quote($text)` to match text as it is. An expression PHP cannot compile
+     * matches no row, so the report comes back empty.
+     */
     public function search(string $pattern, ?string $column = null): self
     {
         $this->params['filter_pattern'] = $pattern;

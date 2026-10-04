@@ -151,6 +151,11 @@ by its inner type, which is what makes the assertion still find it, but the call
 is handed the wrapper. `fn (PageView $hit)` is a `TypeError` there. Narrow with
 `instanceof` inside the closure instead.
 
+The fake records what your code tracks before the tracking gate, so a bot, a
+Do-Not-Track request or an excluded route is recorded there and refused only in
+production. Test the gate on the real path instead: `sync` mode with `Http::fake()`,
+then `Http::assertNothingSent()`.
+
 `MatomoReports::fake()`, `MatomoGdpr::fake()`, and `MatomoAnnotations::fake()`
 follow the same shape.
 
@@ -159,9 +164,15 @@ follow the same shape.
 - Do not wrap tracking calls in `if (app()->isProduction())`. The tracking gate
   already covers environments, bots, Do-Not-Track and the opt-out cookie — adding
   a second gate in application code hides why a hit was dropped.
-- Do not assume the gate asks for consent. `privacy.consent` only drives the
-  JavaScript tracker; for server-side hits, plug your consent check into
-  `tracking.gate`, the hook that lets the application refuse a hit.
+- Do not assume the gate knows your consent layer. Under `privacy.consent => 'full'`
+  it refuses a server-side hit until matomo.js has remembered a consent in the
+  `mtm_consent` cookie, so call `rememberConsentGiven`; any other consent check
+  belongs in `tracking.gate`, the hook that lets the application refuse a hit.
+- Do not pass a value that may be empty to a tracking call. An event without a
+  category or an action, `goal(0)` or an order without an order id is one Matomo
+  would record as another action, so the tracker refuses it and the fake throws;
+  skip the call when the value is missing. An empty site search keyword is the one
+  exception: it is a visitor's input, and the tracker skips it quietly.
 - Do not call the Matomo HTTP API directly alongside this package. Wrap the hit in
   `CustomParameters::for($hit)->param('_rcn', 'newsletter')` and pass it to
   `Matomo::track()`, so the gate, the URL redaction and the delivery mode still

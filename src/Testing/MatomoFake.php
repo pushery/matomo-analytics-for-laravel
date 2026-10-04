@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Request as RequestFacade;
 use Illuminate\Support\Testing\Fakes\Fake;
+use InvalidArgumentException;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Tracking\ContentImpression;
 use MatomoAnalytics\Tracking\ContentInteraction;
@@ -23,6 +24,7 @@ use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\Outlink;
 use MatomoAnalytics\Tracking\PageView;
 use MatomoAnalytics\Tracking\Ping;
+use MatomoAnalytics\Tracking\RequiredFields;
 use MatomoAnalytics\Tracking\SiteSearch;
 use PHPUnit\Framework\Assert;
 
@@ -46,9 +48,26 @@ final class MatomoFake implements Fake, Tracker
 
     public int $flushed = 0;
 
+    /**
+     * Records the hit. A hit the tracker would refuse, because Matomo would record it as
+     * another action, throws here whatever `resilience.never_throw` says, so a test fails at
+     * the call that production reports and drops. A site search without a keyword is skipped
+     * without a word, as the tracker skips it.
+     */
     public function track(Hit $hit): static
     {
+        if (RequiredFields::emptySearch($hit)) {
+            return $this;
+        }
+
+        $missing = RequiredFields::missing($hit);
+        if ($missing !== null) {
+            throw new InvalidArgumentException($missing);
+        }
+
         $this->hits[] = $hit;
+
+        SiteSearch::mark(RequestFacade::instance(), $hit);
 
         return $this;
     }

@@ -11,7 +11,11 @@ use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\SpeculativeRequest;
+use MatomoAnalytics\Tracking\CustomParameters;
+use MatomoAnalytics\Tracking\EcommerceView;
+use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\PageView;
+use MatomoAnalytics\Tracking\SiteSearch;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -27,6 +31,9 @@ final readonly class TrackPageViews
 
     private const string TITLE = 'matomo-analytics.title';
 
+    /** Where `handle()` leaves whether the response is a page, for `terminate()` to read. */
+    private const string PAGE = 'matomo-analytics.page';
+
     /** How far into an HTML body the title is looked for. The spec puts it in `<head>`. */
     private const int TITLE_SCAN_BYTES = 65536;
 
@@ -39,6 +46,9 @@ final readonly class TrackPageViews
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Before the handler, so a product view it records can wait for this page view.
+        EcommerceView::expectPageView($request);
+
         $response = $next($request);
 
         // THE ELAPSED TIME IS TAKEN HERE AND THE TRACKING HAPPENS IN `terminate()`, AND THE
@@ -51,11 +61,15 @@ final readonly class TrackPageViews
         // under Octane.
         $request->attributes->set(self::SERVER_TIME, $this->serverTime($request));
 
-        // The title is read here as well, from the page as the application rendered it. A
-        // middleware around this one can still turn the response into a 304 before terminate()
-        // runs: `cache.headers` renders the page, compares the validator and drops the body. A
-        // tracker listed inside it therefore keeps the title of the page the reader revalidated.
+        $this->requestClientHints($response);
+
+        // The title is read here as well, and whether the response is a page, from the response
+        // as the application rendered it. A middleware around this one can still turn it into a
+        // 304 before terminate() runs: `cache.headers` renders the page, compares the validator
+        // and drops the body and its Content-Type. A tracker listed inside it therefore keeps the
+        // title of the page the reader revalidated, and a revalidated JSON response stays no page.
         $request->attributes->set(self::TITLE, $this->fromHtml($response));
+        $request->attributes->set(self::PAGE, $this->isPage($request, $response));
 
         return $response;
     }
@@ -77,17 +91,26 @@ final readonly class TrackPageViews
      */
     public function terminate(Request $request, Response $response): void
     {
-        if ($this->skips($request, $response)) {
+        $product = EcommerceView::release($request);
+
+        if ($this->skips($request, $response) || $this->leavesItToASearch($request, $response)) {
+            // No page view to carry the product, so the product view goes out on its own.
+            if ($product instanceof Hit) {
+                $this->tracker->track($product);
+            }
+
             return;
         }
 
         $serverTime = $request->attributes->get(self::SERVER_TIME);
 
-        $this->tracker->track(new PageView(
+        $pageView = new PageView(
             $this->title($request, $response),
             $this->url($request),
             is_int($serverTime) ? $serverTime : null,
-        ));
+        );
+
+        $this->tracker->track($product instanceof Hit ? new CustomParameters($pageView, $product->toParams()) : $pageView);
     }
 
     /**
@@ -109,6 +132,33 @@ final readonly class TrackPageViews
         return max(0, (int) round((microtime(true) - (float) $start) * 1000));
     }
 
+    /**
+     * A background request for part of a page rather than a page: an htmx swap, a Turbo Frame,
+     * an XHR, an Inertia partial reload. htmx's boosted links and history restores, Inertia
+     * visits and PJAX are navigations and pass, and so does a Turbo Drive visit, which carries
+     * none of these headers.
+     */
+    private function loadsPart(Request $request): bool
+    {
+        if ($request->headers->get('HX-Request') === 'true') {
+            return $request->headers->get('HX-Boosted') !== 'true'
+                && $request->headers->get('HX-History-Restore-Request') !== 'true';
+        }
+
+        if ($request->hasHeader('Turbo-Frame')) {
+            return true;
+        }
+
+        // An Inertia partial reload asks for some props of the page already shown: a poll, a
+        // deferred prop loading after the page, a reload with `only` or `except`. It names the
+        // component it reloads, which a visit does not.
+        if ($request->hasHeader('X-Inertia')) {
+            return $request->hasHeader('X-Inertia-Partial-Component');
+        }
+
+        return $request->ajax() && ! $request->pjax();
+    }
+
     private function skips(Request $request, Response $response): bool
     {
         if (Config::bool('matomo-analytics.middleware.only_get', true) && ! $request->isMethod('GET')) {
@@ -127,6 +177,10 @@ final readonly class TrackPageViews
         // page nobody ever saw.
         if (Config::bool('matomo-analytics.middleware.skip_livewire', true)
             && ($request->hasHeader('X-Livewire') || $request->hasHeader('X-Livewire-Navigate'))) {
+            return true;
+        }
+
+        if (Config::bool('matomo-analytics.middleware.skip_partials', true) && $this->loadsPart($request)) {
             return true;
         }
 
@@ -153,6 +207,10 @@ final readonly class TrackPageViews
             return true;
         }
 
+        if (Config::bool('matomo-analytics.middleware.only_html', true) && ! $this->deliversPage($request, $response)) {
+            return true;
+        }
+
         // A DELIVERED PAGE IS 2xx OR 304 -- and `isSuccessful()` alone is strictly 200-299.
         //
         // A 304 means the reader has the page; the server only declined to resend the bytes, and
@@ -170,6 +228,89 @@ final readonly class TrackPageViews
         return Config::bool('matomo-analytics.middleware.only_successful', true)
             && ! $response->isSuccessful()
             && $response->getStatusCode() !== Response::HTTP_NOT_MODIFIED;
+    }
+
+    /**
+     * Asks the browser for the client hints that name the platform version, the device model
+     * and the full browser version, when `middleware.client_hints` is on.
+     *
+     * A browser sends them with the following requests, so they reach the hits of the pages a
+     * visitor opens next, never the first. Off by default: they say more about a device, and
+     * the package collects nothing of the kind unasked. A token the application already asks
+     * for stays in the header once.
+     */
+    private function requestClientHints(Response $response): void
+    {
+        if (! Config::bool('matomo-analytics.middleware.client_hints', false)
+            || ! $this->isHtml((string) $response->headers->get('Content-Type', ''))) {
+            return;
+        }
+
+        $asked = array_filter(array_map(trim(...), explode(',', (string) $response->headers->get('Accept-CH', ''))));
+        $known = array_map(strtolower(...), $asked);
+
+        foreach (['Sec-CH-UA-Platform-Version', 'Sec-CH-UA-Model', 'Sec-CH-UA-Full-Version-List'] as $hint) {
+            if (! in_array(strtolower($hint), $known, true)) {
+                $asked[] = $hint;
+            }
+        }
+
+        $response->headers->set('Accept-CH', implode(', ', $asked));
+    }
+
+    /**
+     * A request that records a site search sends no page view.
+     *
+     * Matomo counts a search as the action of its page, so a page view beside it counts the page
+     * twice, and with site search on for the website Matomo reads the keyword out of that page
+     * view's URL and counts the search twice as well. A search is recorded either by a call
+     * during the request, which marks it, or by `matomo.search` in its own `terminate()`.
+     */
+    private function leavesItToASearch(Request $request, Response $response): bool
+    {
+        return SiteSearch::trackedFor($request) || TrackSiteSearch::searches($request, $response);
+    }
+
+    /**
+     * Whether the response is a page, as handle() found it, or for a request an earlier
+     * middleware answered, as the final response reads.
+     */
+    private function deliversPage(Request $request, Response $response): bool
+    {
+        $page = $request->attributes->get(self::PAGE);
+
+        return is_bool($page) ? $page : $this->isPage($request, $response);
+    }
+
+    /**
+     * A page view is a document someone looks at. An HTML response is one, and so is an Inertia
+     * visit, whose page arrives as JSON. JSON for a `fetch()`, a file, an image or a feed is not,
+     * and a response sent as an attachment is a download whatever its type. A response that
+     * declares no type, as a 304 does, is not judged.
+     */
+    private function isPage(Request $request, Response $response): bool
+    {
+        $disposition = (string) $response->headers->get('Content-Disposition', '');
+
+        if (strtolower(trim(explode(';', $disposition, 2)[0])) === 'attachment') {
+            return false;
+        }
+
+        if ($request->hasHeader('X-Inertia')) {
+            return true;
+        }
+
+        $type = (string) $response->headers->get('Content-Type', '');
+
+        return $type === '' || $this->isHtml($type);
+    }
+
+    /** Whether a Content-Type names an HTML document, in any case and with any parameters. */
+    private function isHtml(string $contentType): bool
+    {
+        $mediaType = strtolower(trim(explode(';', $contentType, 2)[0]));
+
+        return $mediaType === 'text/html' || $mediaType === 'application/xhtml+xml';
     }
 
     private function title(Request $request, Response $response): string
@@ -204,7 +345,7 @@ final readonly class TrackPageViews
         $content = $response->getContent();
         $contentType = (string) $response->headers->get('Content-Type', '');
 
-        if (! is_string($content) || ! str_contains($contentType, 'text/html')) {
+        if (! is_string($content) || ! $this->isHtml($contentType)) {
             return null;
         }
 

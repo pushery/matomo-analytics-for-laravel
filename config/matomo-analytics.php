@@ -306,7 +306,8 @@ return [
         // `livewire-*/*` is Livewire 4, whose endpoint prefix carries a hash
         // (`/livewire-490cd34f/update`); `livewire/*` alone covers Livewire 3 only.
         // The second segment is required on purpose, so a page at `/livewire-tips`
-        // stays tracked.
+        // stays tracked. A hit a component action tracks is matched by the component's
+        // page instead, so these two cover Livewire's endpoint itself.
         'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*', 'livewire-*/*'],
 
         // THE CONSENT SEAM, and it can only ever say NO. Consulted LAST, after every
@@ -413,9 +414,18 @@ return [
         'auto' => false,            // auto-register on the 'web' group
         'only_get' => true,         // only GET requests
         'only_successful' => true,  // only delivered pages: 2xx and 304
+        'only_html' => true,        // only pages: HTML or an Inertia visit, no JSON, file or download
         'skip_livewire' => true,    // skip Livewire update requests
+        'skip_partials' => true,    // skip htmx fragments, Turbo Frames, XHR and Inertia partial reloads
         'skip_prefetch' => true,    // skip a speculative request (Sec-Purpose/Purpose: prefetch)
-        'strip_query' => false,     // drop the query string from the tracked URL
+        'strip_query' => false,     // drop the query string from the tracked URL, campaign parameters too
+
+        // Ask the browser, on HTML responses, for the client hints that name the platform
+        // version, the device model and the full browser version (Accept-CH). Chrome reports
+        // Windows 11 as "Windows NT 10.0" and every Android as "Android 10; K" in its user agent,
+        // so without them Matomo reads those values for server-side hits. A browser sends them
+        // from the next request on. Off by default: they say more about a device.
+        'client_hints' => false,
 
         // Stamp the server generation time (pf_srv = "Serverzeit") onto the tracked page view
         // from the Laravel request duration. The one page-performance sub-timing the server

@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\GdprClient;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 final class ForgetCommand extends Command
 {
@@ -46,6 +47,17 @@ final class ForgetCommand extends Command
             }
 
             $this->line((string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+            // A lookup stops at LOOKUP_LIMIT and Matomo offers no way past it, so after a full one
+            // the export may hold only part of the person's visits. The warning goes to stderr,
+            // which keeps stdout a clean JSON document where it is redirected into a file.
+            if ($count >= GdprClient::LOOKUP_LIMIT) {
+                $stderr = $this->getOutput()->getErrorStyle();
+                $stderr->writeln('<comment>'.OutputFormatter::escape(sprintf("Possibly partial export: Matomo's lookup returns at most %d visits, and [%s] matched %d.", GdprClient::LOOKUP_LIMIT, $segment, $count)).'</comment>');
+                $stderr->writeln('<comment>'.OutputFormatter::escape(sprintf('Export in parts of fewer visits by date: [%1$s;visitEndServerDate<YYYY-MM-DD], then [%1$s;visitEndServerDate>=YYYY-MM-DD].', $segment)).'</comment>');
+
+                return self::FAILURE;
+            }
 
             return self::SUCCESS;
         }

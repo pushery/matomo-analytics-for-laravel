@@ -12,7 +12,7 @@ final class AnnotateCommand extends Command
 {
     protected $signature = 'matomo:annotate
         {note? : The annotation text (omit with --release to mark a deployment)}
-        {--date= : The annotation date (YYYY-MM-DD; default: today)}
+        {--date= : The annotation date (YYYY-MM-DD; default: today in app.timezone)}
         {--release : Annotate a deployment ("<prefix> <version>"); gated by the annotations.release config}
         {--app-version= : The version for --release (default: config app.version)}
         {--starred : Star the annotation}
