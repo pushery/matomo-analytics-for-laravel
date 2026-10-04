@@ -6,7 +6,7 @@ namespace MatomoAnalytics\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\BeaconOrigin;
 use MatomoAnalytics\Support\Config;
@@ -49,7 +49,7 @@ final class PrefetchPageViewController
             return new Response(status: Response::HTTP_FORBIDDEN);
         }
 
-        $url = $this->ownUrl($request->input('url'));
+        $url = BeaconOrigin::pageUrl($request->input('url'));
 
         // A URL IS REQUIRED HERE, WHILE THE WEB VITALS BEACON TREATS ONE IT CANNOT VOUCH FOR
         // AS ABSENT. The shapes differ because the fallbacks do: a web-vitals sample without a
@@ -67,46 +67,19 @@ final class PrefetchPageViewController
     }
 
     /**
-     * The beaconed URL, but only when it names a page of this application.
-     *
-     * This is the page the view is filed under, not a check on who sent it: the sending page
-     * writes this field, so it proves nothing about the sender. {@see BeaconOrigin} answers that,
-     * from the request's own origin, before this is read.
-     *
-     * Compared on scheme, host and port, the same three parts {@see WebVitalsController} holds
-     * its own payload to.
-     */
-    private function ownUrl(mixed $url): ?string
-    {
-        if (! is_string($url) || $url === '') {
-            return null;
-        }
-
-        $parts = parse_url($url);
-        $own = parse_url(URL::to('/'));
-
-        if (! is_array($parts) || ! is_array($own)) {
-            return null;
-        }
-
-        $same = ($parts['scheme'] ?? null) === ($own['scheme'] ?? null)
-            && ($parts['host'] ?? null) === ($own['host'] ?? null)
-            && ($parts['port'] ?? null) === ($own['port'] ?? null);
-
-        return $same ? $url : null;
-    }
-
-    /**
      * The reported title, falling back to the URL's own path.
      *
      * The fallback matches what the middleware does when a response carries no `<title>`: the
      * page is named by where it is rather than left blank, because an empty `action_name` shows
-     * up in Matomo as a page nobody can identify.
+     * up in Matomo as a page nobody can identify. `Str::trim()` rather than `trim()`, which knows
+     * only ASCII whitespace: a title of no-break, zero-width or ideographic spaces is as blank.
      */
     private function title(mixed $title, string $url): string
     {
-        if (is_string($title) && trim($title) !== '') {
-            return mb_substr(trim($title), 0, self::MAX_TITLE);
+        $title = is_string($title) ? Str::trim($title) : '';
+
+        if ($title !== '') {
+            return mb_substr($title, 0, self::MAX_TITLE);
         }
 
         $path = trim((string) (parse_url($url, PHP_URL_PATH) ?? ''), '/');

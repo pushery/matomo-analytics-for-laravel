@@ -17,8 +17,10 @@ use MatomoAnalytics\Support\Config;
  * Erases a data subject's hits from the tables this application holds.
  *
  * Matomo's erasure does not reach them, and they hold whole hits: `matomo_tracking_buffer` one
- * built payload per row, `matomo_dead_letters` whole batches for up to thirty days, with `cip`,
- * `ua`, `url`, `urlref`, `_id` and `uid`, in the application's own database.
+ * built payload per row, `matomo_dead_letters` whole batches for as long as
+ * `batch.dead_letter.retention_days` keeps them (30 days by default, without limit at 0, and
+ * only while the scheduler runs), with `cip`, `ua`, `url`, `urlref`, `_id` and `uid`, in the
+ * application's own database.
  *
  * Two segment forms are acted on, each as the only condition: `userId==<value>` against the
  * payload's `uid`, and `visitIp==<value>` against its `cip`. Any other segment is an expression

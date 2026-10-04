@@ -56,10 +56,21 @@ final class ForgetCommand extends Command
             ? "Permanently erase {$count} matched visit(s) for [{$segment}]? This cannot be undone."
             : "No visit matched [{$segment}] in Matomo. Erase this person's hits from the local buffer and dead letters? This cannot be undone.";
 
-        if ($this->option('force') !== true && ! $this->confirm($question)) {
-            $this->info('Aborted — nothing was deleted.');
+        if ($this->option('force') !== true) {
+            // Nobody can answer the prompt under -n, -q or --silent, where it takes its default, no.
+            // Such a run fails rather than reporting an abort, so a job that runs a deletion
+            // request never reads it as done while nothing was deleted.
+            if (! $this->input->isInteractive()) {
+                $this->error('Refusing to erase without --force in a non-interactive run — nothing was deleted.');
 
-            return self::SUCCESS;
+                return self::FAILURE;
+            }
+
+            if (! $this->confirm($question)) {
+                $this->info('Aborted — nothing was deleted.');
+
+                return self::SUCCESS;
+            }
         }
 
         $result = $gdpr->forget($segment, $site);

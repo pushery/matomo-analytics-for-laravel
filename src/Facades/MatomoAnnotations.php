@@ -10,7 +10,7 @@ use MatomoAnalytics\Testing\AnnotationsFake;
 
 /**
  * @method static array<array-key, mixed>|null add(string $note, ?string $date = null, bool $starred = false, int|string|null $site = null)
- * @method static array<array-key, mixed>|null annotateRelease(?string $version = null, ?string $date = null)
+ * @method static array<array-key, mixed>|null annotateRelease(?string $version = null, ?string $date = null, int|string|null $site = null)
  * @method static string|null lastError()
  *
  * @see AnnotationsClient

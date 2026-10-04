@@ -57,6 +57,10 @@ final readonly class BufferFlusher
 
     public function drain(): FlushOutcome
     {
+        // A drain is one run of the failure counter: its first success clears what any other
+        // process raised since the last one.
+        $this->failures->beginRun();
+
         $size = max(1, Config::int('matomo-analytics.batch.size', 200));
         $max = max(1, Config::int('matomo-analytics.batch.max_per_flush', 2000));
         $processed = 0;
@@ -167,15 +171,9 @@ final readonly class BufferFlusher
         }
 
         if ($result->failed()) {
-            // A 4xx is a permanent poison EXCEPT the back-pressure/timeout statuses
-            // (408 Request Timeout, 423 Locked, 425 Too Early, 429 Too Many Requests):
-            // those are transient and must be retried with back-off, not dead-lettered
-            // on the first hit, so a rate-limited instance does not drain the backlog
-            // into the dead-letter queue.
-            $permanent = $result->status >= 400 && $result->status < 500
-                && ! in_array($result->status, [408, 423, 425, 429], true);
-
-            return $this->onFailure($batch, TrackingSendException::status($result->status), $permanent);
+            // A permanent rejection is dead-lettered on the first hit; a transient one is
+            // retried with back-off. SendResult::permanent() draws the line for both modes.
+            return $this->onFailure($batch, TrackingSendException::status($result->status), $result->permanent());
         }
 
         // Matomo answers 200 to a bulk request it partly refused, and the count it states was

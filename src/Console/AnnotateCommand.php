@@ -49,7 +49,7 @@ final class AnnotateCommand extends Command
 
         return $this->report(
             $annotations,
-            $annotations->annotateRelease($this->stringOption('app-version'), $this->stringOption('date')),
+            $annotations->annotateRelease($this->stringOption('app-version'), $this->stringOption('date'), $this->stringOption('site')),
         );
     }
 

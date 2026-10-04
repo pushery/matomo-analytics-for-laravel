@@ -61,17 +61,20 @@ use Override;
 
 final class MatomoAnalyticsServiceProvider extends ServiceProvider
 {
-    /**
-     * Whether the bundled migrations are registered automatically. Disable with
-     * self::ignoreMigrations() to publish and manage them in the host app instead
-     * (e.g. queue-mode apps that do not use the database batch buffer).
-     */
     /** The named rate limiter the Web Vitals route uses — see routes/matomo-analytics.php. */
     public const string WEB_VITALS_LIMITER = 'matomo-analytics-web-vitals';
 
     /** The named limiter the prefetch page-view beacon throttles on. */
     public const string PREFETCH_BEACON_LIMITER = 'matomo-analytics-prefetch-beacon';
 
+    /** The named limiter the hit beacon throttles on. */
+    public const string HIT_BEACON_LIMITER = 'matomo-analytics-hit-beacon';
+
+    /**
+     * Whether the bundled migrations are registered automatically. Disable with
+     * self::ignoreMigrations() to publish and manage them in the host app instead
+     * (e.g. queue-mode apps that do not use the database batch buffer).
+     */
     public static bool $runsMigrations = true;
 
     /**
@@ -151,6 +154,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'matomo-analytics');
         $this->registerBeaconRateLimiter(self::WEB_VITALS_LIMITER, 'matomo-analytics.web_vitals.throttle');
         $this->registerBeaconRateLimiter(self::PREFETCH_BEACON_LIMITER, 'matomo-analytics.prefetch_beacon.throttle');
+        $this->registerBeaconRateLimiter(self::HIT_BEACON_LIMITER, 'matomo-analytics.hit_beacon.throttle');
         $this->loadRoutesFrom(__DIR__.'/../routes/matomo-analytics.php');
 
         if (self::$runsMigrations) {
@@ -204,9 +208,10 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             }
 
             [$max, $minutes] = $throttle;
+            $ip = ClientIp::resolve($request);
 
             return Limit::perMinutes($minutes, $max)
-                ->by(ClientIp::resolve($request) ?? 'matomo-analytics:unknown-client');
+                ->by($ip === null ? 'matomo-analytics:unknown-client' : ClientIp::rateLimitKey($ip));
         });
     }
 
@@ -250,6 +255,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         // Takes a nonce like the others, because it renders an inline script and a consumer
         // running a strict CSP has to be able to name it.
         Blade::directive('matomoPrefetchPageView', static fn (string $expression): string => "<?php echo {$resolve}->prefetchPageView({$expression}); ?>");
+        Blade::directive('matomoHitBeacon', static fn (string $expression): string => "<?php echo {$resolve}->hitBeacon({$expression}); ?>");
     }
 
     private function registerScheduledFlush(): void
@@ -262,25 +268,22 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             // Bound the overlap lock to the run cadence: a hard-killed (SIGKILL/OOM)
             // flush must not hold the mutex for the framework default of 1440 minutes
             // (24h), which would silently stall the every-minute drain for a full day.
-            // IN THE BACKGROUND, because this runs inside the CONSUMER's scheduler. Without
-            // it Laravel's Event::run() calls finish() synchronously, so `schedule:run` waits
-            // for the flush -- and a flush waits on Matomo. A slow or unreachable instance
-            // therefore held up every other scheduled task in that minute, in an application
-            // that installed this package to have analytics rather than a queue of its own.
+            // In the background by default, because this runs inside the consumer's scheduler.
+            // Without it Laravel's Event::run() calls finish() synchronously, so `schedule:run`
+            // waits for the flush, and a flush waits on Matomo. A slow or unreachable instance
+            // would hold up every other scheduled task in that minute, in an application that
+            // installed this package to have analytics rather than a queue of its own.
             //
-            // The cost, stated because it is real: a background event does NOT throw on a
-            // non-zero exit, so the command's own FAILURE code stops reaching the scheduler.
-            // `matomo:flush` reports its state through the consecutive-failure counter and
-            // the TrackingFailed / HitsDeadLettered events, which is where a consumer should
-            // be listening anyway -- an exit code from a per-minute background task is not a
-            // channel anyone watches.
+            // The cost: from Laravel 12.11 on, ScheduleRunCommand raises a non-zero exit only
+            // for a foreground event, which dispatches ScheduledTaskFailed and reaches the
+            // exception handler. A background event does neither, and before 12.11 a
+            // foreground one does not either. `matomo:flush` reports its state through the
+            // consecutive-failure counter and the TrackingFailed / HitsDeadLettered events in
+            // every case, and onFailure() attached through configureSchedule() sees a failed
+            // run on every supported version in either mode.
             //
-            // AND IT IS A SWITCH NOW, because that cost is the consumer's to weigh rather
-            // than ours to impose. Laravel throws on a non-zero exit only when
-            // `! $event->runInBackground`, so a background task dispatches no
-            // ScheduledTaskFailed and never reaches the exception handler — Sentry, Flare and
-            // Nightwatch included. Reported from a real adoption, where the consequence was
-            // neither documented nor escapable.
+            // It is a switch, because that cost is the consumer's to weigh rather than ours to
+            // impose.
             self::scheduled($schedule->command('matomo:flush')->everyMinute())->withoutOverlapping(10);
         });
     }
@@ -326,11 +329,10 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * Apply the consumer's background preference to a scheduled event.
      *
      * One place rather than two call sites, so the two commands cannot drift apart on the
-     * setting — and `schedule.run_in_background` sits at the TOP level rather than under
-     * `batch`, which is where the reporting ticket suggested it. The prune is deliberately
-     * NOT gated on batch mode (a batch is dead-lettered from both delivery modes), so filing
-     * its knob under `batch` would repeat the very mistake the comment above that registration
-     * warns about.
+     * setting. `schedule.run_in_background` sits at the top level rather than under `batch`:
+     * the prune is deliberately not gated on batch mode (a batch is dead-lettered from both
+     * delivery modes), so filing its knob under `batch` would repeat the mistake the comment
+     * above that registration warns about.
      */
     private static function scheduled(Event $event): Event
     {
@@ -416,10 +418,11 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             __DIR__.'/../config/matomo-analytics.php' => $this->app->configPath('matomo-analytics.php'),
         ], ['matomo-analytics', 'matomo-analytics-config']);
 
-        // publishesMigrations(), not publishes(): it rewrites the bundled
-        // 0001_01_01_000000 ordering prefix to the publish date, so a published
-        // migration sorts AFTER the host app's own migrations instead of before all
-        // of them — which is what the bundled prefix would otherwise force.
+        // publishesMigrations(), not publishes(): when the host sets
+        // `database.migrations.update_date_on_publish`, the default of Laravel's application
+        // skeleton since 11, it rewrites the bundled 0001_01_01_000000 ordering prefix to the
+        // publish date, so a published migration sorts after the host's own migrations.
+        // Without the setting the files keep their shipped names.
         $this->publishesMigrations([
             __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
         ], ['matomo-analytics', 'matomo-analytics-migrations']);
@@ -437,11 +440,12 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * Merge the shipped config into the app's, recursing into nested sections.
      *
      * The framework's own `mergeConfigFrom` is a flat `array_merge`, which replaces a
-     * top-level key WHOLESALE. This config is nested three levels deep and is read that
+     * top-level key WHOLESALE. This config is nested several levels deep and is read that
      * way everywhere, so for anyone who published `config/matomo-analytics.php` the flat
      * merge froze every section at the shape it had on publication day. A subkey added by
      * a later release did not fall back to its default — it was simply ABSENT, and the
-     * readers that hurt most take no default at all: `Config::stringList()` answers `[]`.
+     * readers that hurt most took no default at all: `Config::stringList()` answered `[]`
+     * until it learned to fall back to the shipped file.
      *
      * What that meant in practice, and why this is not cosmetic:
      *

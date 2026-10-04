@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Date;
  */
 final class ConsecutiveFailures
 {
-    /** Whether this instance has already cleared the counter — see reset(). */
+    /** Whether this instance has already cleared the counter in the current run — see reset(). */
     private bool $cleared = false;
 
     /**
@@ -70,25 +70,26 @@ final class ConsecutiveFailures
     }
 
     /**
-     * Forget the counter, at most once per instance until it is incremented again.
+     * Start a run: the next `reset()` reaches the cache again.
      *
-     * THIS WAS A ROUND TRIP PER DELIVERED BATCH, ALMOST ALWAYS ON A KEY THAT DOES NOT
-     * EXIST. `deliver()` calls it on every success, so a fully healthy 2000-hit flush issued
-     * 40 `DEL` commands — counted at a TCP relay. At 1ms of round-trip time that is 40ms per
-     * flush and, on a per-minute schedule, 57,600 consequence-free round trips per day per
-     * application. Thirty-nine of the forty are repeats of a delete that already happened
-     * inside the same run.
+     * `BufferFlusher::drain()` calls this first, so the memo in `reset()` lasts one drain. A
+     * drainer that lives for many drains, as `matomo:work` does, then still clears a counter
+     * another process raised in between.
+     */
+    public function beginRun(): void
+    {
+        $this->cleared = false;
+    }
+
+    /**
+     * Forget the counter, at most once per run until it is incremented again.
      *
-     * THE FLAG SAYS "ALREADY CLEARED", NOT "NEVER INCREMENTED", AND THE DIFFERENCE IS THE
-     * WHOLE CORRECTNESS OF THIS. The counter is CROSS-PROCESS by design — it is what carries a
-     * failure from one scheduled `matomo:flush` to the next, and each of those is a new
-     * process. A flag meaning "this instance never incremented" would therefore skip the very
-     * delete that matters, the one clearing what the PREVIOUS run left, and nothing but the
-     * TTL would ever clear the counter again. The first version of this was written that way
-     * and an existing arm caught it.
-     *
-     * So the first `reset()` after construction always reaches the cache, and only the repeats
-     * within one drain are dropped. Every cross-process guarantee is unchanged.
+     * `deliver()` calls this after every successful batch, and the key is almost always absent,
+     * so a delete per batch would cost a round trip each for nothing: forty for a healthy
+     * 2000-hit flush at a batch size of 50. Only the first reset of a run reaches the cache, and
+     * that first one always does. The counter is shared across processes and carries a failure
+     * from one scheduled `matomo:flush` to the next, so the delete that matters is the one
+     * clearing what another run left. `beginRun()` marks where a run starts.
      */
     public function reset(): void
     {

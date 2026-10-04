@@ -84,7 +84,7 @@ final readonly class PayloadBuilder
 
         $base['cdt'] = gmdate('Y-m-d H:i:s');
 
-        return $this->redactUrls(array_merge($base, $hit->toParams()));
+        return $this->redactUrls($this->wellFormed(array_merge($base, $hit->toParams())));
     }
 
     /**
@@ -146,7 +146,7 @@ final readonly class PayloadBuilder
             'rec' => 1,
             'recMode' => Config::int('matomo-analytics.ai_chatbots.rec_mode', 1),
             'send_image' => 0,
-            'url' => $this->redactor->redact($request->fullUrl()),
+            'url' => $this->redactor->redact(mb_scrub($request->fullUrl(), 'UTF-8')),
             'cdt' => gmdate('Y-m-d H:i:s'),
             'source' => Config::string('matomo-analytics.ai_chatbots.source', 'Laravel'),
         ];
@@ -154,6 +154,29 @@ final readonly class PayloadBuilder
         $userAgent = $request->userAgent();
         if ($userAgent !== null && $userAgent !== '') {
             $payload['ua'] = $userAgent;
+        }
+
+        return $this->wellFormed($payload);
+    }
+
+    /**
+     * Every string in the payload as valid UTF-8, with a broken byte sequence replaced.
+     *
+     * A client writes the referrer, the user agent and the language, and nothing makes them
+     * UTF-8. The queue payload and the buffered line are both JSON, which refuses a broken byte,
+     * so one such header lost every hit of its request in `queue` mode, and in `batch` mode every
+     * hit from that one on. Done before the URLs are redacted: a redaction pattern with the `u`
+     * modifier fails on a broken byte and leaves the URL as it was.
+     *
+     * @param  array<string, scalar>  $payload
+     * @return array<string, scalar>
+     */
+    private function wellFormed(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if (is_string($value)) {
+                $payload[$key] = mb_scrub($value, 'UTF-8');
+            }
         }
 
         return $payload;
@@ -238,12 +261,11 @@ final readonly class PayloadBuilder
      */
     private function anonymizeIpv6(string $ip): ?string
     {
-        // THE ZONE ID IS STRIPPED HERE RATHER THAN LEFT TO `inet_pton`, because whether it
-        // accepts one is a LIBC question. It does on glibc and on macOS; it does not on musl,
-        // which is what the container CI runs — so the arm covering `fe80::1%eth0` passed
-        // locally and failed on the lane, over a portability difference rather than over
-        // behavior. `ClientIp` strips it at the source for the same reason it is meaningless
-        // here: it names an interface on the machine that wrote it.
+        // The zone id is stripped here rather than left to `inet_pton`, because whether it
+        // accepts one depends on the C library: glibc and macOS do, musl does not, so the same
+        // address would anonymize on one host and fail on another. `ClientIp` strips it at the
+        // source for the same reason it is meaningless here: it names an interface on the
+        // machine that wrote it.
         $percent = strpos($ip, '%');
         $ip = $percent === false ? $ip : substr($ip, 0, $percent);
 

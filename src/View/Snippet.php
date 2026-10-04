@@ -74,30 +74,6 @@ final readonly class Snippet
     }
 
     /**
-     * The `<noscript>` tracking pixel on its own, for placement inside `<body>`.
-     *
-     * `script()` already appends this pixel when `js.noscript` is on, so most integrations
-     * need nothing here. This method exists for one specific and legitimate complaint: the
-     * documented place for `script()` is `<head>`, and inside `<head>` the HTML spec allows
-     * a `noscript` to contain ONLY `link`, `style` and `meta`. An `img` there is a parse
-     * error that ends the head early.
-     *
-     * The measured impact is validator noise rather than breakage — a parser's "after head"
-     * rules push the following head-ish elements back where they belong, so browsers
-     * recover, and the case only arises with JavaScript disabled to begin with. That is why
-     * the default is unchanged and this is an ADDITION: silently dropping the pixel from
-     * `script()` would cost every consumer their no-JS tracking to fix validator output,
-     * and most of them will never read the release note that explains it.
-     *
-     * So the validator-clean integration is opt-in and takes two steps:
-     *
-     *     'js' => ['noscript' => false],   // stop script() from emitting it in <head>
-     *     …
-     *     <body>… @matomoNoscript </body>  // and place it where an img is legal
-     *
-     * Returns '' when tracking is inactive, exactly like the other parts.
-     */
-    /**
      * A page that was delivered out of a speculation-rules prefetch reports itself, once.
      *
      * THE SERVER CANNOT SEE THIS PAGE VIEW AT ALL, AND THAT IS WHY THERE IS A SCRIPT HERE.
@@ -139,6 +115,61 @@ final readonly class Snippet
         return '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
     }
 
+    /**
+     * Defines `window.matomoHit(type, data)`, which sends a hit to the hit beacon route.
+     *
+     * For a page that loads no `matomo.js`. A call sends `{type, url, …data}` with the page's own
+     * address as `url`, and the route records the hit through the normal gate. `sendBeacon` is
+     * tried first because it survives the page being left, which is the moment an outlink or a
+     * download is clicked; where it is missing or refuses the payload, `fetch` with `keepalive`
+     * sends it instead. A second copy of the tag leaves the first definition in place.
+     */
+    public function hitBeacon(?string $nonce = null): string
+    {
+        if (! Config::bool('matomo-analytics.enabled', false) || ! Config::bool('matomo-analytics.hit_beacon.enabled', false)) {
+            return '';
+        }
+
+        $path = $this->js(URL::to(Config::string('matomo-analytics.hit_beacon.path', 'matomo-analytics/hit')));
+
+        $glue = implode("\n", [
+            '(function(){',
+            '  if(window.matomoHit){return;}',
+            '  window.matomoHit=function(type,data){',
+            '    var body=JSON.stringify(Object.assign({url:location.href},data||{},{type:type}));',
+            '    try{if(navigator.sendBeacon&&navigator.sendBeacon('.$path.',new Blob([body],{type:"application/json"}))){return;}}catch(e){}',
+            '    try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"});}catch(e){}',
+            '  };',
+            '})();',
+        ]);
+
+        return '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
+    }
+
+    /**
+     * The `<noscript>` tracking pixel on its own, for placement inside `<body>`.
+     *
+     * `script()` already appends this pixel when `js.noscript` is on, so most integrations
+     * need nothing here. This method exists for one specific and legitimate complaint: the
+     * documented place for `script()` is `<head>`, and inside `<head>` the HTML spec allows
+     * a `noscript` to contain ONLY `link`, `style` and `meta`. An `img` there is a parse
+     * error that ends the head early.
+     *
+     * The measured impact is validator noise rather than breakage — a parser's "after head"
+     * rules push the following head-ish elements back where they belong, so browsers
+     * recover, and the case only arises with JavaScript disabled to begin with. That is why
+     * the default is unchanged and this is an ADDITION: silently dropping the pixel from
+     * `script()` would cost every consumer their no-JS tracking to fix validator output,
+     * and most of them will never read the release note that explains it.
+     *
+     * So the validator-clean integration is opt-in and takes two steps:
+     *
+     *     'js' => ['noscript' => false],   // stop script() from emitting it in <head>
+     *     …
+     *     <body>… @matomoNoscript </body>  // and place it where an img is legal
+     *
+     * Returns '' when tracking is inactive, exactly like the other parts.
+     */
     public function noscript(): string
     {
         return $this->active() ? $this->noscriptPixel() : '';

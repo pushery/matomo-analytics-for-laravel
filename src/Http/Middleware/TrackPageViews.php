@@ -7,8 +7,10 @@ namespace MatomoAnalytics\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\SpeculativeRequest;
 use MatomoAnalytics\Tracking\PageView;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -22,6 +24,8 @@ final readonly class TrackPageViews
 {
     /** Where `handle()` leaves the elapsed time for `terminate()` to read. */
     private const string SERVER_TIME = 'matomo-analytics.server_time';
+
+    private const string TITLE = 'matomo-analytics.title';
 
     /** How far into an HTML body the title is looked for. The spec puts it in `<head>`. */
     private const int TITLE_SCAN_BYTES = 65536;
@@ -47,6 +51,12 @@ final readonly class TrackPageViews
         // under Octane.
         $request->attributes->set(self::SERVER_TIME, $this->serverTime($request));
 
+        // The title is read here as well, from the page as the application rendered it. A
+        // middleware around this one can still turn the response into a 304 before terminate()
+        // runs: `cache.headers` renders the page, compares the validator and drops the body. A
+        // tracker listed inside it therefore keeps the title of the page the reader revalidated.
+        $request->attributes->set(self::TITLE, $this->fromHtml($response));
+
         return $response;
     }
 
@@ -59,9 +69,7 @@ final readonly class TrackPageViews
      * answering in 20ms: 24.08ms of request time in `sync` against 0.096ms in `queue`, a
      * factor of 250, counted at the far end as 140 POSTs.
      *
-     * `TrackAiChatbots` was moved here for exactly this reason and carries the same note.
-     * `site-search.md` even justified a limitation with "because it runs after the response"
-     * while the code ran before it.
+     * `TrackAiChatbots` and `TrackSiteSearch` track in `terminate()` for the same reason.
      *
      * Laravel terminates middleware BEFORE it runs the application's own terminating
      * callbacks, so a hit queued here is still picked up by the flush the service provider
@@ -139,19 +147,19 @@ final readonly class TrackPageViews
         // AND SKIPPING IT ALONE WOULD TRADE ONE WRONG NUMBER FOR ANOTHER, which is why this
         // ships with {@see \MatomoAnalytics\View\Snippet::prefetchPageView()}. When the
         // reader does click, the page is served FROM the prefetch and the server hears nothing
-        // at all — so without the beacon the view is simply missing. `prefetch-beacon.md` is
-        // the page that says so.
-        if (Config::bool('matomo-analytics.middleware.skip_prefetch', true) && $this->isPrefetch($request)) {
+        // at all — so without the beacon the view is simply missing. The documentation's page
+        // on prefetched pages says so.
+        if (Config::bool('matomo-analytics.middleware.skip_prefetch', true) && SpeculativeRequest::is($request)) {
             return true;
         }
 
         // A DELIVERED PAGE IS 2xx OR 304 -- and `isSuccessful()` alone is strictly 200-299.
         //
-        // A 304 means the reader has the page; the server only declined to resend the bytes.
-        // Dropping it lost the second and every later view of every cached page, which on a
-        // site with cache validators is most of the traffic. The hole only became reachable in
-        // 0.28: tracking moved to `terminate()`, which runs after the whole stack, so a
-        // consumer can no longer order an ETag middleware behind the tracker to keep the 200.
+        // A 304 means the reader has the page; the server only declined to resend the bytes, and
+        // on a site with cache validators that is the second and every later view of a page.
+        // Tracking runs in `terminate()`, after the whole stack, so a consumer cannot order an
+        // ETag middleware behind the tracker to keep the 200, and the 304 has to count here.
+        // The title is read in handle() for the same reason, where the page is still whole.
         //
         // NOT `>= 400`, though `TrackSiteSearch` uses that and the difference looks like an
         // inconsistency worth flattening. It is not. A redirect delivers no page: the browser
@@ -164,21 +172,17 @@ final readonly class TrackPageViews
             && $response->getStatusCode() !== Response::HTTP_NOT_MODIFIED;
     }
 
-    /**
-     * Whether the browser announced this request as speculative.
-     *
-     * Both headers are read as a list of tokens, because `Sec-Purpose` is specified as one:
-     * `prefetch;prerender` is a prerender, and it is speculative for the same reason.
-     */
-    private function isPrefetch(Request $request): bool
-    {
-        return array_any(['Sec-Purpose', 'Purpose'], fn (string $header): bool => str_contains(strtolower((string) $request->headers->get($header, '')), 'prefetch'));
-    }
-
     private function title(Request $request, Response $response): string
     {
-        $title = $this->fromHtml($response);
-        if ($title !== null) {
+        $title = $request->attributes->get(self::TITLE);
+
+        // handle() does not run for a request an earlier middleware answered, and then the
+        // final response is all there is to read.
+        if (! $request->attributes->has(self::TITLE)) {
+            $title = $this->fromHtml($response);
+        }
+
+        if (is_string($title)) {
             return $title;
         }
 
@@ -222,7 +226,11 @@ final readonly class TrackPageViews
             return null;
         }
 
-        $title = trim(html_entity_decode($matches[1]));
+        // Squished: Unicode whitespace at the edges goes, so a title of `&nbsp;` is no title, and a
+        // run of whitespace inside becomes one space, as document.title reads a title broken over
+        // several lines. Scrubbed first, because Str::squish() answers null for a string that is
+        // not valid UTF-8.
+        $title = Str::squish(mb_scrub(html_entity_decode($matches[1]), 'UTF-8'));
 
         return $title !== '' ? $title : null;
     }

@@ -132,7 +132,10 @@ final class MatomoReports implements ReportClient
         if (($decoded['result'] ?? null) === 'error') {
             $message = $decoded['message'] ?? null;
 
-            return $this->fail('Matomo reporting API error: '.(is_string($message) ? $message : 'unknown error'));
+            return $this->fail(
+                'Matomo reporting API error: '.(is_string($message) ? $message : 'unknown error'),
+                ReportRequestException::errorAnswer('reporting', $body['method'] ?? null),
+            );
         }
 
         $this->lastError = null;

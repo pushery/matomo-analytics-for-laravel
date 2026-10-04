@@ -13,7 +13,8 @@ use PHPUnit\Framework\Assert;
 
 /**
  * In-memory ReportClient for tests: records every request and returns stubbed
- * responses (default null = a cache/API miss). Swap it in with MatomoReports::fake().
+ * responses. A method without a stub fails the way a call to the real client fails: it
+ * returns null and sets lastError(). Swap it in with MatomoReports::fake().
  */
 final class MatomoReportsFake implements Fake, ReportClient
 {
@@ -29,8 +30,12 @@ final class MatomoReportsFake implements Fake, ReportClient
 
     private ?string $lastError = null;
 
+    /** The message a failed call reports; see setLastError(). */
+    private ?string $failureMessage = null;
+
     /**
-     * Pre-program the response for a method. Returning null simulates a miss/failure.
+     * Pre-program the response for a method. Null makes the call fail: it returns null and sets
+     * lastError(), as the real client does.
      *
      * @param  array<array-key, mixed>|null  $response
      */
@@ -41,8 +46,12 @@ final class MatomoReportsFake implements Fake, ReportClient
         return $this;
     }
 
+    /**
+     * The message failed calls report, and lastError() until the next call answers.
+     */
     public function setLastError(?string $message): self
     {
+        $this->failureMessage = $message;
         $this->lastError = $message;
 
         return $this;
@@ -52,7 +61,14 @@ final class MatomoReportsFake implements Fake, ReportClient
     {
         $this->requests[] = ['method' => $method, 'params' => $params];
 
-        return $this->stubs[$method] ?? null;
+        $response = $this->stubs[$method] ?? null;
+
+        // Like the real client: a failed call returns null with a reason, and an answer clears it.
+        $this->lastError = $response === null
+            ? ($this->failureMessage ?? sprintf('Nothing answers [%s] in the fake, so the call fails.', $method))
+            : null;
+
+        return $response;
     }
 
     public function query(string $method): ReportQuery

@@ -19,9 +19,16 @@
     "license": "MIT",
     "type": "library",
     "homepage": "https://github.com/pushery/matomo-analytics-for-laravel",
+    "authors": [
+        {
+            "name": "Pushery",
+            "homepage": "https://www.pushery.com"
+        }
+    ],
     "support": {
         "issues": "https://github.com/pushery/matomo-analytics-for-laravel/issues",
-        "source": "https://github.com/pushery/matomo-analytics-for-laravel"
+        "source": "https://github.com/pushery/matomo-analytics-for-laravel",
+        "docs": "https://docs.pushery.com/matomo-analytics-for-laravel/"
     },
     "require": {
         "php": "^8.4",
@@ -69,12 +76,13 @@
         "pestphp/pest-plugin-phpstan": "5.2.1",
         "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "phpstan/phpstan": "2.2.14",
+        "phpstan/phpstan": "2.2.16",
         "rector/rector": "2.6.7",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
-        "matomo/matomo-php-tracker": "Use the official server-side Matomo tracker instead of the bundled thin HTTP client",
+        "ext-pcntl": "Lets matomo:work stop between two runs on SIGTERM or SIGINT, instead of wherever the signal lands.",
+        "ext-redis": "The phpredis client for the redis buffer driver; predis/predis serves it as well.",
         "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
     },
     "autoload": {

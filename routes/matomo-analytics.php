@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use MatomoAnalytics\Http\Controllers\HitBeaconController;
 use MatomoAnalytics\Http\Controllers\PrefetchPageViewController;
 use MatomoAnalytics\Http\Controllers\WebVitalsController;
 use MatomoAnalytics\MatomoAnalyticsServiceProvider;
@@ -65,4 +66,22 @@ if (Config::throttle('matomo-analytics.prefetch_beacon.throttle') !== null) {
 $beaconMiddleware = Config::stringList('matomo-analytics.prefetch_beacon.middleware');
 if ($beaconMiddleware !== []) {
     $prefetchPageView->middleware($beaconMiddleware);
+}
+
+// The hit beacon: an event, an outlink, a download, a site search or a heartbeat from a page that
+// loads no `matomo.js`. Same shape as the two routes above and for the same reasons: always
+// registered, the controller 404s while the feature is off, throttled through a named limiter
+// registered in the provider, and in no middleware group, because sendBeacon carries no CSRF token.
+$hitBeacon = Route::post(
+    Config::string('matomo-analytics.hit_beacon.path', 'matomo-analytics/hit'),
+    HitBeaconController::class,
+)->name('matomo-analytics.hit-beacon');
+
+if (Config::throttle('matomo-analytics.hit_beacon.throttle') !== null) {
+    $hitBeacon->middleware('throttle:'.MatomoAnalyticsServiceProvider::HIT_BEACON_LIMITER);
+}
+
+$hitMiddleware = Config::stringList('matomo-analytics.hit_beacon.middleware');
+if ($hitMiddleware !== []) {
+    $hitBeacon->middleware($hitMiddleware);
 }

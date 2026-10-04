@@ -53,9 +53,10 @@ final class GdprManager implements GdprClient
      */
     public function forget(string $segment, int|string|null $site = null): ?array
     {
-        // Matomo is not the only place this person's hits are: the buffer holds built payloads
-        // and the dead letters hold whole batches for up to thirty days, `cip`, `ua`, `url`,
-        // `urlref` and `uid` included, in the application's own stores. They are reported under
+        // Matomo is not the only place this person's hits are: the buffer holds built payloads,
+        // and the dead letters hold whole batches for as long as the retention keeps them (30
+        // days by default, without limit at 0, and only while the scheduler runs), `cip`, `ua`,
+        // `url`, `urlref` and `uid` included, in the application's own stores. They are reported under
         // their own keys rather than folded into Matomo's counts, because the two are different
         // systems, and `local_segment_understood` says whether this half could run at all.
         //
@@ -209,7 +210,10 @@ final class GdprManager implements GdprClient
         if (($decoded['result'] ?? null) === 'error') {
             $message = $decoded['message'] ?? null;
 
-            return $this->fail('Matomo GDPR API error: '.(is_string($message) ? $message : 'unknown error'));
+            return $this->fail(
+                'Matomo GDPR API error: '.(is_string($message) ? $message : 'unknown error'),
+                ReportRequestException::errorAnswer('GDPR', $params['method'] ?? null),
+            );
         }
 
         $this->lastError = null;

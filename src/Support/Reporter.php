@@ -13,9 +13,11 @@ use Throwable;
 
 /**
  * Failure alerting policy. A single transient timeout never pages Flare/
- * Nightwatch/Sentry: failures are reported only after a configurable number of
- * attempts, via a configurable channel, and throttled per error signature so a
- * sustained Matomo outage cannot flood monitoring.
+ * Nightwatch/Sentry: a delivery that will be retried is reported only after a
+ * configurable number of attempts, via a configurable channel, and throttled per
+ * error signature so a sustained Matomo outage cannot flood monitoring. A failure
+ * that will not be retried (a send in `sync` mode, a batch that is parked) is
+ * reported at once, through the same channel and throttle.
  */
 final class Reporter
 {
@@ -54,7 +56,7 @@ final class Reporter
         try {
             Log::log(
                 $this->level(Config::string('matomo-analytics.resilience.reporting.level', 'warning'), 'warning'),
-                'Matomo tracking failed: '.$e->getMessage(),
+                $this->prefix($context).$e->getMessage(),
                 $context,
             );
 
@@ -67,6 +69,23 @@ final class Reporter
         } catch (Throwable) {
             // The log or the application's handler failed, and neither has anywhere to go.
         }
+    }
+
+    /**
+     * What failed, by the stage the caller names. A request to the reporting, GDPR or
+     * annotations API is not tracking, and a line that called it tracking would send the reader
+     * to the wrong part of the package.
+     *
+     * @param  array<string, scalar>  $context
+     */
+    private function prefix(array $context): string
+    {
+        return match ($context['stage'] ?? null) {
+            'gdpr' => 'Matomo GDPR request failed: ',
+            'reporting' => 'Matomo reporting request failed: ',
+            'annotations' => 'Matomo annotation request failed: ',
+            default => 'Matomo tracking failed: ',
+        };
     }
 
     public function recordTransient(Throwable $e): void
