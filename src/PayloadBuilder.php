@@ -12,6 +12,7 @@ use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\ConsoleRequest;
+use MatomoAnalytics\Support\LivewireUpdate;
 use MatomoAnalytics\Tracking\Hit;
 use Throwable;
 
@@ -44,9 +45,12 @@ final readonly class PayloadBuilder
      * connection's own id.
      *
      * THIS RUNS ON THE REQUEST PATH AND MUST NOT THROW. A resolver is application code the
-     * package cannot see, so anything it does other than returning a positive int -- throwing,
-     * returning null, a string, a negative -- falls back rather than propagating. An
+     * package cannot see, so anything it does other than naming a positive site id -- throwing,
+     * returning null, a negative, any other string -- falls back rather than propagating. An
      * extension point that can break tracking is worse than no extension point.
+     *
+     * A string of digits names a site as an int does: it is the form a site id takes in
+     * configuration and in a string column, and `site_id` itself is read the same way.
      */
     private function siteId(): int
     {
@@ -62,6 +66,10 @@ final readonly class PayloadBuilder
             return $this->connection->siteId;
         }
 
+        if (is_string($resolved) && ctype_digit($resolved)) {
+            $resolved = (int) $resolved;
+        }
+
         return is_int($resolved) && $resolved > 0 ? $resolved : $this->connection->siteId;
     }
 
@@ -70,12 +78,16 @@ final readonly class PayloadBuilder
      */
     public function build(Hit $hit, Request $request): array
     {
+        // A Livewire component update arrives on Livewire's endpoint and is about the page the
+        // component lives on, which its Referer names.
+        $livewirePage = LivewireUpdate::pageUrl($request);
+
         $base = [
             'idsite' => $this->siteId(),
             'rec' => 1,
             'apiv' => 1,
             'send_image' => 0,
-            'url' => $request->fullUrl(),
+            'url' => $livewirePage ?? $request->fullUrl(),
         ];
 
         // A console process has no visitor, only the request Laravel invents for it, and every
@@ -83,6 +95,11 @@ final readonly class PayloadBuilder
         // id derived from both. Such a hit carries only what its caller put on it.
         if (! ConsoleRequest::isSynthetic($request)) {
             $base = [...$base, ...$this->visitor($request)];
+
+            // The Referer of a component update is the page itself, not where the visitor came from.
+            if ($livewirePage !== null) {
+                unset($base['urlref']);
+            }
         }
 
         $userId = $this->userId($request);
@@ -120,6 +137,11 @@ final readonly class PayloadBuilder
             $visitor['lang'] = $language;
         }
 
+        $hints = $this->clientHints($request);
+        if ($hints !== null) {
+            $visitor['uadata'] = $hints;
+        }
+
         if ($this->connection->token !== null) {
             $ip = $this->clientIp($request);
             if ($ip !== null) {
@@ -128,6 +150,38 @@ final readonly class PayloadBuilder
         }
 
         return $visitor;
+    }
+
+    /**
+     * The client hints the browser sent with the request, as `uadata`, or null without any.
+     *
+     * Chrome freezes its user agent at `Windows NT 10.0` and `Android 10; K`; the platform version
+     * and the device model arrive only as `Sec-CH-UA-*` headers. Matomo reads them from the
+     * headers of its own tracking request, and a server-side hit comes from the application
+     * server, which carries none, so they travel as `uadata`, keyed the way Matomo keys them.
+     * `X-Requested-With` goes with them: it names the app around an Android web view.
+     */
+    private function clientHints(Request $request): ?string
+    {
+        $hints = [];
+
+        foreach ($request->headers->all() as $name => $values) {
+            $value = $values[0] ?? null;
+
+            if (is_string($value) && $value !== '' && (str_starts_with($name, 'sec-ch-ua') || $name === 'x-requested-with')) {
+                $hints['HTTP_'.strtoupper(str_replace('-', '_', $name))] = $value;
+            }
+        }
+
+        if ($hints === []) {
+            return null;
+        }
+
+        ksort($hints);
+
+        $json = json_encode($hints, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return is_string($json) ? $json : null;
     }
 
     /**
@@ -179,13 +233,19 @@ final readonly class PayloadBuilder
     }
 
     /**
-     * Every string in the payload as valid UTF-8, with a broken byte sequence replaced.
+     * Every string in the payload as valid UTF-8, with a broken byte sequence replaced, and no
+     * float that is not finite.
      *
      * A client writes the referrer, the user agent and the language, and nothing makes them
      * UTF-8. The queue payload and the buffered line are both JSON, which refuses a broken byte,
      * so one such header lost every hit of its request in `queue` mode, and in `batch` mode every
      * hit from that one on. Done before the URLs are redacted: a redaction pattern with the `u`
      * modifier fails on a broken byte and leaves the URL as it was.
+     *
+     * JSON refuses `INF` and `NAN` as well, and from PHP 8.5 on turning `NAN` into a string
+     * warns, which fails the bulk request of a queued job. Matomo ignores such a value and
+     * records the hit without it, so the value is left out and the hit goes out the way Matomo
+     * would have recorded it.
      *
      * @param  array<string, scalar>  $payload
      * @return array<string, scalar>
@@ -195,6 +255,8 @@ final readonly class PayloadBuilder
         foreach ($payload as $key => $value) {
             if (is_string($value)) {
                 $payload[$key] = mb_scrub($value, 'UTF-8');
+            } elseif (is_float($value) && ! is_finite($value)) {
+                unset($payload[$key]);
             }
         }
 

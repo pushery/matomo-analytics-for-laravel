@@ -12,10 +12,12 @@ use Illuminate\Support\Str;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\BotDetector;
 use MatomoAnalytics\Contracts\TrackingGate;
+use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\ConsoleRequest;
+use MatomoAnalytics\Support\LivewireUpdate;
 use MatomoAnalytics\Support\SpeculativeRequest;
 use MatomoAnalytics\Tracking\Hit;
 use Symfony\Component\HttpFoundation\IpUtils;
@@ -26,6 +28,15 @@ use Symfony\Component\HttpFoundation\IpUtils;
  */
 final readonly class DefaultTrackingGate implements TrackingGate
 {
+    /**
+     * The first-party cookie Matomo's JavaScript opt-out writes, which `@matomoOptOut` renders.
+     * matomo.js stops tracking once it is there; reading it here stops the server side as well.
+     */
+    public const string MATOMO_OPT_OUT_COOKIE = 'mtm_consent_removed';
+
+    /** The first-party cookie in which matomo.js remembers a consent given with `rememberConsentGiven`. */
+    public const string MATOMO_CONSENT_COOKIE = 'mtm_consent';
+
     public function __construct(
         private Connection $connection,
         private BotDetector $botDetector,
@@ -52,6 +63,10 @@ final readonly class DefaultTrackingGate implements TrackingGate
 
         if ($this->optedOut($request)) {
             return GateDecision::deny('opted_out');
+        }
+
+        if ($this->lacksConsent($request)) {
+            return GateDecision::deny('no_consent');
         }
 
         if (! Config::bool('matomo-analytics.bots.track', false) && $this->botDetector->isBot($request->userAgent() ?? '')) {
@@ -104,6 +119,14 @@ final readonly class DefaultTrackingGate implements TrackingGate
             return false;
         }
 
+        // A visitor who opted out through `@matomoOptOut` opted out of this site's tracking, not
+        // only of the half that runs in the browser. JavaScript writes the cookie in plain text,
+        // so the provider exempts it from `EncryptCookies`, which would otherwise drop it.
+        $matomo = $request->cookie(self::MATOMO_OPT_OUT_COOKIE);
+        if (is_string($matomo) && $matomo !== '') {
+            return true;
+        }
+
         $cookie = Config::string('matomo-analytics.privacy.opt_out.cookie', 'matomo_opt_out');
         if ($cookie === '') { // @pest-mutate-ignore: EmptyStringToNotEmpty
             return false; // @pest-mutate-ignore: RemoveEarlyReturn
@@ -112,6 +135,22 @@ final readonly class DefaultTrackingGate implements TrackingGate
         $value = $request->cookie($cookie);
 
         return is_string($value) && $value !== '';
+    }
+
+    /**
+     * Under `privacy.consent => 'full'` a hit waits for the consent matomo.js remembers in the
+     * first-party cookie `mtm_consent`, as matomo.js waits for it in the browser. A job or a
+     * command has no visitor and no cookie, so there the application sends only what it may.
+     */
+    private function lacksConsent(Request $request): bool
+    {
+        if (ConsentMode::resolve() !== ConsentMode::FULL || ConsoleRequest::isSynthetic($request)) {
+            return false;
+        }
+
+        $consent = $request->cookie(self::MATOMO_CONSENT_COOKIE);
+
+        return ! is_string($consent) || $consent === '';
     }
 
     private function excludedByAbility(Request $request): bool
@@ -134,20 +173,37 @@ final readonly class DefaultTrackingGate implements TrackingGate
      * Tested against that page, `except_routes => ['admin/*']` denies a page view on
      * `/admin/customers` and a beacon measured on it alike, as the documentation promises.
      *
-     * A hit that carries its own `url` is telling us where it happened; anything else is
-     * about the request it arrived on, which is the ordinary case.
+     * A hit that carries its own `url` is telling us where it happened. A hit from a Livewire
+     * component action arrives on Livewire's update endpoint and happened on the component's
+     * page, so it is judged by that page, which `livewire/*` does not name. Anything else is
+     * about the request it arrived on, which is the ordinary case. Either way the home page is
+     * `/`, as `Request::path()` names it, so one pattern matches its page view and its beacons.
+     *
+     * A URL without a path names the home page too: `url('/')` and `route()` write it as
+     * `https://example.com`, with no slash. Only a URL that cannot be parsed names no page, and
+     * such a hit is judged by the request it arrived on.
      */
     private function trackedPath(Request $request, Hit $hit): string
     {
         $url = $hit->toParams()['url'] ?? null;
 
         if (! is_string($url) || $url === '') {
+            $url = LivewireUpdate::pageUrl($request);
+        }
+
+        if ($url === null) {
             return $request->decodedPath();
         }
 
         $path = parse_url($url, PHP_URL_PATH);
 
-        return is_string($path) ? trim(rawurldecode($path), '/') : $request->decodedPath();
+        if ($path === false) {
+            return $request->decodedPath();
+        }
+
+        $path = trim(rawurldecode($path ?? ''), '/');
+
+        return $path === '' ? '/' : $path;
     }
 
     private function excludedByIp(Request $request): bool

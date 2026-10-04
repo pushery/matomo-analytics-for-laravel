@@ -112,7 +112,8 @@ final class HitBeaconController
         // A boolean is no result count, and filter_var() reads `true` as 1.
         $results = is_bool($count) ? null : filter_var($count, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0], 'flags' => FILTER_NULL_ON_FAILURE]);
 
-        if ($keyword === null) {
+        // Matomo tests the keyword with `empty()`, so a search for "0" is one it cannot record.
+        if ($keyword === null || $keyword === '0') {
             return null;
         }
 

@@ -40,7 +40,7 @@ final class MatomoReports implements ReportClient
         }
 
         $result = $this->cache->remember(
-            $this->cache->key($method, $params),
+            $this->cache->key($method, $this->cacheScope($method, $params)),
             $this->cache->ttlFor($method, $params),
             fn (): ?array => $this->fetch($method, $params),
         );
@@ -97,6 +97,26 @@ final class MatomoReports implements ReportClient
     public function lastError(): ?string
     {
         return $this->lastError;
+    }
+
+    /**
+     * What a cached report is filed under: the request Matomo receives, without the token, and
+     * the endpoint it is sent to.
+     *
+     * The site, the default period and date and the host join a call only on its way out, so a
+     * key from the caller's parameters alone let two configurations that share a cache store,
+     * such as staging and production on one Redis, read each other's reports. `@endpoint` is a
+     * name no Matomo parameter can have, so it cannot replace one in the key.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<string, scalar>
+     */
+    private function cacheScope(string $method, array $params): array
+    {
+        $request = $this->body($method, $params);
+        unset($request['token_auth']);
+
+        return [...$request, '@endpoint' => $this->connection->reportingUrl()];
     }
 
     /**

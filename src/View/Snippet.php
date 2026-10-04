@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\View;
 
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Request as RequestFacade;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use MatomoAnalytics\Connection;
+use MatomoAnalytics\Contracts\TrackingGate;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
 use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Tracking\PageView;
 
 /**
  * Renders the client-side Matomo snippet (or a Tag Manager container) and the
@@ -21,6 +26,7 @@ final readonly class Snippet
 {
     public function __construct(
         private Connection $connection,
+        private TrackingGate $gate,
     ) {}
 
     public function script(?string $nonce = null): string
@@ -90,9 +96,15 @@ final readonly class Snippet
      * engine that does not report `deliveryType` sends nothing, which is the behavior before
      * this existed.
      *
+     * The beacon is for page views the server counts. Where matomo.js or a Tag Manager container
+     * is on the page, `_paq` or `_mtm` is defined, and the script sends nothing: a prefetched
+     * document runs its scripts when the reader opens it, not when it is fetched, so the client
+     * tracker counts that view itself.
+     *
      * Run on DOMContentLoaded for the same reason as the Web Vitals glue above it, plus one of
-     * its own: `document.title` is read here, and in `<head>` — where a consumer will put this
-     * directive next to the tracker — the title element may not be parsed yet.
+     * its own: `document.title` is read here, and in `<head>`, where a layout puts its tracking
+     * directives, the title element may not be parsed yet. By then every inline script of the
+     * document has run, so a tracker placed after this directive is seen as well.
      */
     public function prefetchPageView(?string $nonce = null): string
     {
@@ -105,7 +117,7 @@ final readonly class Snippet
         $glue = implode("\n", [
             '(function(){',
             '  var start=function(){',
-            '    if(!performance.getEntriesByType){return;}',
+            '    if(window._paq||window._mtm||!performance.getEntriesByType){return;}',
             '    var nav=performance.getEntriesByType("navigation")[0];',
             '    if(!nav||nav.deliveryType!=="navigational-prefetch"){return;}',
             '    var body=JSON.stringify({url:location.href,title:document.title});'.$this->beaconSend($path),
@@ -189,7 +201,7 @@ final readonly class Snippet
      */
     public function noscript(): string
     {
-        return $this->active() ? $this->noscriptPixel() : '';
+        return $this->active() && $this->pixelAllowed() ? $this->noscriptPixel() : '';
     }
 
     /**
@@ -220,6 +232,27 @@ final readonly class Snippet
     }
 
     /**
+     * Whether the tracking gate lets a page view of the current request through.
+     *
+     * The pixel goes from the browser to Matomo directly and never passes the server, so the
+     * rules the gate applies to server-side hits apply to it here or not at all: consent under
+     * `privacy.consent => 'full'`, an opt-out, an excluded route or address, a bot. A visitor
+     * without JavaScript cannot give the consent matomo.js remembers, so under `full` the
+     * pixel stays out until the request carries it.
+     *
+     * A prefetched page is judged as the page that will be shown: its pixel is fetched only
+     * when the reader opens it, so the headers that announce the prefetch do not decide it.
+     */
+    private function pixelAllowed(): bool
+    {
+        $request = RequestFacade::instance()->duplicate();
+        $request->headers->remove('Sec-Purpose');
+        $request->headers->remove('Purpose');
+
+        return $this->gate->decide($request, new PageView(''))->allowed;
+    }
+
+    /**
      * The image a visitor without JavaScript requests.
      *
      * No tracker writes the page address into it, and without `url` Matomo takes the `Referer`
@@ -241,7 +274,31 @@ final readonly class Snippet
     {
         return Config::bool('matomo-analytics.enabled', false)
             && Config::bool('matomo-analytics.js.enabled', true)
-            && $this->connection->isConfigured();
+            && $this->connection->isConfigured()
+            && ! $this->pageExcluded();
+    }
+
+    /**
+     * Whether the tracking config excludes this page for every visitor: an environment outside
+     * `tracking.environments`, or a path `tracking.except_routes` names.
+     *
+     * Those two describe the page rather than the visitor, so matomo.js follows them as the
+     * server does, and a page served from a cache to anyone carries the same decision. Rules
+     * about the visitor, an address, a login, an ability, are decided per hit on the server and
+     * for the `<noscript>` pixel; rendering the tracker by them would let one cached page decide
+     * for everybody.
+     */
+    private function pageExcluded(): bool
+    {
+        $environments = Config::stringList('matomo-analytics.tracking.environments');
+
+        if ($environments !== [] && ! App::environment($environments)) {
+            return true;
+        }
+
+        $routes = Config::stringList('matomo-analytics.tracking.except_routes');
+
+        return $routes !== [] && Str::is($routes, RequestFacade::instance()->decodedPath());
     }
 
     private function tracker(?string $nonce): string
@@ -311,6 +368,33 @@ final readonly class Snippet
     }
 
     /**
+     * The line that keeps a virtual page view off a path `tracking.except_routes` names, as the
+     * server keeps the page view of a full load off it.
+     *
+     * The path is read the way `Request::decodedPath()` reads it, without the slashes at its ends
+     * and `/` for the home page, and each pattern is matched the way `Str::is()` matches it: `*`
+     * stands for anything, everything else for itself, and the whole path has to match. The
+     * referrer chain is left at the last page that was tracked.
+     *
+     * @return list<string>
+     */
+    private function excludedRouteCheck(): array
+    {
+        $routes = array_values(array_filter(Config::stringList('matomo-analytics.tracking.except_routes'), static fn (string $route): bool => $route !== ''));
+
+        if ($routes === []) {
+            return [];
+        }
+
+        $source = '^(?:'.implode('|', array_map(static fn (string $route): string => str_replace('\\*', '.*', preg_quote($route, '/')), $routes)).')$';
+
+        return [
+            '    var path=window.location.pathname.replace(/^\\/+|\\/+$/g,"");try{path=decodeURIComponent(path);}catch(e){}',
+            '    if(new RegExp('.$this->js($source).').test(path||"/")){return;}',
+        ];
+    }
+
+    /**
      * Records a virtual page view on each client-side (soft) navigation that actually
      * changes the URL. Returns an empty string unless spa.enabled. Always exposes
      * window.matomoTrackPageView(), which tracks unconditionally.
@@ -332,6 +416,7 @@ final readonly class Snippet
             '  window.__matomoSpaRef=window.location.href;',
             '  var track=function(){',
             '    if(!window._paq){return;}',
+            ...$this->excludedRouteCheck(),
             '    _paq.push(['.$this->js('setReferrerUrl').', window.__matomoSpaRef||'.$this->js('').']);',
             '    _paq.push(['.$this->js('setCustomUrl').', window.location.href]);',
             '    _paq.push(['.$this->js('setDocumentTitle').', document.title]);',
@@ -358,7 +443,13 @@ final readonly class Snippet
             $lines[] = '    '.$content;
         }
 
-        $lines[] = '    _paq.push(['.$this->js('enableLinkTracking').']);';
+        // Link tracking is re-armed for the links the navigation rendered, and only where it is
+        // on: pushed regardless, it would switch on with the first navigation of a site that
+        // turned it off.
+        if (Config::bool('matomo-analytics.js.enable_link_tracking', true)) {
+            $lines[] = '    _paq.push(['.$this->js('enableLinkTracking').']);';
+        }
+
         $lines[] = '    window.__matomoSpaRef=window.location.href;';
         $lines[] = '  };';
         $lines[] = '  window.matomoTrackPageView=track;';
@@ -448,7 +539,7 @@ final readonly class Snippet
             }
         }
 
-        if (Config::bool('matomo-analytics.js.noscript', true)) {
+        if (Config::bool('matomo-analytics.js.noscript', true) && $this->pixelAllowed()) {
             $html .= "\n".$this->noscriptPixel();
         }
 

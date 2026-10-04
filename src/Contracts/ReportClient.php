@@ -174,7 +174,10 @@ interface ReportClient
     public function contentPieces(array $params = []): ?array;
 
     /**
-     * A/B Testing — requires the licensed AbTesting plugin.
+     * A/B Testing metrics of one experiment — requires the licensed AbTesting plugin.
+     *
+     * Matomo requires the experiment's id: pass `idExperiment` in `$params`, or the call
+     * fails whether the plugin is licensed or not.
      *
      * @param  array<string, scalar>  $params
      * @return array<array-key, mixed>|null

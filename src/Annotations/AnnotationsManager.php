@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Annotations;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use MatomoAnalytics\Annotations\Concerns\AnnotatesReleases;
 use MatomoAnalytics\Connection;
@@ -32,12 +33,16 @@ final class AnnotationsManager implements AnnotationsClient
         private readonly Reporter $reporter,
     ) {}
 
+    /**
+     * Without a date the annotation goes on today in the application's time zone, the day
+     * `today()` names. Matomo keeps the date as it arrives and draws the marker on that day.
+     */
     public function add(string $note, ?string $date = null, bool $starred = false, int|string|null $site = null): ?array
     {
         return $this->call([
             'method' => 'Annotations.add',
             'idSite' => $site ?? $this->connection->siteId,
-            'date' => $date ?? gmdate('Y-m-d'),
+            'date' => $date ?? Date::now()->toDateString(),
             'note' => $note,
             'starred' => $starred ? 1 : 0,
         ]);

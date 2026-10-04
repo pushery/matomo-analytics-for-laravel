@@ -19,11 +19,24 @@ final readonly class EcommerceItem
     ) {}
 
     /**
+     * The positional shape, with every string as valid UTF-8 and a broken byte replaced, and a
+     * price that is not finite sent as no price.
+     *
+     * The items are encoded as JSON here, before the payload's own strings are scrubbed, and JSON
+     * refuses a broken byte, `INF` and `NAN`: one product name read from data in another encoding,
+     * or one price that came out as `INF`, would otherwise lose the whole order.
+     *
      * @return array{0: string, 1: string, 2: string, 3: float, 4: int}
      */
     public function toArray(): array
     {
-        return [$this->sku, $this->name ?? '', $this->category ?? '', $this->price ?? 0.0, $this->quantity];
+        return [
+            mb_scrub($this->sku, 'UTF-8'),
+            mb_scrub($this->name ?? '', 'UTF-8'),
+            mb_scrub($this->category ?? '', 'UTF-8'),
+            $this->price !== null && is_finite($this->price) ? $this->price : 0.0,
+            $this->quantity,
+        ];
     }
 
     /**

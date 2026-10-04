@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Request as RequestFacade;
+use InvalidArgumentException;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Contracts\Tracker;
@@ -34,6 +35,7 @@ use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\Outlink;
 use MatomoAnalytics\Tracking\PageView;
 use MatomoAnalytics\Tracking\Ping;
+use MatomoAnalytics\Tracking\RequiredFields;
 use MatomoAnalytics\Tracking\SiteSearch;
 use Throwable;
 
@@ -62,6 +64,18 @@ final class TrackManager implements Tracker
     public function track(Hit $hit): static
     {
         $this->safe(function () use ($hit): void {
+            // Checked before anything touches the request: a site search Matomo would record
+            // as a page view must not mark the request and so hold back its real page view.
+            // A search without a keyword is a visitor's empty input and nothing to track.
+            if (RequiredFields::emptySearch($hit)) {
+                return;
+            }
+
+            $missing = RequiredFields::missing($hit);
+            if ($missing !== null) {
+                throw new InvalidArgumentException($missing);
+            }
+
             $request = RequestFacade::instance();
 
             $decision = $this->gate->decide($request, $hit);
@@ -74,6 +88,12 @@ final class TrackManager implements Tracker
                     EventFacade::dispatch(new VisitorExcluded($decision->deniedReason()));
                 }
 
+                return;
+            }
+
+            SiteSearch::mark($request, $hit);
+
+            if (EcommerceView::hold($request, $hit)) {
                 return;
             }
 

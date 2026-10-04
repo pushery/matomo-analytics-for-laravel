@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Testing;
 
 use Closure;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Annotations\Concerns\AnnotatesReleases;
 use MatomoAnalytics\Contracts\AnnotationsClient;
@@ -66,7 +67,7 @@ final class AnnotationsFake implements AnnotationsClient, Fake
             'id' => $id,
             'idNote' => $id,
             'idsite' => is_numeric($site) ? (int) $site : Config::int('matomo-analytics.site_id', 0),
-            'date' => $date ?? gmdate('Y-m-d'),
+            'date' => $date ?? Date::now()->toDateString(),
             'note' => $note,
             'starred' => $starred ? 1 : 0,
         ];
