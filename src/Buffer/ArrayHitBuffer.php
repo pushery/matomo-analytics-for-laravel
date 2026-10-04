@@ -8,8 +8,8 @@ use MatomoAnalytics\Contracts\ErasableHitBuffer;
 use MatomoAnalytics\Privacy\DataSubject;
 
 /**
- * In-memory buffer for tests and single-process use. Bound as a singleton so
- * pushes and claims share state within a request.
+ * In-memory buffer for tests and single-process use. Bound scoped, so pushes and claims share
+ * state within a request and start empty in the next one under Octane.
  */
 final class ArrayHitBuffer implements ErasableHitBuffer
 {

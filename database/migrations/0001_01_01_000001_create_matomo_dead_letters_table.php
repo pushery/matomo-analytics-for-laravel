@@ -78,7 +78,7 @@ return new class extends Migration
             }
 
             throw new RuntimeException(sprintf(
-                'The Matomo migration cannot create "%s": %d characters with the table prefix "%s", and this database allows %d. Shorten the prefix, or rename the table through matomo-analytics.batch.table.',
+                'The Matomo migration cannot create "%s": %d characters with the table prefix "%s", and this database allows %d. Shorten the prefix, or rename the table through matomo-analytics.batch.dead_letter.table.',
                 $full,
                 strlen($full),
                 $prefix,

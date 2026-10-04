@@ -27,10 +27,9 @@ final class UrlRedactor
     }
 
     /**
-     * ONE PASS OVER THE URL, NOT ONE PER PARAMETER. This ran a separate
-     * `preg_replace_callback` for every configured name — two dozen ship by default, so an
-     * ordinary hit paid one full scan of its URL per name, and the audit counted 36 passes
-     * per hit across the two URLs a payload carries.
+     * One pass over the URL, not one per parameter. Two dozen names ship by default, and a
+     * separate `preg_replace_callback` per name would scan each URL a payload carries once
+     * for every name.
      *
      * The names go into one alternation instead. Each match is independent of the others, so
      * the combined pattern finds exactly what the sequence of patterns found: `[?&#]` anchors

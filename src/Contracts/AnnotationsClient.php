@@ -26,9 +26,10 @@ interface AnnotationsClient
      * config('app.version'); the note is prefixed by annotations.release_prefix and
      * starred per annotations.starred.
      *
+     * @param  int|string|null  $site  idSite; null = the configured site
      * @return array<array-key, mixed>|null
      */
-    public function annotateRelease(?string $version = null, ?string $date = null): ?array;
+    public function annotateRelease(?string $version = null, ?string $date = null, int|string|null $site = null): ?array;
 
     /** The last error surfaced by a failed call; null when healthy. */
     public function lastError(): ?string;

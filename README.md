@@ -64,7 +64,9 @@ Tracking-API escape hatch for anything the typed hits do not model.
 snippet — link tracking, heartbeat timer, no-script pixel, CSP nonce support — or
 a Matomo Tag Manager container instead. Virtual page views on soft navigation for
 Livewire, Inertia and any History-based router. Matomo's native page-performance
-report, plus Core Web Vitals (LCP/CLS/INP) as Matomo events.
+report, plus Core Web Vitals (LCP/CLS/INP) as Matomo events. A page that loads no
+`matomo.js` can still send events, outlinks, downloads, searches and heartbeats
+through one opt-in route.
 
 **Delivery that never blocks a response.** `queue` sends a request's hits as one
 Bulk request after the response; `batch` buffers across requests and flushes in

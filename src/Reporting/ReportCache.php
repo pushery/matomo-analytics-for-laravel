@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Reporting;
 
+use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
@@ -62,32 +63,99 @@ final class ReportCache
      */
     public function ttlFor(string $method, array $params): int
     {
-        $base = 'matomo-analytics.reporting.cache.ttl.';
-
         if (str_starts_with($method, 'Live.')) {
-            return Config::int($base.'live', 60);
+            return Config::int('matomo-analytics.reporting.cache.ttl.live', 60);
         }
 
-        $date = isset($params['date'])
+        $date = strtolower(trim(isset($params['date'])
             ? (string) $params['date']
-            : Config::string('matomo-analytics.reporting.default_date', 'today');
+            : Config::string('matomo-analytics.reporting.default_date', 'today')));
+        $period = strtolower(trim(isset($params['period'])
+            ? (string) $params['period']
+            : Config::string('matomo-analytics.reporting.default_period', 'day')));
 
-        if ($date === '' || str_contains($date, 'today') || $date === Date::now()->toDateString()) {
-            return Config::int($base.'today', 300);
+        // `previousN` ends with the period before the current one, so it never covers today.
+        if (str_starts_with($date, 'previous')) {
+            return Config::int('matomo-analytics.reporting.cache.ttl.recent', 900);
         }
 
-        if (str_contains($date, 'yesterday') || str_starts_with($date, 'last') || str_contains($date, 'previous')) {
-            return Config::int($base.'recent', 900);
+        $end = $this->lastDayOf($date, $period);
+        $today = Date::today();
+
+        if (! $end instanceof CarbonInterface) {
+            return Config::int('matomo-analytics.reporting.cache.ttl.historical', 3600);
         }
 
-        return Config::int($base.'historical', 3600);
+        if ($end->greaterThanOrEqualTo($today)) {
+            return Config::int('matomo-analytics.reporting.cache.ttl.today', 300);
+        }
+
+        return $end->equalTo($today->copy()->subDay())
+            ? Config::int('matomo-analytics.reporting.cache.ttl.recent', 900)
+            : Config::int('matomo-analytics.reporting.cache.ttl.historical', 3600);
+    }
+
+    /**
+     * The last day a report covers, from Matomo's `date` and `period`, or null when the date is
+     * not one Matomo reads.
+     *
+     * The tier follows the end of the span, not the date string alone: a report on the current
+     * month asked for by its first day, a range that ends today and `lastN` all cover today,
+     * which Matomo has not archived yet. A week runs Monday to Sunday, as Matomo counts it.
+     */
+    private function lastDayOf(string $date, string $period): ?CarbonInterface
+    {
+        if ($date === '' || str_starts_with($date, 'last')) {
+            return Date::today();
+        }
+
+        // A range names its end after the comma, and that end is a day whatever the period.
+        if (str_contains($date, ',')) {
+            return $this->day(substr($date, (int) strrpos($date, ',') + 1));
+        }
+
+        $day = $this->day($date);
+
+        if (! $day instanceof CarbonInterface) {
+            return null;
+        }
+
+        return match ($period) {
+            'week' => $day->startOfWeek(CarbonInterface::MONDAY)->addDays(6),
+            'month' => $day->endOfMonth()->startOfDay(),
+            'year' => $day->endOfYear()->startOfDay(),
+            default => $day,
+        };
+    }
+
+    private function day(string $date): ?CarbonInterface
+    {
+        $date = trim($date);
+
+        return match (true) {
+            $date === 'today', $date === 'now' => Date::today(),
+            $date === 'yesterday' => Date::today()->subDay(),
+            preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 => Date::createFromFormat('!Y-m-d', $date) ?: null,
+            default => null,
+        };
     }
 
     public function flush(): void
     {
-        $next = $this->version() + 1;
+        $repo = $this->repo();
 
-        $this->repo()->forever($this->versionKey(), $next);
+        // Moved in the store, never written from the memo: another process may have flushed
+        // since this instance read the version, and writing the memo plus one over that would
+        // move it back and make entries cached under an older version current again. The
+        // database store and Memcached will not increment a key they do not hold yet and answer
+        // false, so the first flush on them writes the version itself.
+        $next = $repo->increment($this->versionKey());
+
+        if (! is_int($next)) {
+            $next = $this->storedVersion() + 1;
+
+            $repo->forever($this->versionKey(), $next);
+        }
 
         // The memo is this instance's, so the flush that just moved the version has to move
         // it here too — otherwise the very request that cleared the cache keeps building keys
@@ -98,29 +166,27 @@ final class ReportCache
     /**
      * The cache-key version segment, read once per instance.
      *
-     * IT WAS READ ON EVERY KEY BUILD, AND A KEY IS BUILT PER REPORT. Twelve warm dashboard
-     * widgets therefore cost 24 round trips, half of them fetching the same counter — which
-     * cannot change within a request unless this instance changes it, and `flush()` updates
-     * the memo when it does.
-     *
-     * THE BINDING WAS CHANGED FROM `singleton` TO `scoped` FOR THIS. "Per instance" is only
-     * "per request" if the instance is, and a singleton survives every request under Octane —
-     * it would keep serving a version another process had already retired. A static property
-     * would have the same defect and no binding to fix it.
+     * A key is built per report, so reading the counter on every build would cost a round trip
+     * per report for a value that cannot change within a request unless this instance changes
+     * it, and `flush()` updates the memo when it does. One instance is one request because the
+     * binding is `scoped`: a singleton survives every request under Octane and would keep
+     * serving a version another process had already retired.
      */
     private function version(): int
     {
-        if ($this->memoizedVersion !== null) {
-            return $this->memoizedVersion;
-        }
+        return $this->memoizedVersion ??= $this->storedVersion();
+    }
 
+    /** The version the store holds now, or 0 when it holds none. */
+    private function storedVersion(): int
+    {
         $value = $this->repo()->get($this->versionKey());
 
         if (is_int($value)) {
-            return $this->memoizedVersion = $value;
+            return $value;
         }
 
-        return $this->memoizedVersion = is_numeric($value) ? (int) $value : 0;
+        return is_numeric($value) ? (int) $value : 0;
     }
 
     private function versionKey(): string

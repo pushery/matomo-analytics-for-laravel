@@ -21,12 +21,12 @@ trait AnnotatesReleases
     /**
      * @return array<array-key, mixed>|null
      */
-    public function annotateRelease(?string $version = null, ?string $date = null): ?array
+    public function annotateRelease(?string $version = null, ?string $date = null, int|string|null $site = null): ?array
     {
         $version ??= Config::nullableString('app.version');
         $prefix = Config::string('matomo-analytics.annotations.release_prefix', 'Deployed');
         $note = $version !== null ? $prefix.' '.$version : $prefix;
 
-        return $this->add($note, $date, Config::bool('matomo-analytics.annotations.starred', false));
+        return $this->add($note, $date, Config::bool('matomo-analytics.annotations.starred', false), $site);
     }
 }

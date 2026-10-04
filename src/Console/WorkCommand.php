@@ -50,21 +50,18 @@ final class WorkCommand extends Command
         // stale), so this is not a correctness fix; it is the difference between a clean
         // stop and one that leaves a batch to time out first. Same shape as queue:work.
         //
-        // The signal list is a CLOSURE, not an array, and that is not a style choice.
-        // `trap()` guards REGISTRATION behind `Signals::whenAvailable()`, but an array
-        // argument dereferences SIGTERM and SIGINT before the call is even made — and
-        // those constants come from ext-pcntl, which this package does not require
-        // (composer.json asks for php and ext-json). On a host without it, the array
-        // form is an "Undefined constant" fatal in a command that would otherwise run
-        // perfectly well without signal handling. `trap()` passes the argument through
-        // `value()`, so a closure is evaluated only where the constants exist.
+        // The signal list is a closure, not an array, and that is not a style choice. `trap()`
+        // guards the registration behind `Signals::whenAvailable()`, but an array argument
+        // dereferences SIGTERM and SIGINT before the call is made, and those constants come from
+        // ext-pcntl, which this package does not require. On a host without it the array form is
+        // an "Undefined constant" fatal in a command that runs well without signal handling.
+        // `trap()` passes the argument through `value()`, so a closure is evaluated only where
+        // the constants exist.
         //
         // The HANDLER is a first-class callable rather than a closure for a second,
         // unrelated reason: a closure body here is only ever entered by a delivered
         // signal, which no test can trigger without risking the runner itself. Pointing
-        // at a named method gives the stop path a seam a test can drive directly. The
-        // coverage gate proved that is not hypothetical — the closure form left two
-        // unreachable lines and dropped this class to 95.7%.
+        // at a named method gives the stop path a seam a test can drive directly.
         $this->trap(fn (): array => [SIGTERM, SIGINT], $this->stopAfterCurrentRun(...));
 
         // THIS LOOP USED TO CALL `flush()`, DISCARD ITS COUNT, AND RETURN SUCCESS NO MATTER

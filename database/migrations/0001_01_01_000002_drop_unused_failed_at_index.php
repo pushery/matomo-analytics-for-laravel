@@ -32,20 +32,15 @@ return new class extends Migration
         }
 
         Schema::table($this->table(), function (Blueprint $table): void {
-            // The COLUMN ARRAY, deliberately — not a hand-built name.
+            // Dropped by the name the index carries, looked up rather than built.
             //
-            // This used to pass an explicit name, reasoning that an installation which
-            // RENAMED the table carries a name built from its own table. That reasoning was
-            // right about one variable and blind to a second: Laravel's createIndexName()
-            // also prepends the connection's TABLE PREFIX whenever `prefix_indexes` is set,
-            // which is the shipped default for mysql and pgsql. The index was created by an
-            // unnamed `$table->index('failed_at')`, so it carries the prefixed name — and a
-            // hand-built, prefix-blind name never matches it. up() then dropped nothing
-            // while recording itself as run, and down() added a SECOND index on the same
-            // column.
-            //
-            // The array form goes through createIndexName() itself, so it reproduces
-            // whatever Laravel produced at create time — renamed table and prefix alike.
+            // The index was created by an unnamed `$table->index('failed_at')`, so its name came
+            // from createIndexName(), which builds it from the table, renamed or not, and also
+            // prepends the connection's table prefix whenever `prefix_indexes` is set, the shipped
+            // default for mysql and pgsql. A name built here could miss either, and then up()
+            // would drop nothing while recording itself as run. indexNameFor() reads the name
+            // from the table's own index list. When that list holds rows it cannot read, the
+            // literal `failed_at` is the last guess, right for an index created under that name.
             $table->dropIndex($this->indexNameFor('failed_at') ?? 'failed_at');
         });
     }

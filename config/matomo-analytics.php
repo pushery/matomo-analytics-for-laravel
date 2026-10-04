@@ -96,17 +96,20 @@ return [
     | up every other task in that minute, inside an application that installed
     | this package to have analytics rather than a queue of its own.
     |
-    | THE PRICE IS YOUR ERROR REPORTING, and it is why this is a switch rather
-    | than a decision made for you. Laravel's ScheduleRunCommand throws on a
-    | non-zero exit only when `! $event->runInBackground`, so a background task
-    | dispatches no ScheduledTaskFailed and never reaches the exception handler —
-    | Sentry, Flare and Nightwatch included. A nightly prune that fails is then
-    | invisible on the surface somebody actually watches.
+    | The price is your error reporting, and it is why this is a switch rather
+    | than a decision made for you. From Laravel 12.11 on, ScheduleRunCommand
+    | raises the non-zero exit of a foreground task: it dispatches
+    | ScheduledTaskFailed and reaches the exception handler, Sentry, Flare and
+    | Nightwatch included. A background task does neither, so a nightly prune
+    | that fails is invisible on the surface somebody actually watches. Before
+    | 12.11 a foreground failure shows only in the output of `schedule:run`.
     |
-    | Set this to false if that report is what you need. The commands report
-    | plenty on their own besides the exit code — the consecutive-failure counter
-    | and the TrackingFailed / HitsDeadLettered events — but an exit code is what
-    | a scheduler monitor reads, and only the foreground path hands it over.
+    | Set this to false if that report is what you need. On every supported
+    | Laravel version, and in either mode, onFailure() attached through
+    | MatomoAnalyticsServiceProvider::configureSchedule() sees a failed run too.
+    | The commands report plenty on their own besides the exit code: the
+    | consecutive-failure counter and the TrackingFailed / HitsDeadLettered
+    | events.
     */
 
     'schedule' => [
@@ -132,12 +135,15 @@ return [
         // one TCP connection for a whole flush (on a PHP with curl; without it, each
         // request opens its own).
         //
-        // It is ALSO the memory knob, which the old comment did not say: a claimed batch
+        // It is also the memory knob: a claimed batch
         // is held in memory at roughly 2.3 KB per hit, so 200 costs about 460 KB and 500
         // about 1.2 MB per flushing process. 200 is the middle of that trade — four times
         // fewer requests for less than half a megabyte.
-        'size' => env('MATOMO_BATCH_SIZE', 200),
-        'flush_interval' => env('MATOMO_BATCH_INTERVAL', 60),
+        //
+        // A blank `.env` line such as `MATOMO_BATCH_SIZE=` reads as unset, so the size and the
+        // interval keep their shipped values; so does the dead-letter retention further down.
+        'size' => filter_var(env('MATOMO_BATCH_SIZE', 200), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 200,
+        'flush_interval' => filter_var(env('MATOMO_BATCH_INTERVAL', 60), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 60,
         'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 2000,
         'stale_after_minutes' => 15,
 
@@ -178,7 +184,7 @@ return [
             // 30 days is far beyond any realistic diagnosis window and well short of the
             // point where the table becomes a problem. Set it to `0` if you would rather
             // keep everything, or lower it if the queue is large.
-            'retention_days' => env('MATOMO_DEAD_LETTER_RETENTION_DAYS', 30),
+            'retention_days' => filter_var(env('MATOMO_DEAD_LETTER_RETENTION_DAYS', 30), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 30,
         ],
     ],
 
@@ -186,10 +192,12 @@ return [
     |--------------------------------------------------------------------------
     | Fail-safe / resilience
     |--------------------------------------------------------------------------
-    | The app is never blocked and tracking errors never bubble up. Alerts are
-    | raised only after `report_after_attempts` failures, via `channel`
-    | ('report' routes to Flare/Nightwatch/Sentry, 'log', or 'silent'), and are
-    | throttled per error signature so a sustained outage cannot flood monitoring.
+    | The app is never blocked and tracking errors never bubble up. A delivery
+    | that is retried raises an alert only after `report_after_attempts` failures;
+    | one that will not be retried (a send in `sync` mode, a parked batch) raises
+    | it at once. Alerts go via `channel` ('report' routes to Flare/Nightwatch/
+    | Sentry, 'log', or 'silent') and are throttled per error signature so a
+    | sustained outage cannot flood monitoring.
     */
 
     'resilience' => [
@@ -235,8 +243,8 @@ return [
             'prefix' => 'matomo-analytics:report',
             'ttl' => [
                 'live' => 60,         // Live.* realtime counters
-                'today' => 300,       // periods covering today (not yet archived)
-                'recent' => 900,      // yesterday / lastN / previous ranges
+                'today' => 300,       // spans reaching today: today, lastN, the current week, month or year
+                'recent' => 900,      // spans that ended yesterday, and previousN
                 'historical' => 3600, // fully archived past periods
             ],
         ],
@@ -292,6 +300,7 @@ return [
     'tracking' => [
         'environments' => null,          // null = all; or ['production']
         'track_authenticated' => true,   // include logged-in users
+        'skip_prefetch' => true,         // refuse every hit of a speculative request (Sec-Purpose/Purpose: prefetch)
         'except_abilities' => [],        // skip users passing any of these Gate abilities, e.g. ['admin']
         'except_ips' => [],              // skip these client IPs / CIDR ranges
         // `livewire-*/*` is Livewire 4, whose endpoint prefix carries a hash
@@ -501,6 +510,9 @@ return [
     | normal gate. The @matomoWebVitals directive expects Google's `web-vitals`
     | library on window.webVitals; bundle it yourself, or set `library` to a
     | (self-hosted) script URL. No third-party CDN is loaded by default.
+    |
+    | The throttle counts per client address, and an IPv6 address per /64, the
+    | range a single connection is given.
     */
 
     'web_vitals' => [
@@ -525,7 +537,8 @@ return [
     |
     | When enabled, @matomoPrefetchPageView closes that half: the page reports itself,
     | once, and only when the browser says it was delivered from a prefetch. The beacon
-    | goes through the normal gate, and a URL from another origin is refused.
+    | goes through the normal gate, and a URL from another origin is refused. Its throttle
+    | counts like the Web Vitals one: per client address, and an IPv6 address per /64.
     */
 
     'prefetch_beacon' => [
@@ -536,12 +549,34 @@ return [
     ],
 
     /*
-    | The web-vitals and prefetch-beacon routes are registered outside every middleware group, because the
-    | browser beacons it with sendBeacon() and that carries no CSRF token. The consequence
-    | is that no session is started on this path, so the gate's `track_authenticated` and
-    | `except_abilities` rules see a guest there regardless of who is logged in. Name
-    | middleware in `web_vitals.middleware` if you need those rules to apply — `['web']`
-    | starts a session, and you then owe this one route a CSRF exemption on your side.
+    |--------------------------------------------------------------------------
+    | Hits from the browser without matomo.js (opt-in)
+    |--------------------------------------------------------------------------
+    |
+    | A page that loads no `matomo.js` still has things only the browser sees: an
+    | event, a click on an outlink or a download, a search run in the page, a
+    | heartbeat. When enabled, @matomoHitBeacon defines `window.matomoHit(type, data)`,
+    | which beacons them to this route, and the route records each through the
+    | normal gate. A request from another origin is refused, text is bounded, and
+    | `event_categories`, when set, names the only categories a page may send. The
+    | throttle counts per client address, and an IPv6 address per /64.
+    */
+
+    'hit_beacon' => [
+        'enabled' => false,
+        'path' => 'matomo-analytics/hit',
+        'throttle' => env('MATOMO_HIT_BEACON_THROTTLE', '60,1'), // "requests,minutes" or a count a minute; null or "off" to disable
+        'middleware' => [],        // extra route middleware; see the note below
+        'event_categories' => [],  // the only event categories a page may send; empty allows every one
+    ],
+
+    /*
+    | The web-vitals, prefetch-beacon and hit-beacon routes are registered outside every middleware
+    | group, because the browser beacons them with sendBeacon() and that carries no CSRF token. The
+    | consequence is that no session is started on these paths, so the gate's `track_authenticated`
+    | and `except_abilities` rules see a guest there regardless of who is logged in. Name middleware
+    | in the section's `middleware` if you need those rules to apply — `['web']` starts a session,
+    | and you then owe that route a CSRF exemption on your side.
     */
 
     /*

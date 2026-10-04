@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Support\Testing\Fakes\Fake;
 use MatomoAnalytics\Annotations\Concerns\AnnotatesReleases;
 use MatomoAnalytics\Contracts\AnnotationsClient;
+use MatomoAnalytics\Support\Config;
 use PHPUnit\Framework\Assert;
 
 /**
@@ -57,7 +58,18 @@ final class AnnotationsFake implements AnnotationsClient, Fake
 
         $this->lastError = null;
 
-        return ['note' => $note, 'date' => $date, 'starred' => $starred ? 1 : 0];
+        // The shape Matomo answers with: the annotation with its id and site, and a date even when
+        // none was passed, because the real client always sends one.
+        $id = count($this->annotations) - 1;
+
+        return [
+            'id' => $id,
+            'idNote' => $id,
+            'idsite' => is_numeric($site) ? (int) $site : Config::int('matomo-analytics.site_id', 0),
+            'date' => $date ?? gmdate('Y-m-d'),
+            'note' => $note,
+            'starred' => $starred ? 1 : 0,
+        ];
     }
 
     public function lastError(): ?string

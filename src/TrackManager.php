@@ -13,6 +13,7 @@ use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Contracts\TrackingGate;
+use MatomoAnalytics\Events\TrackingFailed;
 use MatomoAnalytics\Events\TrackingQueued;
 use MatomoAnalytics\Events\TrackingSent;
 use MatomoAnalytics\Events\VisitorExcluded;
@@ -240,20 +241,44 @@ final class TrackManager implements Tracker
     }
 
     /**
+     * Send the hits inline, once.
+     *
+     * A failed send here is final: nothing retries it and nothing parks it, so it is announced
+     * with TrackingFailed and reported at once, the way the queued job and the flusher announce
+     * and report a batch they give up on. A sender that throws is announced the same way and its
+     * exception left to the caller, which reports it or, with `resilience.never_throw` off,
+     * rethrows it.
+     *
      * @param  list<array<string, scalar>>  $payloads
      */
     private function sendNow(array $payloads): void
     {
-        $result = $this->sender->send($payloads);
+        try {
+            $result = $this->sender->send($payloads);
+        } catch (Throwable $e) {
+            $this->announceFailure($e);
+
+            throw $e;
+        }
 
         if ($result->failed()) {
-            $this->reporter->report(TrackingSendException::status($result->status), ['stage' => 'sync']);
+            $e = TrackingSendException::status($result->status);
+
+            $this->reporter->report($e, ['stage' => 'sync']);
+            $this->announceFailure($e);
 
             return;
         }
 
         if (Config::bool('matomo-analytics.events', true)) {
             EventFacade::dispatch(new TrackingSent(count($payloads), $result->status));
+        }
+    }
+
+    private function announceFailure(Throwable $e): void
+    {
+        if (Config::bool('matomo-analytics.events', true)) {
+            EventFacade::dispatch(new TrackingFailed($e));
         }
     }
 

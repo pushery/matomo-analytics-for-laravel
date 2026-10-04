@@ -42,12 +42,11 @@ final readonly class TrackSiteSearch
     }
 
     /**
-     * TRACKED AFTER THE RESPONSE IS SENT, not merely after it is built.
+     * Tracked after the response is sent, not merely after it is built.
      *
-     * IT USED TO RUN BEHIND `$next()` IN `handle()`, so a visitor searching waited through
-     * the gate, the payload build and the buffer write — and in `sync` mode through the whole
-     * HTTP call to Matomo. `site-search.md` justified a limitation of this middleware with
-     * "because it runs after the response", which was not true of the code it described.
+     * Behind `$next()` in `handle()` a visitor searching would wait through the gate, the
+     * payload build and the buffer write, and in `sync` mode through the whole HTTP call to
+     * Matomo.
      *
      * Laravel terminates middleware before the application's own terminating callbacks, so a
      * hit queued here is still picked up by the flush the service provider registers there.

@@ -127,8 +127,8 @@ final class Config
      * as the cache is built, so a fresh cache carries the shipped values — a stale one does
      * not, and then a missing key answers with an empty list.
      *
-     * Empty is the wrong answer for five of the thirteen call sites, and two of those are
-     * privacy: `privacy.redact.query_params` ships two dozen entries, and "redaction is
+     * Empty is the wrong answer wherever the shipped list is not empty, and two of those keys
+     * are privacy: `privacy.redact.query_params` ships two dozen entries, and "redaction is
      * running" and "redaction does nothing" look identical in production.
      *
      * The shipped file is read rather than the lists being repeated here. Repeating them
@@ -160,6 +160,45 @@ final class Config
         }
 
         return $list;
+    }
+
+    /**
+     * A list of whole numbers, falling back to what the package ships for that key.
+     *
+     * The same fallback as stringList(), for the same reason: the list stands in the shipped
+     * file once rather than being repeated as a second literal that can drift from it. A value
+     * that is not a list, and a list that holds no number at all, both read as the shipped one;
+     * entries that are not numbers are left out.
+     *
+     * @return list<int>
+     */
+    public static function intList(string $key): array
+    {
+        $numbers = self::numbersIn(ConfigFacade::get($key));
+
+        return $numbers !== [] ? $numbers : self::numbersIn(self::shipped($key));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function numbersIn(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $numbers = [];
+
+        foreach ($value as $item) {
+            if (is_int($item)) {
+                $numbers[] = $item;
+            } elseif (is_numeric($item)) {
+                $numbers[] = (int) $item;
+            }
+        }
+
+        return $numbers;
     }
 
     /**

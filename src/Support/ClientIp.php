@@ -30,6 +30,43 @@ final class ClientIp
     }
 
     /**
+     * The key a rate limit counts this address under.
+     *
+     * An IPv6 connection is given at least a /64, and every device in it picks its own address,
+     * so a limit counted per full address would hand a sender a fresh counter for each of 2^64
+     * of them. An IPv6 address counts under its /64. An IPv4 address, where a connection has one,
+     * counts under itself, and so does an IPv4 address written as IPv6 (`::ffff:192.0.2.1`).
+     * A value that is not an address is returned as it is.
+     *
+     * The `is_string` arms are the declared `string|false` of the calls, not a second opinion
+     * about the input.
+     */
+    public static function rateLimitKey(string $ip): string
+    {
+        if (! str_contains($ip, ':')) {
+            return $ip;
+        }
+
+        $packed = inet_pton($ip);
+
+        if (! is_string($packed)) {
+            return $ip;
+        }
+
+        // Ten zero bytes then `ff ff`: the packed form of `::ffff:0:0/96`, the range RFC 4291
+        // reserves for an IPv4 address carried inside an IPv6 one.
+        if (str_starts_with($packed, str_repeat("\0", 10)."\xff\xff")) {
+            $mapped = inet_ntop(substr($packed, 12));
+
+            return is_string($mapped) ? $mapped : $ip;
+        }
+
+        $network = inet_ntop(substr($packed, 0, 8).str_repeat("\0", 8));
+
+        return is_string($network) ? $network.'/64' : $ip;
+    }
+
+    /**
      * The client address a forwarding header names, or null when it names none.
      *
      * READ FROM THE RIGHT. A proxy APPENDS the address it received the request from to whatever

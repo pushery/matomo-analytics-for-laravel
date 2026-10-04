@@ -17,9 +17,6 @@ use MatomoAnalytics\Support\Config;
 final class DefaultBotDetector implements BotDetector
 {
     /**
-     * @var list<string>
-     */
-    /**
      * The compile-time token lists, lowercased once. Keyed by name — see lowered().
      *
      * @var array<string, list<string>>
@@ -74,9 +71,6 @@ final class DefaultBotDetector implements BotDetector
         return $this->matchesAny($userAgent, $tokens === [] ? $this->lowered('chatbots', AiChatbots::USER_AGENTS) : $tokens);
     }
 
-    /**
-     * @param  list<string>  $tokens
-     */
     /**
      * `mb_strtolower`, NOT `strtolower`, BECAUSE THE FRAMEWORK USES IT AND THIS DIVERGED.
      * `strtolower` is byte-wise: it lowercases ASCII and leaves every other codepoint alone.

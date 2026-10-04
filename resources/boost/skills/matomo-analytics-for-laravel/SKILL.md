@@ -12,9 +12,8 @@ metadata:
 # Matomo Analytics for Laravel
 
 Use this skill when a Laravel application installs or integrates the
-`pushery/matomo-analytics-for-laravel` package. Laravel Boost surfaces it inside
-consuming applications, so keep it focused on adoption — never on package
-internals.
+`pushery/matomo-analytics-for-laravel` package. The full reference is at
+<https://docs.pushery.com/matomo-analytics-for-laravel/>.
 
 ## Primary Goal
 
@@ -94,6 +93,12 @@ or set `middleware.auto` in the config so the package registers it itself.
 Set `spa.enabled` when the app uses Livewire, Inertia, or any History-based
 router, so soft navigations become virtual page views.
 
+**Browser hits without `matomo.js`.** A page that tracks server-side only can still
+send what the browser sees: set `hit_beacon.enabled`, place `@matomoHitBeacon`, and
+call `matomoHit('event', { category: 'Docs', action: 'copy' })`, or the types
+`outlink`, `download`, `search` and `ping`. Do not build a route of your own for this;
+the package's route checks the origin, bounds the fields and applies the gate.
+
 ### 4. Choose a transmission mode
 
 `mode` (env `MATOMO_MODE`) decides when hits leave the process, and it is the one
@@ -164,7 +169,3 @@ follow the same shape.
 - Do not switch to `sync` to "make tracking reliable". It moves a third-party
   HTTP call into the request path; `queue` and `batch` exist precisely so a slow
   Matomo cannot slow the application.
-- Do not document package internals here; keep this skill focused on adoption.
-- Do not duplicate the full documentation — link
-  <https://docs.pushery.com/matomo-analytics-for-laravel/> for the deep reference
-  and keep this skill small enough to load and apply quickly.

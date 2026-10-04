@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Buffer;
 
 use Illuminate\Redis\Connections\Connection;
+use Illuminate\Redis\Connections\PhpRedisClusterConnection;
 use Illuminate\Redis\Connections\PhpRedisConnection;
+use Illuminate\Redis\Connections\PredisClusterConnection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Redis as RedisFacade;
@@ -31,7 +33,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
     /** How many entries one LRANGE reads while an erasure searches a list. */
     private const int ERASE_PAGE = 1000;
 
-    /** One CONFIG GET per process, not one per hit — see reportEvictionPolicyOnce(). */
+    /** One CONFIG GET per process, and none on the push path — see reportEvictionPolicyOnce(). */
     private static bool $evictionChecked = false;
 
     /**
@@ -42,7 +44,8 @@ final class RedisHitBuffer implements ErasableHitBuffer
 
     public function push(array $payload): void
     {
-        $this->connection()->command('rpush', [$this->key(), Json::encode($payload)]);
+        // The request path, so the eviction check stays out of it: see reportEvictionPolicyOnce().
+        $this->redis()->command('rpush', [$this->key(), Json::encode($payload)]);
     }
 
     public function size(): int
@@ -318,9 +321,29 @@ final class RedisHitBuffer implements ErasableHitBuffer
         return $moved;
     }
 
-    private function connection(): Connection
+    /**
+     * The configured connection, without the eviction check: the one `push()` uses.
+     *
+     * A cluster is refused here, on every path. A claim moves hits from the buffer's list into a
+     * processing list with LMOVE, and Redis Cluster refuses a command whose keys sit in different
+     * hash slots; the phpredis cluster client has no pipeline either. The driver cannot drain a
+     * cluster, so it says why rather than buffering hits that no claim can reach.
+     */
+    private function redis(): Connection
     {
         $connection = RedisFacade::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
+
+        if ($connection instanceof PhpRedisClusterConnection || $connection instanceof PredisClusterConnection) {
+            throw new BufferUnavailableException('The redis buffer driver does not run on Redis Cluster: a claim moves hits between two keys, which a cluster refuses across hash slots. Point matomo-analytics.batch.redis_connection at a single Redis instance, or use the database driver.');
+        }
+
+        return $connection;
+    }
+
+    /** The configured connection, after the eviction check: the one every other operation uses. */
+    private function connection(): Connection
+    {
+        $connection = $this->redis();
 
         $this->reportEvictionPolicyOnce($connection);
 
@@ -328,18 +351,18 @@ final class RedisHitBuffer implements ErasableHitBuffer
     }
 
     /**
-     * Report an eviction policy that can delete this buffer — once per process.
+     * Report an eviction policy that can delete this buffer, once per process.
      *
-     * THE FIX FOR THIS USED TO BE A DOCUMENTATION SECTION AND A LINE IN `matomo:test`, A
-     * COMMAND NOBODY RUNS ON A SCHEDULE. At runtime there was no guard at all, and the loss is
-     * total and silent: measured against a real Redis under `allkeys-lru`, 200,000 hits pushed,
-     * 5,358 left, 194,642 gone, `evicted_keys=1` — the whole list at once — and `push()` threw
-     * nothing. The recommended policies do prevent it and turn memory pressure into a
-     * `RedisException: OOM` on `push()` instead, which is the half the documentation left out.
+     * Under an `allkeys-*` policy Redis may evict the whole list at once, and `push()` raises
+     * nothing: measured against a real Redis under `allkeys-lru`, 200,000 hits pushed, 5,358
+     * left, `evicted_keys=1`. The recommended policies turn memory pressure into a
+     * `RedisException: OOM` on `push()` instead.
      *
-     * Once per process, and off the hot path in the sense that matters: this is one `CONFIG
-     * GET` for the lifetime of a worker, not one per hit. A managed provider that disables
-     * `CONFIG` throws here, and that is not a finding about the policy — it is silence, the
+     * Every operation asks except `push()`, which runs on each tracked request: under PHP-FPM a
+     * request starts with fresh static state, so a check there would cost a `CONFIG GET` per
+     * request. A flush, a worker and an erasure ask once each. A provider that renames `CONFIG`
+     * away answers with an error, which phpredis returns as false, and one that denies it by ACL
+     * makes phpredis throw. Neither says anything about the policy, so both are silence, the
      * same answer `matomo:test` gives.
      */
     private function reportEvictionPolicyOnce(Connection $connection): void

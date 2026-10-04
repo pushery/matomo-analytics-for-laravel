@@ -82,52 +82,6 @@ final class TestConnectionCommand extends Command
     }
 
     /**
-     * Warn when the Redis buffer runs on an instance that is allowed to evict it.
-     *
-     * The buffer's durability claim -- claim a batch, remove it only on a confirmed 200 --
-     * holds for the `redis` driver only while Redis is not permitted to throw its keys away.
-     * The buffer sets no TTL on any of them, because they are pending work rather than
-     * cache; under an `allkeys-*` `maxmemory-policy` that makes them exactly as evictable as
-     * everything else in the keyspace.
-     *
-     * WHAT AN EVICTION LOOKS LIKE IS NOTHING. `LLEN` answers 0, the claim comes back empty,
-     * the flush ends, and `matomo:flush` prints "Flushed 0 Matomo hit(s)." and exits zero --
-     * the same output an idle minute produces. Hits vanish and every signal stays green,
-     * which is why this belongs in the command someone runs when they are already wondering
-     * where the data went.
-     *
-     * Advisory, never fatal, like every other line this command prints: it is a diagnostic,
-     * and a diagnostic that fails the run removes the diagnosis. Anything unreadable is
-     * skipped in silence -- a Redis that does not answer CONFIG is a managed instance with
-     * the command disabled, which is common and is not itself a finding.
-     */
-    /**
-     * Whether the host this package talks to is reachable without TLS.
-     *
-     * THIS IS A WARNING AND NOT A REFUSAL, DELIBERATELY. Matomo on a private network without
-     * TLS is a legitimate deployment, and refusing it would break installations that are fine.
-     * What is NOT fine is that it happens silently: `token_auth` travels in the request BODY on
-     * every hit, so a plaintext host puts an admin-capable credential on the wire each time —
-     * and until now the only feedback was this command answering "Matomo OK".
-     *
-     * It sits beside the eviction warning for the same reason: this is the surface an operator
-     * reaches for when they want to know whether the setup is sound.
-     */
-    /**
-     * How much is waiting, and how much has been given up on.
-     *
-     * THE PACKAGE SHIPPED NO SUPPORTED WAY TO ASK EITHER QUESTION. `HitBuffer::size()` had
-     * exactly one caller in the shipped tree — the load simulator — and `matomo:flush` reports
-     * only the pass it just made, so "the buffer grows and never drains", which the
-     * troubleshooting guide names as a symptom, could not be observed with anything the
-     * package hands you. This is the command someone runs while wondering where the data went.
-     *
-     * Silent when both are zero, and silent about the buffer outside `batch` mode: the shipped
-     * default is `queue`, where nothing writes to the buffer, so asking would stand a table up
-     * to report a number that cannot be anything but zero. A line on every healthy run is a
-     * line nobody reads.
-     */
-    /**
      * Say when the Redis holding the buffer would not survive its own restart.
      *
      * The claim-before-send contract is about a crashing PROCESS and says nothing about the
@@ -143,16 +97,28 @@ final class TestConnectionCommand extends Command
             return;
         }
 
+        $confirm = 'that the instance writes an append-only file, or saves often enough to keep what the buffer holds';
+
         try {
             $connection = Redis::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
             $appendonly = $connection->command('config', ['GET', 'appendonly']);
             $save = $connection->command('config', ['GET', 'save']);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            $this->redisSettingUnchecked('persistence', 'failed: '.$this->describe($e), $confirm);
+
             return;
         }
 
         $aof = is_array($appendonly) ? ($appendonly['appendonly'] ?? $appendonly[1] ?? null) : null;
         $rdb = is_array($save) ? ($save['save'] ?? $save[1] ?? null) : null;
+
+        // A CONFIG renamed away answers false under phpredis rather than throwing, and an
+        // `appendonly` that could not be read is not `no`: the setting is unchecked, not off.
+        if (! is_string($aof)) {
+            $this->redisSettingUnchecked('persistence', 'returned nothing usable', $confirm);
+
+            return;
+        }
 
         if ($aof === 'yes') {
             return;
@@ -164,13 +130,13 @@ final class TestConnectionCommand extends Command
     }
 
     /**
-     * Report the three PostgreSQL timeouts, because none of them can be set from Laravel.
+     * Report the PostgreSQL timeouts the session resolved to zero, which is the server default.
      *
      * With no `lock_timeout`, the buffer write waits exactly as long as a lock on the table is
      * held — measured at 22.9 seconds against a 22.9-second `ACCESS EXCLUSIVE`, with no upper
-     * bound, from the framework's `terminating()` callback and therefore inside a worker.
-     * Laravel's `pgsql` connector has no option for these, so they live on the role or the
-     * database, and a diagnostic is the only place a consumer would find out.
+     * bound, from the framework's `terminating()` callback and therefore inside a worker. The
+     * timeouts are set on the role or the database, or, from Laravel 13.33, on the connection
+     * through `server_options`. The query reads what the session resolved, so each way counts.
      */
     private function reportPostgresTimeouts(): void
     {
@@ -202,11 +168,25 @@ final class TestConnectionCommand extends Command
         }
 
         $this->warn(sprintf(
-            'PostgreSQL has %s unset, so a lock on the buffer table blocks the write that runs after each response for as long as the lock lasts. Set them with ALTER ROLE.',
+            'PostgreSQL has %s unset, so a lock on the buffer table blocks the write that runs after each response for as long as the lock lasts. Set them with ALTER ROLE, or from Laravel 13.33 with server_options on the connection.',
             implode(' and ', $unset),
         ));
     }
 
+    /**
+     * How much is waiting, and how much has been given up on.
+     *
+     * THE PACKAGE SHIPPED NO SUPPORTED WAY TO ASK EITHER QUESTION. `HitBuffer::size()` had
+     * exactly one caller in the shipped tree — the load simulator — and `matomo:flush` reports
+     * only the pass it just made, so "the buffer grows and never drains", which the
+     * troubleshooting guide names as a symptom, could not be observed with anything the
+     * package hands you. This is the command someone runs while wondering where the data went.
+     *
+     * Silent when both are zero, and silent about the buffer outside `batch` mode: the shipped
+     * default is `queue`, where nothing writes to the buffer, so asking would stand a table up
+     * to report a number that cannot be anything but zero. A line on every healthy run is a
+     * line nobody reads.
+     */
     private function reportBacklog(): void
     {
         // EACH COUNT IS ITS OWN try, AND NEITHER MAY FAIL THE COMMAND. This is a
@@ -282,6 +262,16 @@ final class TestConnectionCommand extends Command
     }
 
     /**
+     * Say that a Redis setting the buffer depends on could not be read, and what to confirm.
+     *
+     * The buffer itself never needs CONFIG; only these two diagnostics read it.
+     */
+    private function redisSettingUnchecked(string $setting, string $why, string $confirm): void
+    {
+        $this->line(sprintf('Redis %s is unchecked, because CONFIG GET %s. Confirm with the provider %s.', $setting, $why, $confirm));
+    }
+
+    /**
      * An exception as one line for the console: its class and message, with any password in
      * a connection URL masked.
      */
@@ -290,6 +280,18 @@ final class TestConnectionCommand extends Command
         return $e::class.': '.preg_replace('#(//[^/:@\s]+):[^/@\s]+@#', '$1:***@', $e->getMessage());
     }
 
+    /**
+     * Whether the host this package talks to is reachable without TLS.
+     *
+     * THIS IS A WARNING AND NOT A REFUSAL, DELIBERATELY. Matomo on a private network without
+     * TLS is a legitimate deployment, and refusing it would break installations that are fine.
+     * What is NOT fine is that it happens silently: `token_auth` travels in the request BODY on
+     * every hit, so a plaintext host puts an admin-capable credential on the wire each time —
+     * and until now the only feedback was this command answering "Matomo OK".
+     *
+     * It sits beside the eviction warning for the same reason: this is the surface an operator
+     * reaches for when they want to know whether the setup is sound.
+     */
     private function reportPlaintextHost(): void
     {
         $host = Config::nullableString('matomo-analytics.host');
@@ -304,6 +306,27 @@ final class TestConnectionCommand extends Command
         ));
     }
 
+    /**
+     * Warn when the Redis buffer runs on an instance that is allowed to evict it.
+     *
+     * The buffer's durability claim -- claim a batch, remove it only on a confirmed 200 --
+     * holds for the `redis` driver only while Redis is not permitted to throw its keys away.
+     * The buffer sets no TTL on any of them, because they are pending work rather than
+     * cache; under an `allkeys-*` `maxmemory-policy` that makes them exactly as evictable as
+     * everything else in the keyspace.
+     *
+     * WHAT AN EVICTION LOOKS LIKE IS NOTHING. `LLEN` answers 0, the claim comes back empty,
+     * the flush ends, and `matomo:flush` prints "Flushed 0 Matomo hit(s)." and exits zero --
+     * the same output an idle minute produces. Hits vanish and every signal stays green,
+     * which is why this belongs in the command someone runs when they are already wondering
+     * where the data went.
+     *
+     * Advisory, never fatal, like every other line this command prints: it is a diagnostic,
+     * and a diagnostic that fails the run removes the diagnosis. A Redis that does not answer
+     * CONFIG is usually a managed instance with the command renamed or denied, which is not
+     * itself a finding, so it gets a line rather than a warning: printing nothing would read
+     * as a policy that was checked and found safe.
+     */
     private function reportRedisEvictionPolicy(): void
     {
         if (Config::string('matomo-analytics.mode', 'queue') !== 'batch'
@@ -311,10 +334,14 @@ final class TestConnectionCommand extends Command
             return;
         }
 
+        $confirm = 'that the instance runs noeviction or a volatile-* policy';
+
         try {
             $policy = Redis::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default')
                 ->command('config', ['GET', 'maxmemory-policy']);
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            $this->redisSettingUnchecked('maxmemory-policy', 'failed: '.$this->describe($e), $confirm);
+
             return;
         }
 
@@ -323,7 +350,13 @@ final class TestConnectionCommand extends Command
         $values = is_array($policy) ? array_values(array_filter($policy, is_string(...))) : [];
         $value = $values === [] ? null : $values[count($values) - 1];
 
-        if ($value === null || ! str_starts_with($value, 'allkeys')) {
+        if ($value === null) {
+            $this->redisSettingUnchecked('maxmemory-policy', 'returned nothing usable', $confirm);
+
+            return;
+        }
+
+        if (! str_starts_with($value, 'allkeys')) {
             return;
         }
 

@@ -16,6 +16,7 @@ use MatomoAnalytics\Support\CallableResolver;
 use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\ConsoleRequest;
+use MatomoAnalytics\Support\SpeculativeRequest;
 use MatomoAnalytics\Tracking\Hit;
 use Symfony\Component\HttpFoundation\IpUtils;
 
@@ -55,6 +56,13 @@ final readonly class DefaultTrackingGate implements TrackingGate
 
         if (! Config::bool('matomo-analytics.bots.track', false) && $this->botDetector->isBot($request->userAgent() ?? '')) {
             return GateDecision::deny('bot');
+        }
+
+        // Every hit of a speculative request, not only the page view the middleware builds: an
+        // event or a page view the application sends while rendering a prefetched 404 describes
+        // a page no reader has seen.
+        if (Config::bool('matomo-analytics.tracking.skip_prefetch', true) && SpeculativeRequest::is($request)) {
+            return GateDecision::deny('prefetch');
         }
 
         if (! Config::bool('matomo-analytics.tracking.track_authenticated', true) && $request->user() !== null) {
@@ -121,15 +129,13 @@ final readonly class DefaultTrackingGate implements TrackingGate
     /**
      * The path this hit is ABOUT, which is not always the path it arrived on.
      *
-     * `except_routes` USED TO MEASURE THE REQUEST AND NOTHING ELSE, so a Web Vitals beacon
-     * was tested against `/matomo-analytics/web-vitals` — a path no exclusion list ever names.
-     * Measured with `except_routes => ['admin/*']`: a page view on `/admin/customers` was
-     * denied with reason `route`, and a beacon measured ON that page was allowed. Both
-     * `web-vitals.md` ("an excluded route produces no event") and `tracking-gate.md` ("every
-     * hit passes through one gate") describe the first case and not the second.
+     * A beacon arrives on the package's own route, such as `/matomo-analytics/web-vitals`, a
+     * path no exclusion list names, while what it measured happened on the page in its `url`.
+     * Tested against that page, `except_routes => ['admin/*']` denies a page view on
+     * `/admin/customers` and a beacon measured on it alike, as the documentation promises.
      *
      * A hit that carries its own `url` is telling us where it happened; anything else is
-     * about the request it arrived on, which is the ordinary case and unchanged.
+     * about the request it arrived on, which is the ordinary case.
      */
     private function trackedPath(Request $request, Hit $hit): string
     {

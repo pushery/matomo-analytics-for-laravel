@@ -11,7 +11,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event as EventFacade;
 use MatomoAnalytics\Buffer\DeadLetterStore;
@@ -28,7 +27,8 @@ use Throwable;
  * Durably delivers a batch of hits via the Sender. Failures are retried with
  * escalating backoff up to the configured attempt budget; only after the
  * configured attempt threshold is a (throttled) report raised, and a batch that
- * exhausts the budget is dead-lettered so nothing is silently lost.
+ * exhausts the budget is dead-lettered so nothing is silently lost. A batch Matomo
+ * rejects permanently is dead-lettered on its first attempt.
  */
 final class SendHitsJob implements ShouldQueue
 {
@@ -77,25 +77,16 @@ final class SendHitsJob implements ShouldQueue
     }
 
     /**
+     * The seconds between attempts, as `queue.backoff` lists them.
+     *
+     * A value that is not a list, or a list without a single number in it, takes the schedule
+     * the package ships, read from its config file rather than repeated here.
+     *
      * @return list<int>
      */
     public function backoff(): array
     {
-        $configured = ConfigFacade::get('matomo-analytics.queue.backoff');
-        if (! is_array($configured)) {
-            return [30, 120, 300, 900];
-        }
-
-        $backoff = [];
-        foreach ($configured as $seconds) {
-            if (is_int($seconds)) {
-                $backoff[] = $seconds;
-            } elseif (is_numeric($seconds)) {
-                $backoff[] = (int) $seconds;
-            }
-        }
-
-        return $backoff === [] ? [30] : $backoff;
+        return Config::intList('matomo-analytics.queue.backoff');
     }
 
     /**
@@ -120,7 +111,7 @@ final class SendHitsJob implements ShouldQueue
         }
 
         if ($result->failed()) {
-            $this->absorb($reporter, $deadLetters, TrackingSendException::status($result->status));
+            $this->absorb($reporter, $deadLetters, TrackingSendException::status($result->status), $result->permanent());
 
             return;
         }
@@ -131,14 +122,15 @@ final class SendHitsJob implements ShouldQueue
     }
 
     /**
-     * Only reachable when `resilience.never_throw` is off, because that is the one
-     * configuration in which this job still lets an exception escape.
+     * Reached when the job is failed: by the worker at the `queue.retry_until_minutes`
+     * deadline, by this job at `queue.tries` with `resilience.never_throw` off, and by this
+     * job when there is no dead-letter store to park the batch in.
      *
-     * NULLABLE, BECAUSE THE FRAMEWORK'S CONTRACT IS. `CallQueuedHandler::failed()` passes
-     * `?Throwable`, and it really can be null: a job killed by `queue:work --timeout`, or one
-     * failed through `Queue::failing()` without an exception, arrives here with nothing to
-     * report. A non-nullable parameter turns that into a TypeError inside the worker's own
-     * failure handling — the one place an error has nowhere left to go.
+     * The parameter is nullable because the framework's contract is: `CallQueuedHandler::failed()`
+     * passes `?Throwable`, and a job or a job middleware that calls `fail()` without an exception
+     * arrives here with null. A timeout does not: the worker fails the job with a
+     * `TimeoutExceededException`. A non-nullable parameter turns the null into a TypeError inside
+     * the worker's own failure handling, the one place an error has nowhere left to go.
      */
     public function failed(?Throwable $exception): void
     {
@@ -170,14 +162,37 @@ final class SendHitsJob implements ShouldQueue
      * same backoff the worker would have applied, so pacing and escalation behave as
      * before. What changes is that the retry loop is now bounded by `queue.tries` — see
      * the note on that bound below.
+     *
+     * A permanent rejection is not retried. A refused token or an unknown site id gets the
+     * same answer on every attempt, so the batch is parked on the first one, as the buffered
+     * sender parks it, and reported as final. It skips the escalation step, whose log line
+     * for an attempt below the threshold says the delivery is being retried. With
+     * `resilience.never_throw` off the worker owns the retries, so the exception leaves the
+     * job as before, and the job still fails itself at `queue.tries`.
      */
-    private function absorb(Reporter $reporter, DeadLetterStore $deadLetters, Throwable $e): void
+    private function absorb(Reporter $reporter, DeadLetterStore $deadLetters, Throwable $e, bool $permanent = false): void
     {
-        $this->escalate($reporter, $e);
-
         if (! Config::bool('matomo-analytics.resilience.never_throw', true)) {
+            $this->escalate($reporter, $e);
+
+            // The worker counts attempts against maxTries only while retryUntil() answers
+            // nothing, and this job always sets a deadline. So the budget is applied here: the
+            // last attempt fails the job into failed_jobs, as the worker fails one at maxTries,
+            // and the exception still leaves it.
+            if ($this->attempts() >= $this->tries()) {
+                $this->fail($e);
+            }
+
             throw $e;
         }
+
+        if ($permanent) {
+            $this->exhaust($deadLetters, $e);
+
+            return;
+        }
+
+        $this->escalate($reporter, $e);
 
         if ($this->attempts() < $this->tries() && $this->canRunAgain()) {
             $this->release($this->backoffFor($this->attempts()));

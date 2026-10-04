@@ -15,7 +15,7 @@ use MatomoAnalytics\Support\Config;
 use SplFileObject;
 
 /**
- * Framework-agnostic file spool (the pushery pattern). Writers append one JSON
+ * Framework-agnostic file spool. Writers append one JSON
  * line under an exclusive lock on the queue file. A claim takes the same lock,
  * copies up to the limit into a claim file of its own and shifts the remainder to
  * the start of the queue. The queue file is never renamed or replaced, so a writer

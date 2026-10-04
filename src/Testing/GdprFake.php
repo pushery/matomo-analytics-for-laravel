@@ -39,6 +39,12 @@ final class GdprFake implements Fake, GdprClient
 
     private ?string $lastError = null;
 
+    /** The message every call fails with while set; see setLastError(). */
+    private ?string $failure = null;
+
+    /** @var array<array-key, mixed>|null what an export answers; null answers with the found rows under `log_visit` */
+    private ?array $exported = null;
+
     private bool $mutationsFail = false;
 
     private string $mutationError = 'GDPR operation failed';
@@ -85,8 +91,27 @@ final class GdprFake implements Fake, GdprClient
         return $this;
     }
 
+    /**
+     * Stub what an export answers. Matomo answers with the data subject's rows keyed by log
+     * table (`log_visit`, `log_link_visit_action` and so on); without a stub the fake answers
+     * with the visits it exports under `log_visit`.
+     *
+     * @param  array<array-key, mixed>  $tables
+     */
+    public function stubExported(array $tables): self
+    {
+        $this->exported = $tables;
+
+        return $this;
+    }
+
+    /**
+     * Make every call fail with this message, the way the real client fails while Matomo
+     * refuses; null makes the calls succeed again.
+     */
     public function setLastError(?string $message): self
     {
+        $this->failure = $message;
         $this->lastError = $message;
 
         return $this;
@@ -94,7 +119,8 @@ final class GdprFake implements Fake, GdprClient
 
     /**
      * Make every mutation (forget/export/deleteVisits/exportVisits) fail with null
-     * while findDataSubjects still succeeds — to exercise post-lookup error paths.
+     * while findDataSubjects still succeeds — to exercise post-lookup error paths. A
+     * successful lookup clears lastError(), as the real client's does.
      */
     public function failMutations(string $error = 'GDPR operation failed'): self
     {
@@ -108,57 +134,59 @@ final class GdprFake implements Fake, GdprClient
     {
         $this->calls[] = ['op' => 'find', 'segment' => $segment, 'site' => $site, 'visits' => count($this->found)];
 
-        return $this->lastError !== null ? null : $this->found;
+        return $this->answer(false, $this->found);
     }
 
     public function forget(string $segment, int|string|null $site = null): ?array
     {
         $this->calls[] = ['op' => 'forget', 'segment' => $segment, 'site' => $site, 'visits' => count($this->found)];
 
-        if ($this->mutationsFail) {
-            $this->lastError = $this->mutationError;
-        }
-
         // The same shape the real client returns: Matomo's counts, then the local half.
-        return $this->lastError !== null ? null : array_merge($this->deleted, $this->local);
+        return $this->answer(true, array_merge($this->deleted, $this->local));
     }
 
     public function export(string $segment, int|string|null $site = null): ?array
     {
         $this->calls[] = ['op' => 'export', 'segment' => $segment, 'site' => $site, 'visits' => count($this->found)];
 
-        if ($this->mutationsFail) {
-            $this->lastError = $this->mutationError;
-        }
-
-        return $this->lastError !== null ? null : ['exported' => $this->found];
+        // The real client looks the subject up first, and when nothing matched it exports
+        // nothing, without a second call that could fail.
+        return $this->answer($this->found !== [], $this->found === [] ? [] : ($this->exported ?? ['log_visit' => $this->found]));
     }
 
     public function deleteVisits(array $visits): ?array
     {
         $this->calls[] = ['op' => 'deleteVisits', 'segment' => null, 'site' => null, 'visits' => count($visits)];
 
-        if ($this->mutationsFail) {
-            $this->lastError = $this->mutationError;
-        }
-
-        return $this->lastError !== null ? null : $this->deleted;
+        return $this->answer($visits !== [], $visits === [] ? [] : $this->deleted);
     }
 
     public function exportVisits(array $visits): ?array
     {
         $this->calls[] = ['op' => 'exportVisits', 'segment' => null, 'site' => null, 'visits' => count($visits)];
 
-        if ($this->mutationsFail) {
-            $this->lastError = $this->mutationError;
-        }
-
-        return $this->lastError !== null ? null : ['exported' => $visits];
+        return $this->answer($visits !== [], $visits === [] ? [] : ($this->exported ?? ['log_visit' => $visits]));
     }
 
     public function lastError(): ?string
     {
         return $this->lastError;
+    }
+
+    /**
+     * A call's result the way the real client reports it: null with lastError() set when the
+     * call fails, the result with lastError() cleared when it succeeds.
+     *
+     * @template TResult of array
+     *
+     * @param  TResult  $result
+     * @return TResult|null
+     */
+    private function answer(bool $mutation, array $result): ?array
+    {
+        $this->lastError = $this->failure ?? ($mutation && $this->mutationsFail ? $this->mutationError : null);
+
+        return $this->lastError === null ? $result : null;
     }
 
     /**

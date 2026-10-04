@@ -6,7 +6,6 @@ namespace MatomoAnalytics\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Support\BeaconOrigin;
 use MatomoAnalytics\Support\Config;
@@ -78,52 +77,15 @@ final class WebVitalsController
             $measurement,
         );
 
-        $page = $this->pageUrl($request);
+        // Without a page, every Web Vitals event was filed against the ingest endpoint, and Matomo
+        // learned the metric but never which page was slow. A URL from another origin is dropped
+        // rather than refused: the measurement came from one of our pages, and the fallback files
+        // it under the beacon's own URL.
+        $page = BeaconOrigin::pageUrl($request->input('url'));
 
         $tracker->track($page === null ? $event : CustomParameters::for($event)->param('url', $page));
 
         return new Response(status: Response::HTTP_NO_CONTENT);
-    }
-
-    /**
-     * The page the measurement was taken on, or null when the beacon did not name one this
-     * application will vouch for.
-     *
-     * WITHOUT THIS, EVERY WEB VITALS EVENT WAS FILED AGAINST THE INGEST ENDPOINT. The
-     * payload builder takes `url` from the request it runs in, and for a beacon that request
-     * is `/matomo-analytics/web-vitals` — so Matomo learned the metric and the rating and
-     * never which page was slow, which is the one question the feature exists to answer. It
-     * is also why `except_routes` could not protect these events: the gate had only the
-     * beacon's own path to match, and no exclusion list names that.
-     *
-     * THE VALUE IS WRITTEN BY THE PAGE THAT SENDS THE BEACON, so it names a page and proves
-     * nothing about the sender. {@see BeaconOrigin} decides whether a page of this application
-     * sent the request, from the request's own origin, before this is read.
-     *
-     * Only this application's own origin is accepted here as well, compared on scheme, host and
-     * port. A URL from anywhere else is DROPPED rather than refused: the measurement came from
-     * one of our pages, and the fallback files it under the beacon's own URL.
-     */
-    private function pageUrl(Request $request): ?string
-    {
-        $url = $request->input('url');
-
-        if (! is_string($url) || $url === '') {
-            return null;
-        }
-
-        $parts = parse_url($url);
-        $own = parse_url(URL::to('/'));
-
-        if (! is_array($parts) || ! is_array($own)) {
-            return null;
-        }
-
-        $same = ($parts['scheme'] ?? null) === ($own['scheme'] ?? null)
-            && ($parts['host'] ?? null) === ($own['host'] ?? null)
-            && ($parts['port'] ?? null) === ($own['port'] ?? null);
-
-        return $same ? $url : null;
     }
 
     private function plausibleMeasurement(mixed $value): ?float

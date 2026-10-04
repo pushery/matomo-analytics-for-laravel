@@ -84,7 +84,10 @@ final class AnnotationsManager implements AnnotationsClient
         if (($decoded['result'] ?? null) === 'error') {
             $message = $decoded['message'] ?? null;
 
-            return $this->fail('Matomo annotations API error: '.(is_string($message) ? $message : 'unknown error'));
+            return $this->fail(
+                'Matomo annotations API error: '.(is_string($message) ? $message : 'unknown error'),
+                ReportRequestException::errorAnswer('annotations', $params['method'] ?? null),
+            );
         }
 
         $this->lastError = null;

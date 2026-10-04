@@ -2,16 +2,16 @@
      Publish with: php artisan vendor:publish --tag=matomo-analytics-views
      Render with:  @include('matomo-analytics::privacy-policy')
 
-     The prose lives in lang/<locale>/messages.php and ships in seven locales, so
-     a non-English site does not publish an English privacy paragraph. Override a
-     single string by publishing the lang files, or pass $heading to change just
-     the heading.
+     The prose lives in lang/<language>/messages.php and ships in seven languages, so
+     a non-English site does not publish an English privacy paragraph. A regional
+     locale such as pt_BR or de_AT reads its language. Override a single string by
+     publishing the lang files, or pass $heading to change just the heading.
 
-     Lang::get() rather than the global double-underscore translation helper, and fully
-     qualified rather than through the alias. That helper is declared in
-     Illuminate\Foundation\helpers.php, which this package deliberately does not depend on,
-     so a component-only install would fatal on this view. The `Lang` alias itself comes
-     from the host application's config, which a lean install need not have either.
+     Translation::line() rather than the global double-underscore translation helper, and
+     fully qualified. That helper is declared in Illuminate\Foundation\helpers.php, which
+     this package deliberately does not depend on, so a component-only install would fatal
+     on this view. Translation::line() also reads the language of a regional locale, which
+     Lang::get() never falls back to.
 
      Writing the helper's name here in full would trip the very guard that enforces this —
      LeanDependencyContractTest scans the shipped tree, and a Blade comment is not a PHP
@@ -21,8 +21,8 @@
      configuration — cookieless, anonymized IPs, no user id, nothing shared. If
      you change those, change the text. --}}
 <section class="matomo-analytics-privacy">
-    <h2>{{ $heading ?? \Illuminate\Support\Facades\Lang::get('matomo-analytics::messages.privacy_policy.heading') }}</h2>
+    <h2>{{ $heading ?? \MatomoAnalytics\Support\Translation::line('matomo-analytics::messages.privacy_policy.heading') }}</h2>
     <p>
-        {{ \Illuminate\Support\Facades\Lang::get('matomo-analytics::messages.privacy_policy.body') }}
+        {{ \MatomoAnalytics\Support\Translation::line('matomo-analytics::messages.privacy_policy.body') }}
     </p>
 </section>
