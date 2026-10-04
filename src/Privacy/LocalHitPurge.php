@@ -94,7 +94,7 @@ final readonly class LocalHitPurge
 
         return match ($groups[0][0]['dimension']) {
             'userId' => new DataSubject('uid', $groups[0][0]['value']),
-            'visitIp' => new DataSubject('cip', $groups[0][0]['value']),
+            'visitIp' => new DataSubject('cip', $groups[0][0]['value'], address: true),
             default => null,
         };
     }

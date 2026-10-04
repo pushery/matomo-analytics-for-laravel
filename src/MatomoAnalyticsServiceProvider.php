@@ -250,7 +250,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         // For placing the no-JS pixel inside <body>, where an <img> is legal — see
         // Snippet::noscript(). Opt-in: script() still emits it by default.
         Blade::directive('matomoNoscript', static fn (): string => "<?php echo {$resolve}->noscript(); ?>");
-        Blade::directive('matomoOptOut', static fn (): string => "<?php echo {$resolve}->optOut(); ?>");
+        Blade::directive('matomoOptOut', static fn (string $expression): string => "<?php echo {$resolve}->optOut({$expression}); ?>");
         Blade::directive('matomoWebVitals', static fn (string $expression): string => "<?php echo {$resolve}->webVitals({$expression}); ?>");
         // Takes a nonce like the others, because it renders an inline script and a consumer
         // running a strict CSP has to be able to name it.

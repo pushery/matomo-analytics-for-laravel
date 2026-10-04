@@ -38,7 +38,7 @@ final class HitBeaconController
     /** The longest text field accepted: an event's category, action and name, a search keyword and its category. */
     private const int MAX_TEXT = 255;
 
-    /** The longest link accepted for an outlink or a download. */
+    /** The longest link accepted for an outlink or a download, in bytes. */
     private const int MAX_LINK = 2_048;
 
     public function __invoke(Request $request, Tracker $tracker): Response
@@ -109,7 +109,8 @@ final class HitBeaconController
         $keyword = $this->text($request->input('keyword'));
         $category = $request->input('category');
         $count = $request->input('count');
-        $results = filter_var($count, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0], 'flags' => FILTER_NULL_ON_FAILURE]);
+        // A boolean is no result count, and filter_var() reads `true` as 1.
+        $results = is_bool($count) ? null : filter_var($count, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0], 'flags' => FILTER_NULL_ON_FAILURE]);
 
         if ($keyword === null) {
             return null;
@@ -173,7 +174,7 @@ final class HitBeaconController
         return is_finite($number) ? $number : null;
     }
 
-    /** An absolute `http` or `https` URL of at most MAX_LINK characters, or null. */
+    /** An absolute `http` or `https` URL of at most MAX_LINK bytes, or null. */
     private function link(mixed $value): ?string
     {
         if (! is_string($value) || $value === '' || strlen($value) > self::MAX_LINK) {

@@ -4,6 +4,32 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.1] - 2026-10-04
+
+### Fixed
+
+- **Web Vitals and prefetched page views reach the server where a browser refuses a JSON beacon.** Both scripts sent a Blob of type `application/json` with `navigator.sendBeacon` and had no other way to send, so where a browser refuses that Blob, as Chromium has (crbug.com/490015), the measurement was dropped in an empty catch. They fall back to `fetch` with `keepalive`, as the hit beacon already did.
+- **The hit beacon refuses a site search whose result count is `true`.** It recorded `"count": true` as a search with one result, while `false` was already refused.
+- **A search keyword of only whitespace is no site search.** `matomo.search` and `Matomo::searchFromRequest()` sent `?q=+` as a search for a space, which Matomo trims to nothing and records as a second page view of the same request. The keyword and the category are now trimmed, Unicode whitespace included, as the hit beacon already did.
+- **AI assistant telemetry from `matomo.chatbots` reports the response the assistant got.** It sent no HTTP status, size or build time, so Matomo's not-found and server-error figures for AI assistants stayed at zero for every fetch it reported. The middleware now sends `http_status`, `bw_bytes` and `pf_srv`.
+- **A phone whose device name contains `bot` is no longer taken for a crawler.** The generic `bot` signal matched CUBOT phones, so every visit from one was dropped as a bot. `bot` now counts outside the device names `matomo/device-detector` excludes from its own generic rule as well.
+- **Erasing by `visitIp` finds a buffered hit in any spelling of the address.** The local half of `MatomoGdpr::forget()` compared the address as text, so `visitIp==2001:db8::1` left a hit stored as `2001:DB8::1` in the buffer and the dead letters while Matomo erased the visits.
+
+### Security
+
+- **URL redaction covers a sensitive parameter in array form with percent-encoded or nested brackets.** Laravel reports the URL of a request with `token[]=` written as `token%5B0%5D=`, and only the literal single-bracket form was redacted, so the value of such a parameter reached Matomo. `token[a][b]=` was missed as well.
+- **`MatomoGdpr::forget()` erases every matching visit, not the first 401.** Matomo's `findDataSubjects` returns at most 401 visits per lookup, and the erasure looked once: a person with more visits kept the rest in Matomo while the result looked complete. It now erases in rounds, sums the counts, reports `erased_visits` and `erased_completely`, and `matomo:forget` exits with a failure when visits are left. `export()` still reads one lookup, and the documentation says so.
+- **`matomo:replay` redacts a hit again before it sends it.** A dead letter holds hits whose URLs were redacted when they were built, up to `batch.dead_letter.retention_days` earlier, so a replay after this update would still have sent the array-form parameters above unredacted. The replay now applies the redaction of the day it runs.
+- **The client-side tracker redacts the URLs it sends.** `matomo.js` sends its hits from the browser straight to Matomo, so a `token` or a `signature` in the page address, the referrer or a tracked link reached Matomo whatever `privacy.redact` said. `@matomoScript` now redacts the names in `privacy.redact.query_params` before each request leaves the page; `privacy.redact.patterns` still apply on the server only.
+- **The referrer is redacted in both copies matomo.js sends, and a content target by default.** matomo.js adds `_ref`, the referrer it keeps in a cookie for conversion attribution, to every request while the cookie lives, and only `urlref` was redacted, so a token in the address a visitor came from still reached Matomo. A `privacy.redact.keys` list that names `urlref` now covers `_ref` as well, on the server and in the browser, and `c_t`, the target of a tracked content block, joins the default list.
+- **`@matomoOptOut` renders Matomo's JavaScript opt-out instead of its iframe.** The iframe set the opt-out cookie on the Matomo domain, a third-party cookie wherever Matomo runs on another site, such as Matomo Cloud, and a browser that blocks those, Safari among them, never kept it, so a visitor who opted out went on being tracked. The script writes the first-party cookie matomo.js reads, with cookies disabled as well, and takes a nonce like the other directives.
+- **The token of a password-reset link is redacted, and so is an email address in a query.** Laravel's reset link carries a live token in its path, `/reset-password/{token}?email=…`, where no parameter name reached it, so the page a visitor opened from the link went to Matomo with the token and the address the reset form asks for. The token of the route `password.reset` is now redacted on the path the application registers and on the starter kits' paths, on the server and in the browser, whatever the published config says, and `email` joins the default `query_params`.
+- **The `<noscript>` pixel names the page itself and sends no `Referer`.** It requested the image without `url`, and Matomo then takes the `Referer` header as the page, which the browser filled with the full address and its query. The pixel now carries the address as `url`, redacted like a server-side hit, with `referrerpolicy="no-referrer"`.
+
+### Documentation
+
+- **The redaction page says that a listed name counts only as the parameter's own name.** A secret nested inside another parameter, such as `user[password]=`, is left alone, and the page shows a pattern that catches it.
+
 ## [0.32.0] - 2026-10-04
 
 ### Added
@@ -1576,7 +1602,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.1...v0.32.0
 [0.31.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.30.0...v0.31.0

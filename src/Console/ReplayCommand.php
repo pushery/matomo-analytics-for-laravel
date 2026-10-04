@@ -11,6 +11,7 @@ use MatomoAnalytics\Buffer\DeadLetterStore;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Jobs\SendHitsJob;
+use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\Config;
 
 final class ReplayCommand extends Command
@@ -36,7 +37,7 @@ final class ReplayCommand extends Command
      *   queue  a `SendHitsJob` per entry, exactly as the live path dispatches it
      *   sync   the sender, right here — and the row is kept when the send is refused
      */
-    public function handle(DeadLetterStore $store, HitBuffer $buffer, Sender $sender): int
+    public function handle(DeadLetterStore $store, HitBuffer $buffer, Sender $sender, UrlRedactor $redactor): int
     {
         if ($this->option('list') === true) {
             return $this->showList($store);
@@ -80,7 +81,11 @@ final class ReplayCommand extends Command
         $hits = 0;
         $refused = 0;
         foreach ($store->take($this->limit()) as $entry) {
-            if (! $this->deliver($mode, $entry['payloads'], $buffer, $sender)) {
+            // Redacted again with today's settings: the payloads were redacted when they were
+            // built, possibly before a name was added to the list or the redactor improved.
+            $payloads = array_map($redactor->redactPayload(...), $entry['payloads']);
+
+            if (! $this->deliver($mode, $payloads, $buffer, $sender)) {
                 // Kept, not deleted. A refused send is the one case where dropping the row
                 // would turn a recoverable backlog into a loss, so the entry stays exactly
                 // where it was and the next run tries again.

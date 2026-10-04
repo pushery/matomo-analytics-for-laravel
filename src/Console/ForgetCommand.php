@@ -52,8 +52,10 @@ final class ForgetCommand extends Command
 
         // With no match in Matomo the erasure still has work: the hits Matomo never received,
         // waiting in the buffer or parked as dead letters, exist only here.
+        // A lookup stops at GdprClient::LOOKUP_LIMIT, so a full one means at least that many.
+        $matched = $count >= GdprClient::LOOKUP_LIMIT ? "at least {$count}" : (string) $count;
         $question = $count > 0
-            ? "Permanently erase {$count} matched visit(s) for [{$segment}]? This cannot be undone."
+            ? "Permanently erase {$matched} matched visit(s) for [{$segment}]? This cannot be undone."
             : "No visit matched [{$segment}] in Matomo. Erase this person's hits from the local buffer and dead letters? This cannot be undone.";
 
         if ($this->option('force') !== true) {
@@ -84,15 +86,27 @@ final class ForgetCommand extends Command
         // booleans as well as counts, so the two halves are reported apart.
         $matomo = array_filter(
             $result,
-            static fn (bool|int $value, string $key): bool => is_int($value) && ! str_starts_with($key, 'local_'),
+            static fn (bool|int $value, string $key): bool => is_int($value) && ! str_starts_with($key, 'local_') && $key !== 'erased_visits',
             ARRAY_FILTER_USE_BOTH,
         );
+        $erased = is_int($result['erased_visits'] ?? null) ? $result['erased_visits'] : $count;
 
-        $this->info($count > 0
-            ? sprintf('Matomo: erased %d matched visit(s); deleted %d record(s) across %d storage area(s).', $count, array_sum($matomo), count($matomo))
+        $this->info($erased > 0
+            ? sprintf('Matomo: erased %d matched visit(s); deleted %d record(s) across %d storage area(s).', $erased, array_sum($matomo), count($matomo))
             : 'Matomo: no visit matched.');
 
-        return $this->reportLocal($result);
+        // Erased in rounds of at most LOOKUP_LIMIT visits. Rounds that ended while a lookup still
+        // came back full leave visits in Matomo, so the request is not fulfilled and the exit
+        // code says so after the local half is reported.
+        $incomplete = ($result['erased_completely'] ?? true) === false;
+
+        if ($incomplete) {
+            $this->warn('Matomo: more visits matched than this run could erase. Run the command again to erase the rest.');
+        }
+
+        $local = $this->reportLocal($result);
+
+        return $incomplete ? self::FAILURE : $local;
     }
 
     /**

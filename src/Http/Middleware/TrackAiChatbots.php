@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use MatomoAnalytics\Contracts\BotDetector;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\PayloadBuilder;
 use MatomoAnalytics\Support\Config;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,7 +17,9 @@ use Symfony\Component\HttpFoundation\Response;
  * telemetry (recMode) — the self-hosted alternative to Matomo's Cloudflare Worker.
  * Only GET requests whose User-Agent is a known on-demand AI fetcher are captured,
  * and only while `ai_chatbots.track` is enabled. The telemetry never creates a
- * visit, so it stays out of the human analytics reports.
+ * visit, so it stays out of the human analytics reports. It carries the response's
+ * status, size and build time, which Matomo counts its not-found and server-error
+ * fetches by AI assistants from.
  */
 final readonly class TrackAiChatbots
 {
@@ -30,7 +33,14 @@ final readonly class TrackAiChatbots
      */
     public function handle(Request $request, Closure $next): Response
     {
-        return $next($request);
+        $start = hrtime(true);
+
+        $response = $next($request);
+
+        // The milliseconds the application took to build the response, before it is sent.
+        $request->attributes->set(PayloadBuilder::AI_CHATBOT_RESPONSE, ['pf_srv' => (int) round((hrtime(true) - $start) / 1_000_000)]);
+
+        return $response;
     }
 
     /**
@@ -46,11 +56,33 @@ final readonly class TrackAiChatbots
      * callbacks, so a hit queued here is still picked up by the flush the service provider
      * registers there. The ordering queue mode depends on is unchanged.
      */
-    public function terminate(Request $request): void
+    public function terminate(Request $request, Response $response): void
     {
         if ($this->captures($request)) {
+            $measured = $request->attributes->get(PayloadBuilder::AI_CHATBOT_RESPONSE);
+
+            $request->attributes->set(PayloadBuilder::AI_CHATBOT_RESPONSE, [
+                'http_status' => $response->getStatusCode(),
+                'bw_bytes' => $this->size($response),
+                'pf_srv' => is_array($measured) ? ($measured['pf_srv'] ?? null) : null,
+            ]);
+
             $this->tracker->aiChatbot($request);
         }
+    }
+
+    /** The body size in bytes, or null for a response that streamed without a declared length. */
+    private function size(Response $response): ?int
+    {
+        $content = $response->getContent();
+
+        if (is_string($content)) {
+            return strlen($content);
+        }
+
+        $length = $response->headers->get('Content-Length');
+
+        return is_string($length) && ctype_digit($length) ? (int) $length : null;
     }
 
     private function captures(Request $request): bool

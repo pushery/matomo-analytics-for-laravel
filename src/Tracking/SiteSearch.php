@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Tracking;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 final readonly class SiteSearch implements Hit
 {
@@ -17,17 +18,31 @@ final readonly class SiteSearch implements Hit
     /**
      * Build a site search from a request's query parameters, or null when the
      * keyword is absent/blank (so callers can skip tracking a non-search request).
+     *
+     * Blank is judged after `Str::trim()`, which knows Unicode whitespace. Matomo trims the
+     * keyword with PHP's `trim()` and records a hit whose keyword is then empty as a page view,
+     * so a search box submitted with a space would count the page a second time.
      */
     public static function fromRequest(Request $request, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): ?self
     {
-        $keyword = $request->query($keywordKey);
-        if (! is_string($keyword) || $keyword === '') {
+        $keyword = self::text($request->query($keywordKey));
+        if ($keyword === null) {
             return null;
         }
 
-        $category = $categoryKey !== null ? $request->query($categoryKey) : null;
+        return new self($keyword, $categoryKey !== null ? self::text($request->query($categoryKey)) : null, $count);
+    }
 
-        return new self($keyword, is_string($category) && $category !== '' ? $category : null, $count);
+    /** The value trimmed of whitespace, Unicode whitespace included, or null when nothing is left. */
+    private static function text(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $text = Str::trim($value);
+
+        return $text === '' ? null : $text;
     }
 
     public function toParams(): array

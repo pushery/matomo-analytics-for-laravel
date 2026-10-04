@@ -141,8 +141,9 @@ final class GdprFake implements Fake, GdprClient
     {
         $this->calls[] = ['op' => 'forget', 'segment' => $segment, 'site' => $site, 'visits' => count($this->found)];
 
-        // The same shape the real client returns: Matomo's counts, then the local half.
-        return $this->answer(true, array_merge($this->deleted, $this->local));
+        // The same shape the real client returns: Matomo's counts, the visits erased and whether
+        // that was all of them, then the local half.
+        return $this->answer(true, array_merge($this->deleted, ['erased_visits' => count($this->found), 'erased_completely' => true], $this->local));
     }
 
     public function export(string $segment, int|string|null $site = null): ?array
