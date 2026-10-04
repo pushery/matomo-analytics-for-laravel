@@ -13,6 +13,12 @@ namespace MatomoAnalytics\Contracts;
 interface GdprClient
 {
     /**
+     * The most visits one lookup returns: Matomo's `PrivacyManager.findDataSubjects` asks
+     * `Live.getLastVisitsDetails` with `filter_limit` 401.
+     */
+    public const int LOOKUP_LIMIT = 401;
+
+    /**
      * Find the visits matching a segment (the data subject).
      *
      * @param  int|string|null  $site  idSite; null = the configured site, "all" = every site
@@ -31,7 +37,11 @@ interface GdprClient
      * `local_queue_searched` is false in the `queue` mode, where hits still waiting in the queue,
      * and jobs that ran out of attempts in `failed_jobs`, cannot be searched from here.
      *
-     * @return array<string, bool|int>|null Matomo's deletion counts keyed by storage area (none when Matomo matched nothing), then the local keys above; null on failure
+     * A lookup returns at most LOOKUP_LIMIT visits, so a person with more is erased in rounds.
+     * `erased_visits` counts the visits erased across them, and `erased_completely` is false
+     * when the rounds ended while a lookup still came back full: run it again for the rest.
+     *
+     * @return array<string, bool|int>|null Matomo's deletion counts keyed by storage area (none when Matomo matched nothing), then `erased_visits`, `erased_completely` and the local keys above; null on failure
      */
     public function forget(string $segment, int|string|null $site = null): ?array;
 

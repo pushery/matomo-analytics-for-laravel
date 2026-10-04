@@ -25,6 +25,14 @@ use Throwable;
  */
 final readonly class PayloadBuilder
 {
+    /**
+     * The request attribute under which `TrackAiChatbots` leaves the response it saw: the HTTP
+     * status, the body size in bytes and the milliseconds the application took, as
+     * `http_status`, `bw_bytes` and `pf_srv`. Matomo's bot tracking stores the three and counts
+     * its not-found, server-error, size and timing figures for AI assistants from them.
+     */
+    public const string AI_CHATBOT_RESPONSE = 'matomo-analytics.ai_chatbot_response';
+
     public function __construct(
         private Connection $connection,
         private VisitorIdResolver $visitorId,
@@ -84,7 +92,7 @@ final readonly class PayloadBuilder
 
         $base['cdt'] = gmdate('Y-m-d H:i:s');
 
-        return $this->redactUrls($this->wellFormed(array_merge($base, $hit->toParams())));
+        return $this->redactor->redactPayload($this->wellFormed(array_merge($base, $hit->toParams())));
     }
 
     /**
@@ -156,6 +164,17 @@ final readonly class PayloadBuilder
             $payload['ua'] = $userAgent;
         }
 
+        $response = $request->attributes->get(self::AI_CHATBOT_RESPONSE);
+        if (is_array($response)) {
+            foreach (['http_status', 'bw_bytes', 'pf_srv'] as $key) {
+                $value = $response[$key] ?? null;
+
+                if (is_int($value) && $value >= 0) {
+                    $payload[$key] = $value;
+                }
+            }
+        }
+
         return $this->wellFormed($payload);
     }
 
@@ -176,21 +195,6 @@ final readonly class PayloadBuilder
         foreach ($payload as $key => $value) {
             if (is_string($value)) {
                 $payload[$key] = mb_scrub($value, 'UTF-8');
-            }
-        }
-
-        return $payload;
-    }
-
-    /**
-     * @param  array<string, scalar>  $payload
-     * @return array<string, scalar>
-     */
-    private function redactUrls(array $payload): array
-    {
-        foreach (Config::stringList('matomo-analytics.privacy.redact.keys') as $key) {
-            if (isset($payload[$key]) && is_string($payload[$key])) {
-                $payload[$key] = $this->redactor->redact($payload[$key]);
             }
         }
 

@@ -61,10 +61,11 @@
         "symfony/http-kernel": "^7.0 || ^8.0"
     },
     "require-dev": {
+        "fakerphp/faker": "^1.24",
         "larastan/larastan": "3.12.2",
-        "laravel/ai": "^1.0",
-        "laravel/boost": "^2.9",
-        "laravel/mcp": "^1.0",
+        "laravel/ai": "^1.0.1",
+        "laravel/boost": "^2.10.1",
+        "laravel/mcp": "^1.0.1",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
@@ -73,7 +74,7 @@
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.0",
         "pestphp/pest-plugin-laravel": "^5.0",
-        "pestphp/pest-plugin-phpstan": "5.2.1",
+        "pestphp/pest-plugin-phpstan": "5.2.2",
         "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
         "phpstan/phpstan": "2.2.16",

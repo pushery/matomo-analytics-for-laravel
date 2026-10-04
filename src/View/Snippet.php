@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\URL;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Http\Middleware\TrackPageViews;
 use MatomoAnalytics\Privacy\ConsentMode;
+use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\Config;
 
 /**
@@ -56,7 +57,8 @@ final readonly class Snippet
             '(function(){',
             '  var start=function(){',
             '    var wv=window.webVitals; if(!wv){return;}',
-            '    var send=function(m){try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType,url:location.href})],{type:"application/json"}));}catch(e){}};',
+            '    var send=function(m){var body=JSON.stringify({metric:m.name,value:m.value,rating:m.rating,navigationType:m.navigationType,url:location.href});'
+                .$this->beaconSend($path).'};',
             '    '.$names.'.forEach(function(n){var f=wv["on"+n];if(f){f(send);}});',
             '  };',
             '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',
@@ -106,13 +108,28 @@ final readonly class Snippet
             '    if(!performance.getEntriesByType){return;}',
             '    var nav=performance.getEntriesByType("navigation")[0];',
             '    if(!nav||nav.deliveryType!=="navigational-prefetch"){return;}',
-            '    try{navigator.sendBeacon('.$path.',new Blob([JSON.stringify({url:location.href,title:document.title})],{type:"application/json"}));}catch(e){}',
+            '    var body=JSON.stringify({url:location.href,title:document.title});'.$this->beaconSend($path),
             '  };',
             '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',
             '})();',
         ]);
 
         return '<script'.$this->runOnceAttribute().$this->nonceAttribute($nonce).'>'."\n".$glue."\n".'</script>';
+    }
+
+    /**
+     * Sends the JSON in `body` to the beacon route at `$path`: `sendBeacon` first, because it
+     * survives the page being left, and `fetch` with `keepalive` where it is missing, refuses
+     * the payload or throws.
+     *
+     * Chromium refuses a Blob whose type is not a CORS-safelisted one, `application/json` among
+     * them (crbug.com/490015), and the routes read JSON. Without the second call the measurement
+     * was dropped in an empty catch. The hit beacon sends the same way.
+     */
+    private function beaconSend(string $path): string
+    {
+        return 'try{if(navigator.sendBeacon&&navigator.sendBeacon('.$path.',new Blob([body],{type:"application/json"}))){return;}}catch(e){}'
+            .'try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"});}catch(e){}';
     }
 
     /**
@@ -175,22 +192,49 @@ final readonly class Snippet
         return $this->active() ? $this->noscriptPixel() : '';
     }
 
-    public function optOut(): string
+    /**
+     * Matomo's JavaScript opt-out: a container and the script that fills it.
+     *
+     * The script asks the tracker on the page to opt the visitor out, which writes the
+     * first-party cookie `mtm_consent_removed`, or writes it directly where no tracker runs.
+     * matomo.js writes that cookie with cookies disabled as well and stops tracking once it is
+     * there. Matomo's older iframe set its cookie on the Matomo domain, a third-party cookie
+     * wherever Matomo runs on another site, which browsers that block those never keep.
+     */
+    public function optOut(?string $nonce = null): string
     {
         if (! $this->connection->isConfigured()) {
             return '';
         }
 
-        $url = $this->connection->host.'/index.php?module=CoreAdminHome&action=optOut&language=auto';
+        $url = $this->connection->host.'/index.php?'.http_build_query([
+            'module' => 'CoreAdminHome',
+            'action' => 'optOutJS',
+            'divId' => 'matomo-opt-out',
+            'language' => 'auto',
+            'showIntro' => 1,
+        ], '', '&', PHP_QUERY_RFC3986);
 
-        return '<iframe title="Matomo opt-out" style="border:0;height:200px;width:100%;" src="'.e($url).'"></iframe>';
+        return '<div id="matomo-opt-out"></div>'
+            .'<script'.$this->nonceAttribute($nonce).' src="'.e($url).'"></script>';
     }
 
+    /**
+     * The image a visitor without JavaScript requests.
+     *
+     * No tracker writes the page address into it, and without `url` Matomo takes the `Referer`
+     * header, the full address with its query, as the page. So the address goes in as `url`,
+     * redacted like a server-side hit, and the image sends no `Referer` at all.
+     */
     private function noscriptPixel(): string
     {
-        $pixel = $this->connection->trackingUrl().'?idsite='.$this->connection->siteId.'&rec=1';
+        $pixel = $this->connection->trackingUrl().'?'.http_build_query([
+            'idsite' => $this->connection->siteId,
+            'rec' => 1,
+            'url' => (new UrlRedactor)->redact(URL::full()),
+        ], '', '&', PHP_QUERY_RFC3986);
 
-        return '<noscript><img referrerpolicy="no-referrer-when-downgrade" src="'.e($pixel).'" style="border:0" alt=""></noscript>';
+        return '<noscript><img referrerpolicy="no-referrer" src="'.e($pixel).'" style="border:0" alt=""></noscript>';
     }
 
     private function active(): bool
@@ -217,6 +261,11 @@ final readonly class Snippet
 
         if (Config::bool('matomo-analytics.privacy.honor_dnt', true)) {
             $commands[] = "_paq.push(['setDoNotTrack', true]);";
+        }
+
+        $redaction = $this->redactionCommand();
+        if ($redaction !== null) {
+            $commands[] = $redaction;
         }
 
         // Statically-configured Custom Dimensions, set before the page view so
@@ -453,6 +502,67 @@ final readonly class Snippet
             'visible' => '_paq.push(['.$this->js('trackVisibleContentImpressions').']);',
             default => null,
         };
+    }
+
+    /**
+     * The URL redaction of {@see UrlRedactor} for the requests matomo.js sends from the browser,
+     * or null when redaction is off or names nothing.
+     *
+     * Those requests never pass the server, so `setCustomRequestProcessing` takes each one's
+     * query string after the tracker built it and before it is sent. The function decodes the
+     * parameters named in `privacy.redact.keys`, replaces the value of every name in
+     * `privacy.redact.query_params` with the server's grammar, and encodes them again.
+     * `privacy.redact.patterns` are PCRE and apply on the server only.
+     */
+    private function redactionCommand(): ?string
+    {
+        if (! Config::bool('matomo-analytics.privacy.redact.enabled', true)) {
+            return null;
+        }
+
+        $redactor = new UrlRedactor;
+        $names = array_values(array_filter(Config::stringList('matomo-analytics.privacy.redact.query_params'), static fn (string $name): bool => $name !== ''));
+        $keys = $redactor->keys();
+        $paths = $redactor->pathPatterns();
+
+        if (($names === [] && $paths === []) || $keys === []) {
+            return null;
+        }
+
+        $process = <<<'JS'
+            _paq.push(['setCustomRequestProcessing', (function(names, keys, forms, replacement, paths){
+              var rx = names.length ? new RegExp('([?&#](?:' + names.map(function(n){ return n.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&'); }).join('|') + ')' + forms + '=)[^&#]*', 'gi') : null;
+              var px = paths.map(function(p){ return new RegExp(p); });
+              var redact = function(url){
+                px.forEach(function(p){ url = url.replace(p, function(match, prefix){ return prefix + replacement; }); });
+                var start = url.search(/[?#]/);
+                return start < 0 || !rx ? url : url.slice(0, start) + url.slice(start).replace(rx, function(match, key){ return key + replacement; });
+              };
+              return function(request){
+                return request.split('&').map(function(pair){
+                  var at = pair.indexOf('=');
+                  if (at < 0 || keys.indexOf(pair.slice(0, at)) < 0) { return pair; }
+                  try { return pair.slice(0, at + 1) + encodeURIComponent(redact(decodeURIComponent(pair.slice(at + 1)))); } catch (e) { return pair; }
+                }).join('&');
+              };
+            })(__NAMES__, __KEYS__, __FORMS__, __REPLACEMENT__, __PATHS__)]);
+            JS;
+
+        return strtr($process, [
+            '__NAMES__' => $this->jsList($names),
+            '__KEYS__' => $this->jsList($keys),
+            '__FORMS__' => $this->js(UrlRedactor::ARRAY_FORMS),
+            '__REPLACEMENT__' => $this->js(rawurlencode(Config::string('matomo-analytics.privacy.redact.replacement', 'REDACTED'))),
+            '__PATHS__' => $this->jsList($paths),
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $values
+     */
+    private function jsList(array $values): string
+    {
+        return '['.implode(',', array_map($this->js(...), $values)).']';
     }
 
     private function js(string $value): string

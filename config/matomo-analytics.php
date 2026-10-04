@@ -356,10 +356,13 @@ return [
                 'token', 'api_key', 'apikey', 'api-key', 'access_token', 'refresh_token',
                 'id_token', 'jwt', 'code', 'state', 'auth', 'auth_token', 'password',
                 'passwd', 'pwd', 'secret', 'client_secret', 'signature', 'sig', '_token',
-                'session', 'session_id', 'sessionid',
+                'session', 'session_id', 'sessionid', 'email',
             ],
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
-            'keys' => ['url', 'urlref', 'link', 'download'],
+            // The payload fields redacted. `urlref` covers `_ref` as well, the referrer matomo.js
+            // keeps for conversion attribution and sends with every request; `c_t` is the
+            // target of a tracked content block.
+            'keys' => ['url', 'urlref', 'link', 'download', 'c_t'],
         ],
     ],
 

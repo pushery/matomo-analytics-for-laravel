@@ -24,6 +24,9 @@ use Throwable;
  */
 final class GdprManager implements GdprClient
 {
+    /** Rounds of lookup and deletion one forget() runs before it stops and says so. */
+    private const int MAX_ROUNDS = 100;
+
     private ?string $lastError = null;
 
     public function __construct(
@@ -66,19 +69,51 @@ final class GdprManager implements GdprClient
         // Matomo before the lookup below, which then finds and erases it with the rest.
         $local = (new LocalHitPurge)->forget($segment);
 
-        $visits = $this->descriptorsFor($segment, $site);
+        // A lookup returns at most LOOKUP_LIMIT visits, so a person with more is erased in
+        // rounds: delete what a lookup found, and look again while it came back full. A lookup
+        // that returns the visits of the round before made no progress and ends the rounds.
+        $counts = [];
+        $erased = 0;
+        $complete = false;
+        $previous = null;
 
-        if (! is_array($visits)) {
-            return null;
+        for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
+            $visits = $this->descriptorsFor($segment, $site);
+
+            if (! is_array($visits)) {
+                return null;
+            }
+
+            if ($visits === [] || $visits === $previous) {
+                $complete = $visits === [];
+
+                break;
+            }
+
+            $deleted = $this->deleteRound($visits);
+
+            if ($deleted === null) {
+                return null;
+            }
+
+            $counts = $this->summed($counts, $deleted);
+            $erased += count($visits);
+            $previous = $visits;
+
+            if (count($visits) < self::LOOKUP_LIMIT) {
+                $complete = true;
+
+                break;
+            }
         }
 
-        $counts = $this->deleteVisits($visits);
-
-        if ($counts === null) {
-            return null;
+        if ($erased > 0 && Config::bool('matomo-analytics.events', true)) {
+            EventFacade::dispatch(new DataSubjectForgotten($erased, $counts));
         }
 
         return array_merge($counts, [
+            'erased_visits' => $erased,
+            'erased_completely' => $complete,
             'local_buffer' => $local['buffer'],
             'local_dead_letters' => $local['dead_letters'],
             'local_segment_understood' => $local['matched'],
@@ -87,6 +122,10 @@ final class GdprManager implements GdprClient
         ]);
     }
 
+    /**
+     * Matomo's lookup returns at most LOOKUP_LIMIT visits, and an export reads no further:
+     * for a person with more visits the export is partial.
+     */
     public function export(string $segment, int|string|null $site = null): ?array
     {
         $visits = $this->descriptorsFor($segment, $site);
@@ -96,17 +135,9 @@ final class GdprManager implements GdprClient
 
     public function deleteVisits(array $visits): ?array
     {
-        if ($visits === []) {
-            return [];
-        }
+        $counts = $this->deleteRound($visits);
 
-        $result = $this->call(['method' => 'PrivacyManager.deleteDataSubjects', 'visits' => $visits]);
-        if ($result === null) {
-            return null;
-        }
-
-        $counts = $this->intCounts($result);
-        if (Config::bool('matomo-analytics.events', true)) {
+        if ($counts !== null && $visits !== [] && Config::bool('matomo-analytics.events', true)) {
             EventFacade::dispatch(new DataSubjectForgotten(count($visits), $counts));
         }
 
@@ -156,6 +187,37 @@ final class GdprManager implements GdprClient
         }
 
         return $visits;
+    }
+
+    /**
+     * Matomo's deletion counts for these visits, without the event a public call dispatches.
+     *
+     * @param  list<array{idsite: int, idvisit: int}>  $visits
+     * @return array<string, int>|null
+     */
+    private function deleteRound(array $visits): ?array
+    {
+        if ($visits === []) {
+            return [];
+        }
+
+        $result = $this->call(['method' => 'PrivacyManager.deleteDataSubjects', 'visits' => $visits]);
+
+        return $result === null ? null : $this->intCounts($result);
+    }
+
+    /**
+     * @param  array<string, int>  $total
+     * @param  array<string, int>  $round
+     * @return array<string, int>
+     */
+    private function summed(array $total, array $round): array
+    {
+        foreach ($round as $key => $value) {
+            $total[$key] = ($total[$key] ?? 0) + $value;
+        }
+
+        return $total;
     }
 
     /**

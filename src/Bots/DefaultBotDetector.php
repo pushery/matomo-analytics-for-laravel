@@ -24,13 +24,20 @@ final class DefaultBotDetector implements BotDetector
     private static array $lowered = [];
 
     private const array GENERIC = [
-        'bot', 'crawler', 'spider', 'slurp', 'crawl', '+http', 'python-requests',
+        'crawler', 'spider', 'slurp', 'crawl', '+http', 'python-requests',
         'curl/', 'wget', 'go-http-client', 'java/', 'headlesschrome', 'facebookexternalhit',
         'googlebot', 'bingbot', 'yandexbot', 'duckduckbot', 'baiduspider', 'semrushbot',
         'ahrefsbot', 'mj12bot', 'dotbot',
         // Social/link-preview fetchers that carry none of the generic signals above.
         'whatsapp', 'skypeuripreview', 'vkshare',
     ];
+
+    /**
+     * `bot` as a signal of its own, outside the device names that contain it: CUBOT phones and
+     * the others matomo/device-detector keeps out of its generic bot rule. The named bots in
+     * GENERIC match whatever stands around them.
+     */
+    private const string GENERIC_BOT = '/(?<!cu|hu|power[ _]|m[ _])bot(?![ _]tab|[ _]?5[0-9]|[ _]senior|[ _]junior)/i';
 
     public function isBot(string $userAgent): bool
     {
@@ -51,7 +58,8 @@ final class DefaultBotDetector implements BotDetector
             return true;
         }
 
-        if (Config::bool('matomo-analytics.bots.detect_generic', true) && $this->matchesAny($userAgent, $this->lowered('generic', self::GENERIC))) {
+        if (Config::bool('matomo-analytics.bots.detect_generic', true)
+            && ($this->matchesAny($userAgent, $this->lowered('generic', self::GENERIC)) || preg_match(self::GENERIC_BOT, $userAgent) === 1)) {
             return true;
         }
 
