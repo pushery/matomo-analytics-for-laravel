@@ -126,7 +126,7 @@ final class UrlRedactor
     }
 
     /**
-     * One pass over the URL, not one per parameter. Two dozen names ship by default, and a
+     * One pass over the URL, not one per parameter. Close to thirty names ship by default, and a
      * separate `preg_replace_callback` per name would scan each URL a payload carries once
      * for every name.
      *

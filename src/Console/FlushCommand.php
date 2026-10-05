@@ -42,8 +42,12 @@ final class FlushCommand extends Command
 
         // Surface a persistently failing drain to the scheduler's failure hooks and
         // exit-code monitors: once consecutive failures reach the alerting threshold the
-        // drain is stuck, so report FAILURE instead of masking it as a green run.
+        // drain is stuck, so report FAILURE instead of masking it as a green run. The count
+        // outlives the run that raised it, so the line says why: without it the output of a
+        // failing run reads exactly like a quiet one.
         if ($failures->current() >= max(1, Config::int('matomo-analytics.resilience.reporting.report_after_attempts', 3))) {
+            $this->error('The drain is not moving — consecutive failures have reached the alerting threshold.');
+
             return self::FAILURE;
         }
 

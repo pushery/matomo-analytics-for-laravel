@@ -113,6 +113,13 @@ final class WorkCommand extends Command
             // elapsed one, so the default can be held without waiting for it. In production it
             // calls the same `sleep()`.
             Sleep::for($interval)->seconds();
+
+            // A shutdown signal usually arrives during this pause and ends it early. Asked again
+            // here, it stops the worker before another pass begins, as queue:work does after
+            // its sleep, instead of after a pass started for nobody.
+            if ($this->stopRequested()) {
+                break;
+            }
         }
 
         return $stuck ? self::FAILURE : self::SUCCESS;
@@ -127,6 +134,18 @@ final class WorkCommand extends Command
     public function stopAfterCurrentRun(): void
     {
         $this->shouldStop = true;
+    }
+
+    /**
+     * Whether a shutdown signal has arrived.
+     *
+     * The handler sets the flag at any point of the loop, the pause included. A call reads it
+     * as the handler left it, where a property read right after the check before the pause
+     * could be taken as unchanged since that check.
+     */
+    private function stopRequested(): bool
+    {
+        return $this->shouldStop;
     }
 
     private function intOption(string $key): int

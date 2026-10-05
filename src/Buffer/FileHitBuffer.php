@@ -12,6 +12,7 @@ use MatomoAnalytics\Contracts\ErasableHitBuffer;
 use MatomoAnalytics\Exceptions\BufferUnavailableException;
 use MatomoAnalytics\Privacy\DataSubject;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\SpoolDirectory;
 use SplFileObject;
 
 /**
@@ -34,8 +35,11 @@ final class FileHitBuffer implements ErasableHitBuffer
     public function push(array $payload): void
     {
         $dir = $this->dir();
-        if (! is_dir($dir)) {
-            mkdir($dir, 0o775, true);
+
+        if (! SpoolDirectory::ensure($dir, 0o775)) {
+            throw new BufferUnavailableException(
+                'The Matomo file buffer could not create its spool directory — check that '.$dir.' is writable.',
+            );
         }
 
         file_put_contents($this->queue(), Json::encode($payload)."\n", FILE_APPEND | LOCK_EX);

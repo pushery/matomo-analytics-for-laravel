@@ -4,6 +4,24 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1] - 2026-10-05
+
+### 🐛 Fixed
+
+- **`matomo:work` stops when a shutdown signal arrives during its pause, instead of starting another pass.** The daemon spends most of its time sleeping between passes, so that is where a supervisor restart or a deploy usually lands. The signal ended the pause early, and the worker started a new pass of up to `batch.max_per_flush` hits. A supervisor's stop timeout could cut that pass off halfway, and a batch it had claimed went out a second time once the claim expired. It now checks for the signal after the pause as well, as `queue:work` does.
+- **The file buffer keeps the hits of a request that races another one to create the spool directory.** When two requests found a fresh spool missing at the same moment, the second one's `mkdir()` failed with "File exists", Laravel turned the warning into an exception, and all hits of that request were lost. A directory that exists after a failed `mkdir()` now counts as created. A spool directory that cannot be created at all raises a `BufferUnavailableException` that names the path.
+- **`matomo:flush` says why it fails at the alerting threshold.** Once consecutive failures reached `resilience.reporting.report_after_attempts`, the command exited non-zero and printed only `Flushed 0 Matomo hit(s).` The count outlives the run that raised it, so with a healthy Matomo and an empty buffer the command kept failing every minute without saying why. It now prints the line `matomo:work` prints in that state.
+
+### 🔒 Security
+
+- **A presigned S3 or GCS URL reaches Matomo without its signature and credentials, and so does the piece of a tracked content block.** `Storage::temporaryUrl()` on an S3-compatible or GCS disk writes `X-Amz-Signature`, `X-Amz-Credential`, `X-Amz-Security-Token`, `X-Goog-Signature` and `X-Goog-Credential` into the URL, and anyone holding it can download the file until it expires. None of those names was on the redaction list, so a presigned URL went to Matomo intact as a download, an outlink or a content piece, and showed in its reports. `matomo.js` fills a content block's piece (`c_p`) with the address of its image, video or audio, and that field was not redacted at all. Both are in the defaults now, on the server and in the browser. **A config you published needs the two lines added**; the upgrade guide shows them.
+
+### 📚 Documentation
+
+- **The segment builder's page says how Matomo groups `andWhere()` and `orWhere()`.** Matomo splits a segment at `;` before `,`, so an OR alternative binds tighter than an AND condition, the reverse of SQL and of Eloquent. The page shows how a chain reads and how to write a condition that would need parentheses.
+- **CONTRIBUTING says how a pull request reaches a release.** The public repository is replaced with the released tree on every release, so a pull request is not merged there: an accepted change is carried into the development repository and arrives with the next release. The bug report form asks for the version `composer show pushery/matomo-analytics-for-laravel` reports, and for a failing test in your own application.
+- **SECURITY.md speaks to the application that installs the package.** Its section on dependency updates described the update automation of the development repository, which does not run in the public one. It now says that the versions of the dependencies come from your own `composer.lock`, to keep them current with `composer update` and check them with `composer audit`, and its table of supported versions answers in words.
+
 ## [0.33.0] - 2026-10-04
 
 ### Added
@@ -1645,7 +1663,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...HEAD
+[0.33.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.31.1...v0.32.0
