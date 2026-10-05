@@ -10,9 +10,11 @@ use Stringable;
 /**
  * Fluent builder for a Matomo segment definition string, e.g.
  * `deviceType==smartphone;visitCount>1`. Expressions are joined with `;` (AND)
- * or `,` (OR). A value is matched exactly as given: it is encoded once for each of
- * the three times Matomo decodes it, so none of its characters is read as syntax.
- * Immutable: each call returns a new instance.
+ * or `,` (OR). Matomo splits at `;` before `,`, so `orWhere()` binds tighter than
+ * `andWhere()`: `a;b,c` reads as a AND (b OR c), the reverse of SQL. A value is
+ * matched exactly as given: it is encoded once for each of the three times Matomo
+ * decodes it, so none of its characters is read as syntax. Immutable: each call
+ * returns a new instance.
  *
  *   Segment::where('deviceType', '==', 'smartphone')->andWhere('visitCount', '>', 1);
  */

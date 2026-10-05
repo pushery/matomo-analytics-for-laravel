@@ -128,7 +128,7 @@ final class Config
      * not, and then a missing key answers with an empty list.
      *
      * Empty is the wrong answer wherever the shipped list is not empty, and two of those keys
-     * are privacy: `privacy.redact.query_params` ships two dozen entries, and "redaction is
+     * are privacy: `privacy.redact.query_params` ships close to thirty entries, and "redaction is
      * running" and "redaction does nothing" look identical in production.
      *
      * The shipped file is read rather than the lists being repeated here. Repeating them

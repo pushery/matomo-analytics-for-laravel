@@ -353,17 +353,23 @@ return [
             // secret-bearing parameter is `code` — which was not on this list, along with
             // `state`, `id_token`, `jwt` and `refresh_token`. A callback URL lands in `urlref`
             // on the very next page view, so the authorization code reached Matomo intact.
+            // The `X-Amz-*` and `X-Goog-*` names are the signature and credentials of a presigned
+            // S3 or GCS URL, which `Storage::temporaryUrl()` writes on an S3-compatible or GCS
+            // disk: whoever holds one downloads the file until it expires.
             'query_params' => [
                 'token', 'api_key', 'apikey', 'api-key', 'access_token', 'refresh_token',
                 'id_token', 'jwt', 'code', 'state', 'auth', 'auth_token', 'password',
                 'passwd', 'pwd', 'secret', 'client_secret', 'signature', 'sig', '_token',
                 'session', 'session_id', 'sessionid', 'email',
+                'X-Amz-Signature', 'X-Amz-Credential', 'X-Amz-Security-Token',
+                'X-Goog-Signature', 'X-Goog-Credential',
             ],
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
             // The payload fields redacted. `urlref` covers `_ref` as well, the referrer matomo.js
             // keeps for conversion attribution and sends with every request; `c_t` is the
-            // target of a tracked content block.
-            'keys' => ['url', 'urlref', 'link', 'download', 'c_t'],
+            // target of a tracked content block, and `c_p` its piece, which matomo.js fills
+            // with the address of the image, video or audio in the block.
+            'keys' => ['url', 'urlref', 'link', 'download', 'c_t', 'c_p'],
         ],
     ],
 
