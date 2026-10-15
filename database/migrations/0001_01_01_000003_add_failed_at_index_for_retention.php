@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // The index on failed_at comes back, and this time it is used.
 //
@@ -30,7 +31,7 @@ return new class extends Migration
         // connection's table prefix when `prefix_indexes` is set (the shipped default for
         // mysql and pgsql), so a name assembled here would miss the real index and this
         // migration would add a second one beside it.
-        if (! Schema::hasTable($this->table()) || Schema::hasIndex($this->table(), ['failed_at'])) {
+        if (! TableLookup::exists($this->table()) || Schema::hasIndex(TableLookup::qualified($this->table()), ['failed_at'])) {
             return;
         }
 

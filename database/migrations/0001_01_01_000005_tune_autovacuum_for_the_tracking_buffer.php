@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // A QUEUE TABLE IS THE WORST SHAPE FOR POSTGRESQL'S DEFAULT AUTOVACUUM, and this one is a
 // queue: every row is inserted, claimed (an UPDATE, which writes a new tuple) and deleted.
@@ -37,7 +38,7 @@ return new class extends Migration
 
         $table = $this->table();
 
-        if (! Schema::hasTable($table)) {
+        if (! TableLookup::exists($table)) {
             return;
         }
 
@@ -57,7 +58,7 @@ return new class extends Migration
 
         $table = $this->table();
 
-        if (! Schema::hasTable($table)) {
+        if (! TableLookup::exists($table)) {
             return;
         }
 

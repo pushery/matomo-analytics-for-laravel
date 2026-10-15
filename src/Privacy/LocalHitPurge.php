@@ -6,12 +6,12 @@ namespace MatomoAnalytics\Privacy;
 
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Buffer\Json;
 use MatomoAnalytics\Contracts\ErasableHitBuffer;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Reporting\SegmentReader;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 /**
  * Erases a data subject's hits from the tables this application holds.
@@ -103,7 +103,7 @@ final readonly class LocalHitPurge
     {
         $table = Config::string('matomo-analytics.batch.dead_letter.table', 'matomo_dead_letters');
 
-        if (! Schema::hasTable($table)) {
+        if (! TableLookup::exists($table)) {
             return 0;
         }
 

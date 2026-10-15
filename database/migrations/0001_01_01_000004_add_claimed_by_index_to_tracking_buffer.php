@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // The claim path reads and writes by claimed_by, and until now nothing indexed it.
 //
@@ -32,7 +33,7 @@ return new class extends Migration
         // prepends the connection's table prefix when `prefix_indexes` is set (the shipped
         // default for mysql and pgsql), so a name assembled here would miss the real index and
         // add a second one beside it.
-        if (! Schema::hasTable($this->table()) || Schema::hasIndex($this->table(), ['claimed_by'])) {
+        if (! TableLookup::exists($this->table()) || Schema::hasIndex(TableLookup::qualified($this->table()), ['claimed_by'])) {
             return;
         }
 

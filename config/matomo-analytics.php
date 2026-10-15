@@ -73,6 +73,12 @@ return [
     'js_path' => env('MATOMO_JS_PATH', 'matomo.js'),
     'timeout' => filter_var(env('MATOMO_TIMEOUT', 5), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 5,
 
+    // Extra Guzzle request options for every tracking call, a single hit and a bulk send alike, for
+    // an application whose HTTP middleware reads an option of its own. The sender's own options
+    // win over one of the same name: the timeouts, HTTP/1.1 and the refusal to follow a redirect.
+    // The Reporting API does not take them.
+    'http_options' => [],
+
     /*
     |--------------------------------------------------------------------------
     | Dispatch mode
@@ -546,18 +552,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Prefetched page views (opt-in)
+    | Prefetched and prerendered page views (opt-in)
     |--------------------------------------------------------------------------
     |
-    | `middleware.skip_prefetch` keeps a speculation-rules prefetch from counting as a
-    | page view — the pointer resting on a link is not a visit. But when the reader then
-    | DOES click, the browser serves the page out of that prefetch and the server never
-    | hears about it, so the view would be missing instead of doubled.
+    | `middleware.skip_prefetch` keeps a speculation-rules prefetch or prerender from
+    | counting as a page view — the pointer resting on a link is not a visit. But when the
+    | reader then DOES click, the browser shows the page it already holds and the server
+    | never hears about it, so the view would be missing instead of doubled.
     |
     | When enabled, @matomoPrefetchPageView closes that half: the page reports itself,
-    | once, and only when the browser says it was delivered from a prefetch. The beacon
-    | goes through the normal gate, and a URL from another origin is refused. Its throttle
-    | counts like the Web Vitals one: per client address, and an IPv6 address per /64.
+    | once, and only when the browser says it was delivered from a prefetch or opened from
+    | a prerender. A prerender that is never opened sends nothing. The beacon goes through
+    | the normal gate, and a URL from another origin is refused. Its throttle counts like
+    | the Web Vitals one: per client address, and an IPv6 address per /64.
     */
 
     'prefetch_beacon' => [
@@ -593,9 +600,19 @@ return [
     | The web-vitals, prefetch-beacon and hit-beacon routes are registered outside every middleware
     | group, because the browser beacons them with sendBeacon() and that carries no CSRF token. The
     | consequence is that no session is started on these paths, so the gate's `track_authenticated`
-    | and `except_abilities` rules see a guest there regardless of who is logged in. Name middleware
-    | in the section's `middleware` if you need those rules to apply — `['web']` starts a session,
-    | and you then owe that route a CSRF exemption on your side.
+    | and `except_abilities` rules see a guest there regardless of who is logged in. To apply those
+    | rules without writing the session on every beacon, name the two middleware that read it in the
+    | section's `middleware`:
+    |
+    |     'middleware' => [
+    |         \Illuminate\Cookie\Middleware\EncryptCookies::class,
+    |         \MatomoAnalytics\Http\Middleware\ReadSessionWithoutWriting::class,
+    |     ],
+    |
+    | The session is loaded and never saved, and the remember-me cookie is ignored, so a visitor
+    | whose session has expired is a guest to the beacons until the next page view signs them in.
+    | `['web']` applies the rules as well, but it writes the session on every beacon, and you then
+    | owe that route a CSRF exemption on your side.
     */
 
     /*

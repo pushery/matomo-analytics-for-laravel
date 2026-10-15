@@ -7,8 +7,8 @@ namespace MatomoAnalytics\Buffer;
 use Generator;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 /**
  * The dead-letter queue: batches that exhausted delivery are parked here (as JSONL)
@@ -187,7 +187,7 @@ final class DeadLetterStore
         //
         // A cleanup command that fails on the absence of the thing it cleans up has no state
         // to report.
-        if (! Schema::hasTable($this->table())) {
+        if (! TableLookup::exists($this->table())) {
             return 0;
         }
 
@@ -243,7 +243,7 @@ final class DeadLetterStore
      */
     private function tableExists(): bool
     {
-        return Schema::hasTable($this->table());
+        return TableLookup::exists($this->table());
     }
 
     private function table(): string

@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // The dead-letter table shipped with an index on failed_at that no query ever used:
 // the recent list orders by id, the replay walks by id, the cleanup deletes by id.
@@ -27,7 +28,7 @@ return new class extends Migration
         // run from zero as cleanly as it runs on an installation that has the old shape.
         // Matched by COLUMNS, not by name. hasIndex() compares against both, and the
         // column form is the only one that is independent of how the name was derived.
-        if (! Schema::hasTable($this->table()) || ! Schema::hasIndex($this->table(), ['failed_at'])) {
+        if (! TableLookup::exists($this->table()) || ! Schema::hasIndex(TableLookup::qualified($this->table()), ['failed_at'])) {
             return;
         }
 
@@ -47,7 +48,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (! Schema::hasTable($this->table()) || Schema::hasIndex($this->table(), ['failed_at'])) {
+        if (! TableLookup::exists($this->table()) || Schema::hasIndex(TableLookup::qualified($this->table()), ['failed_at'])) {
             return;
         }
 
@@ -74,7 +75,7 @@ return new class extends Migration
         $wanted = array_map(strtolower(...), (array) $columns);
         sort($wanted);
 
-        foreach (Schema::getIndexes($this->table()) as $index) {
+        foreach (Schema::getIndexes(TableLookup::qualified($this->table())) as $index) {
             if (! is_array($index)) {
                 continue;
             }

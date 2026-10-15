@@ -10,11 +10,11 @@ use Illuminate\Database\MySqlConnection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\ErasableHitBuffer;
 use MatomoAnalytics\Privacy\DataSubject;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 /**
  * Portable, durable buffer backed by a database table. Claims are token-stamped
@@ -203,7 +203,7 @@ final class DatabaseHitBuffer implements ErasableHitBuffer
         $table = $this->table();
 
         // An installation that skipped the migrations has no buffer here, and nothing to erase.
-        if (! Schema::hasTable($table)) {
+        if (! TableLookup::exists($table)) {
             return 0;
         }
 

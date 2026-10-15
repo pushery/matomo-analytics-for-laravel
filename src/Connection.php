@@ -12,6 +12,9 @@ use MatomoAnalytics\Support\Config;
  */
 final readonly class Connection
 {
+    /**
+     * @param  array<string, mixed>  $httpOptions  Guzzle request options for the tracking calls, under the sender's own
+     */
     public function __construct(
         public string $host,
         public int $siteId,
@@ -21,6 +24,7 @@ final readonly class Connection
         public int $connectTimeout,
         public string $reportingPath = 'index.php',
         public bool $requireTls = false,
+        public array $httpOptions = [],
     ) {}
 
     public static function fromConfig(): self
@@ -34,6 +38,7 @@ final readonly class Connection
             connectTimeout: Config::int('matomo-analytics.resilience.connect_timeout', 2),
             reportingPath: Config::string('matomo-analytics.reporting.path', 'index.php'),
             requireTls: Config::bool('matomo-analytics.require_tls', false),
+            httpOptions: Config::options('matomo-analytics.http_options'),
         );
     }
 

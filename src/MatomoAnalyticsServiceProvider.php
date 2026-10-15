@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics;
 
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository;
@@ -12,13 +11,11 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Cookie\Middleware\EncryptCookies;
-use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Jobs\SyncJob;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use MatomoAnalytics\Annotations\AnnotationsManager;
@@ -54,8 +51,8 @@ use MatomoAnalytics\Privacy\GdprManager;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Reporting\MatomoReports;
 use MatomoAnalytics\Reporting\ReportCache;
-use MatomoAnalytics\Support\ClientIp;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\RateLimits;
 use MatomoAnalytics\Support\Reporter;
 use MatomoAnalytics\Transport\HttpSender;
 use Override;
@@ -153,9 +150,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     {
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'matomo-analytics');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'matomo-analytics');
-        $this->registerBeaconRateLimiter(self::WEB_VITALS_LIMITER, 'matomo-analytics.web_vitals.throttle');
-        $this->registerBeaconRateLimiter(self::PREFETCH_BEACON_LIMITER, 'matomo-analytics.prefetch_beacon.throttle');
-        $this->registerBeaconRateLimiter(self::HIT_BEACON_LIMITER, 'matomo-analytics.hit_beacon.throttle');
+        // In the provider rather than the routes file, which `route:cache` never executes while the
+        // compiled routes still carry `throttle:` with these names.
+        $this->app->make(RateLimits::class)->define();
         $this->loadRoutesFrom(__DIR__.'/../routes/matomo-analytics.php');
 
         if (self::$runsMigrations) {
@@ -177,48 +174,6 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->registerPublishing();
         }
-    }
-
-    /**
-     * Register the named limiter a beacon route throttles on.
-     *
-     * IT LIVED IN THE ROUTES FILE FROM v0.27.0, WHICH MADE IT INERT IN EVERY PRODUCTION THAT
-     * CACHES ITS ROUTES. `loadRoutesFrom()` is a bare `require` guarded by `routesAreCached()`,
-     * so under `php artisan route:cache` that file never executes — while the compiled route
-     * table still carries `throttle:matomo-analytics-web-vitals`. The middleware then looked up
-     * a limiter nobody had registered, and every beacon answered 500 with
-     * `MissingRateLimiterException`. A provider boots either way; the location was the whole
-     * defect. The switch to a named limiter itself was right and stays: only a named limiter
-     * can key on `ClientIp::resolve()` instead of `$request->ip()`, which behind a CDN is the
-     * proxy address that puts every visitor in one bucket.
-     *
-     * REGISTERED UNCONDITIONALLY, AND THE CONFIG IS READ INSIDE THE CLOSURE — the route table
-     * and this boot are compiled at two different moments. Mirroring the routes file's
-     * `if ($throttle !== null)` here would reopen the same hole through the other door: a
-     * consumer who switches the throttle off, or on, without rebuilding the route cache gets a
-     * compiled `throttle:` middleware and no limiter behind it. An opt-out answers
-     * `Limit::none()` instead, which is a limiter the cached middleware can find.
-     *
-     * TAKES ITS NAME AND ITS CONFIG KEY, because there are two of these now and the defect
-     * above is one a second copy would inherit silently. Web Vitals was the first; the prefetch
-     * page-view beacon has the same shape, the same CSRF-less entry and the same need for a key
-     * that survives a CDN.
-     */
-    private function registerBeaconRateLimiter(string $limiter, string $configKey): void
-    {
-        RateLimiter::for($limiter, static function (Request $request) use ($configKey): Limit {
-            $throttle = Config::throttle($configKey);
-
-            if ($throttle === null) {
-                return Limit::none();
-            }
-
-            [$max, $minutes] = $throttle;
-            $ip = ClientIp::resolve($request);
-
-            return Limit::perMinutes($minutes, $max)
-                ->by($ip === null ? 'matomo-analytics:unknown-client' : ClientIp::rateLimitKey($ip));
-        });
     }
 
     private function registerMiddleware(): void

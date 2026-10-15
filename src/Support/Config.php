@@ -220,6 +220,31 @@ final class Config
     }
 
     /**
+     * A map of options keyed by name, as an HTTP client takes them. An entry under a number is
+     * dropped, and a value that is not an array reads as no options at all.
+     *
+     * @return array<string, mixed>
+     */
+    public static function options(string $key): array
+    {
+        $value = ConfigFacade::get($key);
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach ($value as $name => $option) {
+            if (is_string($name)) {
+                $options[$name] = $option;
+            }
+        }
+
+        return $options;
+    }
+
+    /**
      * A map of scalar values keyed as configured. Non-scalar entries are dropped
      * so call sites stay typed (used for e.g. the custom-dimension id => value map).
      *
