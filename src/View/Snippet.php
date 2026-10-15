@@ -82,24 +82,28 @@ final readonly class Snippet
     }
 
     /**
-     * A page that was delivered out of a speculation-rules prefetch reports itself, once.
+     * A page the browser fetched on speculation, prefetched or prerendered, reports itself once
+     * the reader opens it.
      *
-     * THE SERVER CANNOT SEE THIS PAGE VIEW AT ALL, AND THAT IS WHY THERE IS A SCRIPT HERE.
-     * The prefetch request is skipped by {@see TrackPageViews}
-     * on purpose — the pointer resting on a link is not a visit — and the navigation that
-     * follows makes no request, because the browser already holds the bytes. Skipping alone
-     * would therefore trade a page view too many for a page view missing.
+     * The server cannot see this page view, which is why there is a script here. The speculative
+     * request is skipped by {@see TrackPageViews} on purpose, because the pointer resting on a
+     * link is not a visit, and opening the page makes no request, because the browser already
+     * holds the bytes. Skipping alone would therefore trade a page view too many for a page view
+     * missing.
      *
-     * `deliveryType` is the browser's own answer to "where did this document come from", and
-     * `navigational-prefetch` is the only value this beacons on: an ordinary load has already
-     * been counted server-side, and beaconing it too would double every view on the site. An
-     * engine that does not report `deliveryType` sends nothing, which is the behavior before
-     * this existed.
+     * Two answers of the browser mark such a page. `deliveryType` is `navigational-prefetch` for
+     * a document served out of a prefetch, and `activationStart` is above zero for a prerendered
+     * document the reader has opened. An ordinary load has neither and has already been counted
+     * server-side, so it sends nothing, and so does an engine that reports neither.
+     *
+     * A prerendered document runs its scripts while it is prerendered, before anybody has opened
+     * it. While `document.prerendering` is true the script waits for `prerenderingchange`, which
+     * the browser fires when the reader opens the page, so a prerender that is never opened sends
+     * nothing.
      *
      * The beacon is for page views the server counts. Where matomo.js or a Tag Manager container
-     * is on the page, `_paq` or `_mtm` is defined, and the script sends nothing: a prefetched
-     * document runs its scripts when the reader opens it, not when it is fetched, so the client
-     * tracker counts that view itself.
+     * is on the page, `_paq` or `_mtm` is defined, and the script sends nothing: the client
+     * tracker counts that view itself when the reader opens the page.
      *
      * Run on DOMContentLoaded for the same reason as the Web Vitals glue above it, plus one of
      * its own: `document.title` is read here, and in `<head>`, where a layout puts its tracking
@@ -117,9 +121,10 @@ final readonly class Snippet
         $glue = implode("\n", [
             '(function(){',
             '  var start=function(){',
+            '    if(document.prerendering){document.addEventListener("prerenderingchange",start,{once:true});return;}',
             '    if(window._paq||window._mtm||!performance.getEntriesByType){return;}',
             '    var nav=performance.getEntriesByType("navigation")[0];',
-            '    if(!nav||nav.deliveryType!=="navigational-prefetch"){return;}',
+            '    if(!nav||(nav.deliveryType!=="navigational-prefetch"&&!(nav.activationStart>0))){return;}',
             '    var body=JSON.stringify({url:location.href,title:document.title});'.$this->beaconSend($path),
             '  };',
             '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",start);}else{start();}',
@@ -137,11 +142,15 @@ final readonly class Snippet
      * Chromium refuses a Blob whose type is not a CORS-safelisted one, `application/json` among
      * them (crbug.com/490015), and the routes read JSON. Without the second call the measurement
      * was dropped in an empty catch. The hit beacon sends the same way.
+     *
+     * `fetch` reports a network failure as a rejected promise, which no `try` catches, so the
+     * rejection is caught on the promise: a beacon that does not arrive is lost either way, and
+     * the visitor's console and an error monitor on the page hear nothing of it.
      */
     private function beaconSend(string $path): string
     {
         return 'try{if(navigator.sendBeacon&&navigator.sendBeacon('.$path.',new Blob([body],{type:"application/json"}))){return;}}catch(e){}'
-            .'try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"});}catch(e){}';
+            .'try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"}).catch(function(){});}catch(e){}';
     }
 
     /**
@@ -151,7 +160,8 @@ final readonly class Snippet
      * address as `url`, and the route records the hit through the normal gate. `sendBeacon` is
      * tried first because it survives the page being left, which is the moment an outlink or a
      * download is clicked; where it is missing or refuses the payload, `fetch` with `keepalive`
-     * sends it instead. A second copy of the tag leaves the first definition in place.
+     * sends it instead, its rejection caught as in beaconSend(). A second copy of the tag leaves
+     * the first definition in place.
      */
     public function hitBeacon(?string $nonce = null): string
     {
@@ -167,7 +177,7 @@ final readonly class Snippet
             '  window.matomoHit=function(type,data){',
             '    var body=JSON.stringify(Object.assign({url:location.href},data||{},{type:type}));',
             '    try{if(navigator.sendBeacon&&navigator.sendBeacon('.$path.',new Blob([body],{type:"application/json"}))){return;}}catch(e){}',
-            '    try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"});}catch(e){}',
+            '    try{fetch('.$path.',{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"}).catch(function(){});}catch(e){}',
             '  };',
             '})();',
         ]);
@@ -356,8 +366,7 @@ final readonly class Snippet
 
         $commands[] = '_paq.push(['.$this->js('setTrackerUrl').', '.$this->js($this->connection->trackingUrl()).']);';
         $commands[] = '_paq.push(['.$this->js('setSiteId').', '.$this->js((string) $this->connection->siteId).']);';
-        $commands[] = "var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];";
-        $commands[] = 'g.async=true;g.src='.$this->js($this->jsUrl()).';s.parentNode.insertBefore(g,s);';
+        $commands[] = $this->loadWhenActivated($this->jsUrl());
 
         $spa = $this->spaListeners();
         if ($spa !== '') {
@@ -489,11 +498,35 @@ final readonly class Snippet
         $commands = [
             'var _mtm = window._mtm = window._mtm || [];',
             "_mtm.push({'mtm.startTime':(new Date().getTime()),'event':'mtm.Start'});",
-            "var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];",
-            'g.async=true;g.src='.$this->js($container).';s.parentNode.insertBefore(g,s);',
+            $this->loadWhenActivated($container),
         ];
 
         return $this->wrap(implode("\n", $commands), $nonce);
+    }
+
+    /**
+     * Inserts the script at `$src` into the page: at once, or for a prerendered page when the
+     * reader opens it.
+     *
+     * A prerendered document runs its scripts while it is prerendered, so a tracker loaded then
+     * counts a page view for a page that may never be opened. matomo.js holds its page view back
+     * only for the `prerender` visibility state of the older `<link rel="prerender">`, which a
+     * prerender from Speculation Rules does not report, and a Tag Manager container fires its
+     * Pageview trigger as soon as it loads. So while `document.prerendering` is true the script is
+     * inserted on `prerenderingchange`, which the browser fires when the reader opens the page.
+     *
+     * The `_paq` and `_mtm` queues are filled at once either way. The tracker works through its
+     * queue when it loads, so a page view pushed while the page is prerendered waits there until
+     * the reader opens it.
+     */
+    private function loadWhenActivated(string $src): string
+    {
+        return implode("\n", [
+            '(function(){',
+            "  var load=function(){var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.async=true;g.src=".$this->js($src).';s.parentNode.insertBefore(g,s);};',
+            '  if(document.prerendering){document.addEventListener("prerenderingchange",load,{once:true});}else{load();}',
+            '})();',
+        ]);
     }
 
     private function nonceAttribute(?string $nonce): string

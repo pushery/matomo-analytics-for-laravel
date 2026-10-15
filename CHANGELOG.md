@@ -4,6 +4,31 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] - 2026-10-15
+
+Beacon limiters an application can register again for each tenant, beacon routes that leave the session alone, and Guzzle options of your own on every tracking call, together with prerendered pages counted when the reader opens them and a redaction pattern that can no longer let a URL through.
+
+### ✨ Added
+
+- **`MatomoAnalytics\Support\RateLimits::define()` registers the three beacon limiters, and again on demand.** An application with a cache per tenant discards the `RateLimiter` singleton on a tenant switch, and the named limiters go with it, so every beacon answered 500 with `Rate limiter [...] is not defined` in a tenant's context. Calling `app(RateLimits::class)->define()` after the switch puts them back; the provider calls it at boot as before.
+- **`ReadSessionWithoutWriting` lets the beacon routes apply `track_authenticated` and `except_abilities` without writing the session.** The Web Vitals, prefetch and hit beacons stand outside every middleware group, so the gate saw a guest there, and `['web']`, the only way to change that, wrote the session on every heartbeat. Named after `EncryptCookies` in a beacon's `middleware`, it loads the session the cookie names, never saves it, sends no session cookie and ignores the remember-me cookie. The configuration and the beacon pages show the pair. The middleware reads the session through `illuminate/session`, which the package now requires. Nothing changes for an install that already worked: `illuminate/http` and `illuminate/routing`, both direct dependencies, require it already.
+- **`http_options` hands every tracking call Guzzle options of your own.** An application whose global HTTP middleware lets a call through only when it names its purpose in an option could not track at all, because the sender built each call with fixed options. The configured options now reach a single hit and a bulk send alike, and the sender's own still win over one of the same name: the timeouts, HTTP/1.1 and the refusal to follow a redirect.
+
+### 🐛 Fixed
+
+- **A prerendered page counts when the reader opens it, not when the browser prerenders it.** A page that Speculation Rules prerender runs its scripts in the background, and matomo.js holds its page view back only for the `prerender` visibility state of the older `<link rel="prerender">`, which such a prerender does not report. So `@matomoScript` counted every prerendered page at once, the ones nobody opened included. On a page that is being prerendered, the snippet now fills the `_paq` queue as before and loads matomo.js, or the Tag Manager container, when the browser fires `prerenderingchange` as the reader opens the page. Expect page views to fall on a site that prerenders, by the prerendered pages nobody opened.
+- **`@matomoPrefetchPageView` reports a page the reader opens from a prerender.** `matomo.track` skips a prerender as it skips a prefetch, and opening a prerendered page makes no request, so with server-side page views that visit was missing. The beacon now also reports a page whose `activationStart` is above zero, and while `document.prerendering` is true it waits until the reader opens the page, so a prerender that is never opened sends nothing. A page served from a prefetch is still reported once, an ordinary load not at all, and a page that runs matomo.js or a Tag Manager container still sends nothing.
+- **On PostgreSQL with a schema per tenant, the local half of an erasure, the dead-letter store and the migrations find the package's tables.** With `search_path` set to `tenant, public` and the tables in `public`, Laravel's schema builder looks only in `current_schema()`, the tenant schema, while every query walks the whole path. So an erasure left the person's buffered hits and dead letters in place, the dead-letter store read as empty and its daily prune deleted nothing, all without an error, and the index migrations skipped the tables they were written for. Each of them now looks a table up the way a query finds it.
+- **A beacon that cannot reach the server no longer leaves an unhandled rejection in the visitor's console.** The Web Vitals, prefetch and hit beacons fall back to `fetch()`, which Chromium takes for every beacon, and a network failure rejected its promise past the `try` around it. An error monitor that records unhandled rejections on the page received an event for each lost beacon. The rejection is now caught on the promise.
+
+### 🔒 Security
+
+- **A host pattern in `privacy.redact.patterns` that fails on a URL no longer lets that URL through unredacted.** `preg_replace()` answers null without a warning when the subject makes a pattern fail, for example on bytes that are no UTF-8 under `/u`, and the redactor kept the URL as it was. It now sends the replacement in place of the whole URL, the built-in patterns take the same path, and a pattern PCRE cannot compile is refused with its own wording.
+
+### 📚 Documentation
+
+- **The prefetched-pages page covers prerendered pages and says what each mode counts.** It is now titled Prefetched and prerendered pages, and a table shows for server-side and client-side tracking how a prefetched and a prerendered page are counted: once, when the reader opens it, and not at all when nobody does. It also says to leave the beacon off when both `skip_prefetch` switches are off, because the speculative load is counted then and the beacon would count the page a second time.
+
 ## [0.33.1] - 2026-10-05
 
 ### 🐛 Fixed
@@ -1663,7 +1688,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.0...v0.32.1

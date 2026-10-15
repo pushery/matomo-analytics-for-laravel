@@ -15,11 +15,12 @@ use MatomoAnalytics\View\Snippet;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * Records the page view of a page the browser delivered out of a speculation-rules prefetch.
+ * Records the page view of a page the browser delivered out of a speculation-rules prefetch, or
+ * opened from a prerender.
  *
- * The middleware cannot see that page at all. The prefetch itself is skipped on purpose — the
+ * The middleware cannot see that page at all. The speculative request is skipped on purpose — the
  * pointer resting on a link is not a visit — and the navigation that follows never reaches the
- * server, because the bytes are already in the browser. So the page reports itself, once, from
+ * server, because the page is already in the browser. So the page reports itself, once, from
  * {@see Snippet::prefetchPageView()}, and this is where it lands.
  *
  * Tracking goes through the normal TrackManager, so the gate (bots, opt-out, DNT, excluded

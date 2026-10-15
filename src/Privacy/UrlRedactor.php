@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Privacy;
 
 use Illuminate\Support\Facades\Route;
+use InvalidArgumentException;
 use MatomoAnalytics\Support\Config;
 use Throwable;
 
@@ -14,6 +15,11 @@ use Throwable;
  * their value replaced, and arbitrary regex patterns can scrub anything else. The
  * key segment is preserved so reports still show "a token was present" without
  * leaking its value into analytics, logs, or shared dashboards.
+ *
+ * A pattern that fails on a URL closes rather than opens: `preg_replace()` answers null without a
+ * warning when the subject makes it fail, with bytes that are no UTF-8 under `/u` or past a
+ * backtracking limit, and the URL then goes out as the replacement alone, because what the pattern
+ * had to hide is somewhere in it.
  */
 final class UrlRedactor
 {
@@ -175,17 +181,13 @@ final class UrlRedactor
             substr($url, $start),
         );
 
-        return is_string($result) ? substr($url, 0, $start).$result : $url;
+        return is_string($result) ? substr($url, 0, $start).$result : $replacement;
     }
 
     private function redactPaths(string $url, string $replacement): string
     {
         foreach ($this->pathPatterns() as $pattern) {
-            $result = preg_replace('~'.$pattern.'~', '${1}'.rawurlencode($replacement), $url);
-
-            if (is_string($result)) {
-                $url = $result;
-            }
+            $url = preg_replace('~'.$pattern.'~', '${1}'.rawurlencode($replacement), $url) ?? $replacement;
         }
 
         return $url;
@@ -214,14 +216,33 @@ final class UrlRedactor
 
     private function redactPatterns(string $url, string $replacement): string
     {
-        foreach (Config::stringList('matomo-analytics.privacy.redact.patterns') as $pattern) {
-            $result = preg_replace($pattern, $replacement, $url);
-
-            if (is_string($result)) {
-                $url = $result;
-            }
+        foreach ($this->patterns() as $pattern) {
+            $url = preg_replace($pattern, $replacement, $url) ?? $replacement;
         }
 
         return $url;
+    }
+
+    /**
+     * The host's patterns, each refused with its own wording when PCRE cannot compile it, so a
+     * typo in `privacy.redact.patterns` names itself instead of failing somewhere in a request.
+     *
+     * @return list<string>
+     */
+    private function patterns(): array
+    {
+        $patterns = Config::stringList('matomo-analytics.privacy.redact.patterns');
+
+        foreach ($patterns as $pattern) {
+            if (@preg_match($pattern, '') === false) {
+                throw new InvalidArgumentException(sprintf(
+                    'matomo-analytics.privacy.redact.patterns holds [%s], which is no valid regular expression: %s',
+                    $pattern,
+                    error_get_last()['message'] ?? preg_last_error_msg(),
+                ));
+            }
+        }
+
+        return $patterns;
     }
 }

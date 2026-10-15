@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // MYSQL'S `TIMESTAMP` IS NOT AN ABSOLUTE MOMENT, AND THIS SCHEMA TREATED IT AS ONE.
 //
@@ -57,11 +58,11 @@ return new class extends Migration
      */
     private function rewrite(string $table, array $columns, string $type): void
     {
-        if (! Schema::hasTable($table)) {
+        if (! TableLookup::exists($table)) {
             return;
         }
 
-        $present = array_values(array_filter($columns, static fn (string $column): bool => Schema::hasColumn($table, $column)));
+        $present = array_values(array_filter($columns, static fn (string $column): bool => Schema::hasColumn(TableLookup::qualified($table), $column)));
 
         if ($present === []) {
             return;

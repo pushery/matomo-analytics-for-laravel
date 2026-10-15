@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\TableLookup;
 
 // PostgreSQL's `json` keeps the text it was handed, and this column has no use for that.
 //
@@ -55,7 +56,7 @@ return new class extends Migration
         $table = Config::string('matomo-analytics.batch.table', 'matomo_tracking_buffer');
 
         // The name is validated before the existence check, and the order is the whole point.
-        // The other way round the refusal below is unreachable: `Schema::hasTable()` answers
+        // The other way round the refusal below is unreachable: `TableLookup::exists()` answers
         // false for any name that is not a real table, so a hostile one would take the quiet
         // exit and the guard would never run — a check that cannot fire, which reads in a
         // coverage report exactly as it did here, as a line no test covers.
@@ -63,7 +64,7 @@ return new class extends Migration
 
         // Guarded per column rather than per table: `ignoreMigrations()` and a renamed table
         // both leave a tree where one exists and the other does not.
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'payload')) {
+        if (! TableLookup::exists($table) || ! Schema::hasColumn(TableLookup::qualified($table), 'payload')) {
             return;
         }
 
@@ -81,7 +82,7 @@ return new class extends Migration
      * The table name as an identifier, refusing a configured name that is not a bare one.
      *
      * The name is configuration rather than input, but it reaches DDL either way, and "it
-     * cannot be hostile" is an assumption rather than a guard. `Schema::hasTable()` and
+     * cannot be hostile" is an assumption rather than a guard. `TableLookup::exists()` and
      * `hasColumn()` add the connection's table prefix themselves and a raw statement does not,
      * so the prefix is added here, quoted the way the autovacuum migration quotes it.
      */

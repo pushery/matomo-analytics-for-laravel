@@ -192,7 +192,10 @@ final class HttpSender implements Sender
 
     private function request(): PendingRequest
     {
-        $request = Http::connectTimeout($this->connection->connectTimeout)
+        // The configured options come first, so the ones below replace any of the same name: the
+        // timeouts, HTTP/1.1 and the refused redirect are the sender's whatever the configuration says.
+        $request = Http::withOptions($this->connection->httpOptions)
+            ->connectTimeout($this->connection->connectTimeout)
             ->timeout($this->connection->timeout)
             ->withOptions(['version' => 1.1])
             // A 307 OR 308 KEEPS THE METHOD AND THE BODY, AND THE TOKEN IS IN THE BODY.
