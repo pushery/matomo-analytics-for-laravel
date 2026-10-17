@@ -36,8 +36,8 @@ final class Json
             }
         }
 
-        // EVERY VALUE DROPPED IS THE LOUDEST CORRUPTION SIGNAL THERE IS, AND IT USED TO
-        // RETURN `[]` — which `decodeAll()` kept as a valid payload. Downstream that meant
+        // Every value dropped is the loudest corruption signal there is, and it used to
+        // return `[]` — which `decodeAll()` kept as a valid payload. Downstream that meant
         // `BufferBatch::isEmpty()` was false, so the unreadable-batch path never ran, and empty
         // payloads went to Matomo as hits and counted as delivered.
         //

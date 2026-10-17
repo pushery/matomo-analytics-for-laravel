@@ -40,20 +40,20 @@ final class PrefetchPageViewController
     public function __invoke(Request $request, Tracker $tracker): Response
     {
         if (! Config::bool('matomo-analytics.prefetch_beacon.enabled', false)) {
-            // NOT abort(): that helper ships only with laravel/framework's Foundation, and
+            // Not abort(): that helper ships only with laravel/framework's Foundation, and
             // this package requires illuminate components instead. It throws exactly this.
             throw new NotFoundHttpException;
         }
 
-        // The origin of the REQUEST, which the sending page cannot write, before the `url` it can.
+        // The origin of the request, which the sending page cannot write, before the `url` it can.
         if (! BeaconOrigin::isOwn($request)) {
             return new Response(status: Response::HTTP_FORBIDDEN);
         }
 
         $url = BeaconOrigin::pageUrl($request->input('url'));
 
-        // A URL IS REQUIRED HERE, WHILE THE WEB VITALS BEACON TREATS ONE IT CANNOT VOUCH FOR
-        // AS ABSENT. The shapes differ because the fallbacks do: a web-vitals sample without a
+        // A URL is required here, while the Web Vitals beacon treats one it cannot vouch for
+        // as absent. The shapes differ because the fallbacks do: a web-vitals sample without a
         // page is still a real measurement and is filed with the beacon's own URL. A page view
         // without a page is not a page view at all — filed against `/matomo-analytics/page-view`
         // it would put a row in the reports for a path no reader ever opened, and it would do

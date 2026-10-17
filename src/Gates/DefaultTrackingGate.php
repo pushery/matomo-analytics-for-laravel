@@ -166,7 +166,7 @@ final readonly class DefaultTrackingGate implements TrackingGate
     }
 
     /**
-     * The path this hit is ABOUT, which is not always the path it arrived on.
+     * The path this hit is about, which is not always the path it arrived on.
      *
      * A beacon arrives on the package's own route, such as `/matomo-analytics/web-vitals`, a
      * path no exclusion list names, while what it measured happened on the page in its `url`.

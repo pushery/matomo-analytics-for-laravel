@@ -109,7 +109,7 @@ final readonly class LocalHitPurge
 
         $removed = 0;
 
-        // A dead letter holds a BATCH, so the subject's hits are removed from it and the row
+        // A dead letter holds a batch, so the subject's hits are removed from it and the row
         // is rewritten; a row left empty is deleted. Dropping the whole row would erase other
         // people's undelivered hits to satisfy one person's request.
         foreach (DB::table($table)->select(['id', 'payloads'])->lazyById() as $row) {

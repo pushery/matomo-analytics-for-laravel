@@ -44,7 +44,7 @@ final readonly class TrackAiChatbots
     }
 
     /**
-     * TRACKED AFTER THE RESPONSE IS SENT, not merely after it is built.
+     * Tracked after the response is sent, not merely after it is built.
      *
      * This used to sit in `handle()` behind `$next()`, which reads as "afterwards" and is
      * not: the fetcher is still on the wire while the payload is built and — in `sync` mode —
@@ -52,7 +52,7 @@ final readonly class TrackAiChatbots
      * "runs after the response, so it costs the fetcher nothing", and that sentence was only
      * ever true of `terminate()`.
      *
-     * Laravel terminates middleware BEFORE it runs the application's own terminating
+     * Laravel terminates middleware before it runs the application's own terminating
      * callbacks, so a hit queued here is still picked up by the flush the service provider
      * registers there. The ordering queue mode depends on is unchanged.
      */

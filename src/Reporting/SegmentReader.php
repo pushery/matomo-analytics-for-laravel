@@ -27,7 +27,7 @@ final class SegmentReader
     private const string CONDITION = '/^(.+?)(==|!=|>=|>|<=|<|=@|!@|=\^|=\$)(.*)/';
 
     /**
-     * The groups are joined by `;` (AND) and hold the conditions joined by `,` (OR). Null when
+     * The groups are joined by `;` (and) and hold the conditions joined by `,` (OR). Null when
      * Matomo refuses the definition.
      *
      * @return list<list<array{dimension: string, operator: string, value: string}>>|null
@@ -38,7 +38,7 @@ final class SegmentReader
         $decoded = urldecode($definition);
         $raw = self::groups($definition);
 
-        // Matomo keeps the definition as given only when that reading has MORE conditions than the
+        // Matomo keeps the definition as given only when that reading has more conditions than the
         // decoded one. A tie, the usual case, goes to the decoded reading.
         $decodedCount = $decoded === $definition ? 0 : self::count(self::groups($decoded));
 

@@ -90,7 +90,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     /**
      * A consumer's hook on each scheduled event, applied before it is registered.
      *
-     * WITHOUT IT THE OUTPUT OF BOTH COMMANDS GOES TO /dev/null AND NOTHING CAN CHANGE THAT.
+     * Without it the output of both commands goes to /dev/null and nothing can change that.
      * Laravel's `CommandBuilder` redirects to `$event->output` in `buildForegroundCommand()`
      * AND `buildBackgroundCommand()`, so the diagnosis `matomo:flush` prints is discarded on
      * the scheduled path in both modes — `schedule.run_in_background` buys back the exit code,
@@ -130,12 +130,12 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         // Also scoped now, for the same reason one line down: `reset()` remembers whether it
         // has already cleared the counter in this run, and that memo must not outlive the run.
         // An instance kept across Octane requests would skip the delete that clears what a
-        // PREVIOUS request left, and only the TTL would ever clear it again.
+        // previous request left, and only the TTL would ever clear it again.
         $this->app->scoped(ConsecutiveFailures::class);
         $this->app->scoped(HitBuffer::class, static fn (): HitBuffer => App::make(BufferManager::class)->driver());
         $this->app->scoped(Tracker::class, TrackManager::class);
 
-        // SCOPED, not singleton, and that became load-bearing when `version()` grew a memo.
+        // Scoped, not singleton, and that became load-bearing when `version()` grew a memo.
         // The cache-key version is per-request state: another process can retire it at any
         // time, so an instance that survives into the next request would go on building keys
         // against a version that is no longer current and read its own stale entries back.
@@ -193,9 +193,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
 
     private function registerBladeDirectives(): void
     {
-        // EVERY class in the emitted PHP is fully qualified, `App` included, and that
+        // Every class in the emitted PHP is fully qualified, `App` included, and that
         // is not style. A directive's return value is written into the host
-        // application's compiled view — a plain PHP file in the GLOBAL namespace, where
+        // application's compiled view — a plain PHP file in the global namespace, where
         // this file's `use` statements do not reach. A bare `App` there resolves only
         // through the `App` class alias, which an application is free not to register;
         // the Snippet class was already written out in full, so the two halves of the
@@ -203,7 +203,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         //
         // It arrived with the move off Foundation helpers: `app()` is a global function
         // and needs no alias, `App::make()` does. Trading one for the other inside
-        // GENERATED code moves the dependency from the package into the consumer's
+        // generated code moves the dependency from the package into the consumer's
         // configuration, where this package cannot see it fail.
         $resolve = '\\Illuminate\\Support\\Facades\\App::make(\\MatomoAnalytics\\View\\Snippet::class)';
 
@@ -252,8 +252,8 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     /**
      * Delete dead letters past the retention window, once a day.
      *
-     * NOT gated on `mode === 'batch'`, unlike the flush above, and that is the easy mistake
-     * here: a batch is dead-lettered from BOTH delivery modes — `SendHitsJob` parks an
+     * Not gated on `mode === 'batch'`, unlike the flush above, and that is the easy mistake
+     * here: a batch is dead-lettered from both delivery modes — `SendHitsJob` parks an
      * exhausted batch in queue mode, the flusher does it in batch mode — so a prune that
      * only registered for batch would leave the queue-mode table growing exactly as it does
      * today.
@@ -264,7 +264,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             return;
         }
 
-        // The fallback is 30 because the SHIPPED config says 30, and those two have to
+        // The fallback is 30 because the shipped config says 30, and those two have to
         // agree — `ConfigFallbackParityTest` enforces it, and it caught this line reading 0.
         // The reason is not tidiness: a consumer whose published config predates this key,
         // or who trimmed it, would silently get the opposite behavior from the one the file
@@ -301,15 +301,15 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
             ? $event->runInBackground()
             : $event;
 
-        // ONE SERVER PER TICK, for both commands and in this one place. The scheduler fires on every
+        // One server per tick, for both commands and in this one place. The scheduler fires on every
         // application server, and withoutOverlapping() does not stop that: its lock is released the moment
         // a run finishes, so a flush done on one node let the next node flush the same buffer in the same
-        // minute, and the daily prune ran once per node. onOneServer() takes a lock per event AND tick.
+        // minute, and the daily prune ran once per node. onOneServer() takes a lock per event and tick.
         // That lock needs a cache store shared between the servers; on `file` or `array` every server takes
         // its own and nothing reports it, which the commands reference says.
         $event->onOneServer();
 
-        // LAST, so a consumer's callback can override anything decided above it — including
+        // Last, so a consumer's callback can override anything decided above it — including
         // the background preference. It is their scheduler; the package's defaults are a
         // starting point, and a seam that cannot reach the setting next to it is half a seam.
         if (self::$scheduleCallback !== null) {
@@ -322,14 +322,14 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     /**
      * Hand the collected hits off at the end of each unit of work.
      *
-     * THE CALLBACK ASKS THE CONTAINER IT IS CALLED IN, NOT THE ONE THIS PROVIDER BOOTED IN.
+     * The callback asks the container it is called in, not the one this provider booted in.
      * Octane clones the application for every request and terminates the clone, and the scoped
      * Tracker that collected the request's hits lives only there. A callback asking `$this->app`
      * found nothing resolved on the original and flushed nothing, so in the default `queue`
      * mode no server-side hit left an Octane worker. `Application::terminate()` runs its
      * callbacks through `call()`, which injects the container being terminated.
      *
-     * A QUEUE WORKER DOES NOT TERMINATE BETWEEN JOBS, and it forgets scoped instances before
+     * A queue worker does not terminate between jobs, and it forgets scoped instances before
      * each one, so a job's hits went with its Tracker and only the last job's reached the end of
      * the process. A job hands its hits off as it finishes, processed or failed. A SyncJob is
      * left out: it runs inside a request, whose own termination hands off, and a flush there
@@ -365,9 +365,9 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     private function registerPublishing(): void
     {
         // Resolve publish targets through the Application contract's path methods
-        // (available via illuminate/contracts), NOT the config_path()/database_path()/
+        // (available via illuminate/contracts), not the config_path()/database_path()/
         // resource_path()/lang_path() global helpers. Those are Foundation helpers,
-        // shipped ONLY with laravel/framework — which this lean package does not
+        // shipped only with laravel/framework — which this lean package does not
         // require — so the helper form would freeze a wrong dependency contract and
         // fatal in a non-Foundation host. The method form is behavior-identical.
         //
@@ -401,10 +401,10 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * Merge the shipped config into the app's, recursing into nested sections.
      *
      * The framework's own `mergeConfigFrom` is a flat `array_merge`, which replaces a
-     * top-level key WHOLESALE. This config is nested several levels deep and is read that
+     * top-level key wholesale. This config is nested several levels deep and is read that
      * way everywhere, so for anyone who published `config/matomo-analytics.php` the flat
      * merge froze every section at the shape it had on publication day. A subkey added by
-     * a later release did not fall back to its default — it was simply ABSENT, and the
+     * a later release did not fall back to its default — it was simply absent, and the
      * readers that hurt most took no default at all: `Config::stringList()` answered `[]`
      * until it learned to fall back to the shipped file.
      *
@@ -415,18 +415,18 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      *   - `bots.allow` / `bots.deny`, `web_vitals.metrics` — empty rather than defaulted
      *
      * The obvious framework alternative is a trap: `replaceConfigRecursivelyFrom` uses
-     * `array_replace_recursive`, which merges LISTS BY INDEX. That would resurrect
+     * `array_replace_recursive`, which merges lists by index. That would resurrect
      * entries an operator deliberately deleted from `bots.deny` or from the redaction
      * list — turning a privacy setting back on behind their back. So the recursion here
      * is list-aware, and the rule it encodes is:
      *
      *   a map is a namespace, and gets merged · a list is a value, and is taken whole
      *
-     * The app always wins on a scalar; recursion only ever ADDS what the app's file never
+     * The app always wins on a scalar; recursion only ever adds what the app's file never
      * mentioned. Pattern adopted from WireKit's `mergeConfigRecursivelyFrom`, which fixed
      * the identical defect in its v2.18.0 for the identical reason.
      *
-     * NOTE the early return, because it bounds what this can rescue: a CACHED config is
+     * Note the early return, because it bounds what this can rescue: a cached config is
      * never merged at all, by the framework's design. For those installations the
      * published file is the whole truth, and the only thing standing between them and a
      * missing key is the read-site fallback — which is why those fallbacks have to agree
@@ -468,7 +468,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
                 continue;
             }
 
-            // Recurse only where BOTH sides are maps. If either is a list, the published
+            // Recurse only where both sides are maps. If either is a list, the published
             // one stands as written — see the list-aware rule above.
             if (is_array($value) && is_array($published[$key]) && ! array_is_list($value) && ! array_is_list($published[$key])) {
                 $published[$key] = $this->mergeConfigSections($value, $published[$key]);

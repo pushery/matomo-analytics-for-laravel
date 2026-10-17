@@ -6,7 +6,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Master switch — OFF until you turn it on
+    | Master switch — off until you turn it on
     |--------------------------------------------------------------------------
     | Installing this package must never start tracking anyone. The default is
     | therefore false: dormancy is a property of the package, not an accident of
@@ -33,14 +33,14 @@ return [
     |
     | Only MATOMO_HOST is read. MATOMO_URL used to be accepted as a fallback and
     | is not any more: it is not this package's key, so applications that already
-    | had their own Matomo integration reading MATOMO_URL were activating THIS
-    | package by configuring THAT one. Setting MATOMO_HOST means this package.
+    | had their own Matomo integration reading MATOMO_URL were activating this
+    | package by configuring that one. Setting MATOMO_HOST means this package.
     */
 
     'host' => env('MATOMO_HOST'),
     'site_id' => env('MATOMO_SITE_ID'),
 
-    // A SITE ID PER REQUEST, FOR MULTI-TENANT APPLICATIONS. Null means "use site_id above",
+    // A site ID per request, for multi-tenant applications. Null means "use site_id above",
     // which is what almost every application wants.
     //
     // The shape is `fn(): ?int` -- an invokable class-string (config-cache-safe) or a closure.
@@ -48,7 +48,7 @@ return [
     // request context, which the callback already has, and passing a Hit would tie this seam
     // to a value object it has no business knowing.
     //
-    // It is resolved PER PAYLOAD, so a buffered batch may legitimately carry hits for several
+    // It is resolved per payload, so a buffered batch may legitimately carry hits for several
     // sites -- each buffered hit already holds its own `idsite`, and Matomo's Bulk endpoint
     // accepts a mixed batch. That is why this is a resolver rather than a `scoped` binding:
     // rebuilding the connection per request would not fix the buffer, and this does.
@@ -57,11 +57,11 @@ return [
     // `site_id`. Tracking never breaks the caller, and that includes an extension point.
     'site_id_resolver' => null,
 
-    // REFUSE TO TRACK OVER A PLAINTEXT HOST. Off by default, because Matomo on a private
+    // Refuse to track over a plaintext host. Off by default, because Matomo on a private
     // network without TLS is a legitimate deployment and turning this on by default would
     // silently stop tracking for every one of them.
     //
-    // With it on, a `host` that is not https makes the connection count as UNCONFIGURED --
+    // With it on, a `host` that is not https makes the connection count as unconfigured --
     // the same no-op path a missing host takes, never an exception. This package does not
     // throw into application code, and a security setting is the last place to start.
     //
@@ -125,16 +125,18 @@ return [
     'queue' => [
         'connection' => env('MATOMO_QUEUE_CONNECTION'),
         'queue' => env('MATOMO_QUEUE', 'matomo'),
-        'tries' => 5,
+        // A value that is not a whole number of at least 1 keeps the shipped one: zero tries is no
+        // ceiling to Laravel's worker, and zero minutes would end the retrying before it began.
+        'tries' => filter_var(env('MATOMO_QUEUE_TRIES', 5), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 5,
         'backoff' => [30, 120, 300, 900],
-        'retry_until_minutes' => 1440,
+        'retry_until_minutes' => filter_var(env('MATOMO_QUEUE_RETRY_UNTIL_MINUTES', 1440), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 1440,
     ],
 
     'batch' => [
         'driver' => env('MATOMO_BATCH_DRIVER', 'database'), // database|redis|file|array
 
-        // HOW MANY HITS GO INTO ONE BULK REQUEST, AND THEREFORE HOW MANY REQUESTS A
-        // BACKLOG COSTS. It is the round-trip knob, and it was set low enough to matter:
+        // How many hits go into one bulk request, and therefore how many requests a
+        // backlog costs. It is the round-trip knob, and it was set low enough to matter:
         // draining 2000 hits against a Matomo answering in 20ms took 1021ms at 50, 276ms
         // at 200 and 125ms at 500 — the same hits, the same connection, 8x apart. These
         // are round trips rather than handshakes; the shared cURL handler already reuses
@@ -151,7 +153,7 @@ return [
         'size' => filter_var(env('MATOMO_BATCH_SIZE', 200), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 200,
         'flush_interval' => filter_var(env('MATOMO_BATCH_INTERVAL', 60), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 60,
         'max_per_flush' => filter_var(env('MATOMO_BATCH_MAX_PER_FLUSH', 2000), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 2000,
-        'stale_after_minutes' => 15,
+        'stale_after_minutes' => filter_var(env('MATOMO_BATCH_STALE_AFTER_MINUTES', 15), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 15,
 
         // The `redis` driver moves hits with LMOVE, which needs Redis 6.2 or later. On an older
         // server a flush ends marked unavailable and names the missing command.
@@ -173,7 +175,7 @@ return [
             // `0` keeps them forever — the same convention as `--max-runs`, `--max-time`
             // and `--memory`, where 0 means "no limit".
             //
-            // ON by default, and that is a deliberate choice rather than a default that
+            // On by default, and that is a deliberate choice rather than a default that
             // happened. Two reasons, and the second is the one specific to this package:
             //
             //  1. Nothing else ever deletes from this table. `matomo:replay` removes an
@@ -181,7 +183,7 @@ return [
             //     a human. An installation where nothing goes wrong never runs either, so
             //     the table only grows, and its rows carry a longText payload each.
             //  2. An old dead letter is not merely stale, it is misleading to replay.
-            //     `cdt` is stamped when the payload is BUILT, so a replayed batch carries
+            //     `cdt` is stamped when the payload is built, so a replayed batch carries
             //     its original timestamp — and Matomo refuses a `cdt` older than about a
             //     day unless the request carries `token_auth`. Without a token such a hit
             //     is sent without its time and recorded at today's date instead, which
@@ -190,7 +192,8 @@ return [
             // 30 days is far beyond any realistic diagnosis window and well short of the
             // point where the table becomes a problem. Set it to `0` if you would rather
             // keep everything, or lower it if the queue is large.
-            'retention_days' => filter_var(env('MATOMO_DEAD_LETTER_RETENTION_DAYS', 30), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 30,
+            // A negative value keeps the shipped 30 days rather than reading as a retention.
+            'retention_days' => filter_var(env('MATOMO_DEAD_LETTER_RETENTION_DAYS', 30), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0], 'flags' => FILTER_NULL_ON_FAILURE]) ?? 30,
         ],
     ],
 
@@ -270,7 +273,7 @@ return [
         'user_id' => null,   // 'auth' to attach the authenticated user id, or null
     ],
 
-    // On by default, and the truncation happens HERE — in this application, before
+    // On by default, and the truncation happens here — in this application, before
     // the hit is sent. That is the answer to the question an EU deployment actually
     // asks: the full address never leaves your server. (Matomo can also anonymize
     // server-side; that is its own setting and independent of this one.) A value that
@@ -316,7 +319,7 @@ return [
         // page instead, so these two cover Livewire's endpoint itself.
         'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*', 'livewire-*/*'],
 
-        // THE CONSENT SEAM, and it can only ever say NO. Consulted LAST, after every
+        // The consent seam, and it can only ever say NO. Consulted last, after every
         // rule above it, and server-side only: return false to refuse tracking; true and
         // null both leave the earlier verdict exactly as it was. It cannot re-admit a
         // visitor the bot check, the opt-out cookie or Do-Not-Track already turned away.
@@ -343,7 +346,7 @@ return [
         // Server-side opt-out: the gate skips tracking when this first-party cookie
         // is present. Set/clear it with MatomoAnalytics\Privacy\OptOut::enable()/disable()
         // — a server-set, encrypted cookie. A plaintext cookie set from client-side JS is
-        // dropped by Laravel's EncryptCookies and will NOT be honored: opt out server-side.
+        // dropped by Laravel's EncryptCookies and will not be honored: opt out server-side.
         'opt_out' => [
             'respect' => true,
             'cookie' => 'matomo_opt_out',
@@ -453,7 +456,7 @@ return [
     */
 
     'js' => [
-        // The client-side tracker as a whole. It governs BOTH doors that put tracking into a
+        // The client-side tracker as a whole. It governs both doors that put tracking into a
         // page: `@matomoScript` and the `<noscript>` pixel (`@matomoNoscript`) — both go
         // through the same `active()` check. `@matomoWebVitals` has its own switch below and
         // ships off; `@matomoOptOut` is not tracking and keeps working either way.
@@ -468,8 +471,8 @@ return [
         'enable_link_tracking' => true,
 
         // Native Matomo page-performance metrics (the "Leistung" report: network/server/
-        // transfer/DOM/on-load times) are collected AUTOMATICALLY by matomo.js on the first
-        // full page load — no extra call. This flag only lets you turn them OFF: when false,
+        // transfer/DOM/on-load times) are collected automatically by matomo.js on the first
+        // full page load — no extra call. This flag only lets you turn them off: when false,
         // the snippet pushes disablePerformanceTracking before trackPageView.
         'performance' => true,
 
@@ -504,7 +507,7 @@ return [
     |   - "livewire" : Livewire wire:navigate            (fires livewire:navigated)
     |   - "inertia"  : Inertia.js (Vue & React)          (fires inertia:navigate)
     |   - "generic"  : any client router via History pushState + popstate
-    | An adapter records a page view only when the URL actually CHANGES: these events
+    | An adapter records a page view only when the URL actually changes: these events
     | are not proof of a navigation on their own (Livewire emits livewire:navigated
     | once on every hard load, too), and firing on them counted such a load twice.
     | A window.matomoTrackPageView() helper is always exposed for manual triggers;
@@ -557,7 +560,7 @@ return [
     |
     | `middleware.skip_prefetch` keeps a speculation-rules prefetch or prerender from
     | counting as a page view — the pointer resting on a link is not a visit. But when the
-    | reader then DOES click, the browser shows the page it already holds and the server
+    | reader then does click, the browser shows the page it already holds and the server
     | never hears about it, so the view would be missing instead of doubled.
     |
     | When enabled, @matomoPrefetchPageView closes that half: the page reports itself,

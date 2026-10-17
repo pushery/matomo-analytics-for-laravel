@@ -85,7 +85,7 @@ final readonly class BufferFlusher
                 break;
             }
 
-            // CLAIMED ROWS, NO READABLE PAYLOADS — a poison pill of a different kind, and the
+            // Claimed rows, no readable payloads — a poison pill of a different kind, and the
             // loop used to stop dead on it. `isEmpty()` was the break condition, so a batch
             // whose payloads no longer decode read as "the buffer is drained": the rows kept
             // their claim, went stale, were reclaimed, failed to decode again, and every hit
@@ -95,8 +95,8 @@ final readonly class BufferFlusher
             // decode cannot be sent to Matomo by anyone. So it is reported once and acked
             // away, which is the only disposal that lets the rest of the buffer move.
             //
-            // THE REPORT IS DRIVEN BY `skipped`, NOT BY `isEmpty()`, AND THAT IS THE HALF
-            // 0.24.0 LEFT BEHIND. The all-or-nothing case was fixed and the PARTIAL one was
+            // The report is driven by `skipped`, NOT BY `isEmpty()`, and that is the half
+            // 0.24.0 left behind. The all-or-nothing case was fixed and the partial one was
             // not: two readable rows and one corrupt row delivered two hits, acked all three
             // — `ack()` deletes by claim ref, so the skipped row goes with them — and ended
             // green. Measured: delivered 2, dead-lettered 0, `isStuck()` false, no event, no
@@ -178,7 +178,7 @@ final readonly class BufferFlusher
 
         // Matomo answers 200 to a bulk request it partly refused, and the count it states was
         // read and then dropped one layer down until now. Reported rather than acted on: the
-        // envelope does not say WHICH hits, so there is nothing to release or dead-letter —
+        // envelope does not say which hits, so there is nothing to release or dead-letter —
         // but a batch that half arrived must not look identical to one that fully did.
         if ($result->invalid > 0) {
             $this->reporter->report(
@@ -266,7 +266,7 @@ final readonly class BufferFlusher
         $this->buffer->ack($batch);
 
         if (Config::bool('matomo-analytics.events', true)) {
-            // BOTH EVENTS, AND `TrackingFailed` WAS MISSING HERE ENTIRELY. It has only ever
+            // Both events, and `TrackingFailed` was missing here entirely. It has only ever
             // been dispatched from `SendHitsJob` — the queue path — while three places said
             // otherwise, including `config/matomo-analytics.php`, which is the file a consumer
             // publishes and reads, and a comment in `SendHitsJob` itself claiming "the batch

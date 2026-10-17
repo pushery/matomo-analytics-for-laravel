@@ -25,7 +25,7 @@ final class ReplayCommand extends Command
     protected $description = 'Replay dead-lettered Matomo hits back into delivery.';
 
     /**
-     * REPLAY GOES WHERE THE CONFIGURED MODE ACTUALLY DELIVERS, which used to be the buffer
+     * Replay goes where the configured mode actually delivers, which used to be the buffer
      * in every mode — and the buffer is only ever drained in `batch` mode, because
      * `registerScheduledFlush()` returns early for anything else. So on the shipped default
      * (`queue`) the command deleted the dead-letter rows, pushed their hits into a store

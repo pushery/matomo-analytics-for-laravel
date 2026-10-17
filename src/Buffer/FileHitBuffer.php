@@ -181,7 +181,7 @@ final class FileHitBuffer implements ErasableHitBuffer
      * The queue file, open for reading and writing under the lock writers take, or null when
      * nothing was ever buffered.
      *
-     * THE QUEUE STAYS WHERE IT IS. A claim used to rename it aside, and push() opens the file
+     * The queue stays where it is. A claim used to rename it aside, and push() opens the file
      * before it waits for the lock: a writer caught between the two held the renamed file, its
      * line landed after the claim had read it, and ack() deleted the line with the batch. Locking
      * the same file a writer appends to, and never moving it, leaves no file a writer could still

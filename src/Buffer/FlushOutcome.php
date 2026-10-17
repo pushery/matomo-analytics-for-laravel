@@ -11,7 +11,7 @@ namespace MatomoAnalytics\Buffer;
  * apart from a losing one: a wrong `site_id` makes Matomo answer 4xx to every batch, each
  * batch is dead-lettered as poison, and the run ends with zero delivered — exactly the number
  * an idle minute produces. The consecutive-failure counter does not close that gap either,
- * because it only counts TRANSIENT failures; the permanent branch never touches it. So the
+ * because it only counts transient failures; the permanent branch never touches it. So the
  * single most common misconfiguration in this package produced a green scheduled command
  * every minute while nothing arrived.
  *
@@ -35,9 +35,9 @@ final readonly class FlushOutcome
      * poison batch among thousands of delivered hits is the dead-letter queue doing its job,
      * and reporting failure for it would train the reader to ignore the signal.
      *
-     * - Zero delivered AND something lost is what a wrong host, site id or token makes.
+     * - Zero delivered and something lost is what a wrong host, site id or token makes.
      * - The buffer could not be claimed from at all — a spool directory nobody can write to,
-     *   a full disk, a read-only mount. That one used to be INVISIBLE: the driver had nothing
+     *   a full disk, a read-only mount. That one used to be invisible: the driver had nothing
      *   to return but an empty batch, an empty batch is how the flusher learns the buffer is
      *   drained, and so the command printed `Flushed 0 Matomo hit(s).` and exited zero every
      *   minute over hits that were still sitting in the file.

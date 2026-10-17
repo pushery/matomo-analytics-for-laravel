@@ -17,7 +17,7 @@ use MatomoAnalytics\Support\TableLookup;
 // retention window is now here. batch.dead_letter.retention_days makes the daily prune
 // filter on exactly this column, on a table whose reason for existing is that it grows.
 //
-// Deliberately a SEPARATE migration rather than an edit to either of the two before it.
+// Deliberately a separate migration rather than an edit to either of the two before it.
 // Editing the create migration would leave every existing installation without the index
 // while recording the schema as current, and editing the drop would make a migration mean
 // something different after it had already run.
@@ -26,8 +26,8 @@ return new class extends Migration
     public function up(): void
     {
         // Conditional, for the same reason the drop before it is: this has to run cleanly
-        // from zero AND on an installation carrying either earlier shape. Matched by
-        // COLUMNS, never by a hand-built name — Laravel's createIndexName() prepends the
+        // from zero and on an installation carrying either earlier shape. Matched by
+        // columns, never by a hand-built name — Laravel's createIndexName() prepends the
         // connection's table prefix when `prefix_indexes` is set (the shipped default for
         // mysql and pgsql), so a name assembled here would miss the real index and this
         // migration would add a second one beside it.

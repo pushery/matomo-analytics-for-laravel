@@ -27,7 +27,7 @@ final class TestConnectionCommand extends Command
     public function handle(Connection $connection, Sender $sender): int
     {
         if (! $connection->isConfigured()) {
-            // TWO REFUSALS WEAR THE SAME BOOLEAN, AND THEY NEED OPPOSITE REACTIONS. A missing
+            // Two refusals wear the same boolean, and they need opposite reactions. A missing
             // host is something nobody has done yet; a plaintext host under require_tls is
             // something the operator asked this package to refuse. Printing "set MATOMO_HOST"
             // to somebody who has set it sends them looking for a fault that is not there.
@@ -92,7 +92,7 @@ final class TestConnectionCommand extends Command
     /**
      * Say when the Redis holding the buffer would not survive its own restart.
      *
-     * The claim-before-send contract is about a crashing PROCESS and says nothing about the
+     * The claim-before-send contract is about a crashing process and says nothing about the
      * store. Measured: 5,000 hits buffered, `kill -9` on the server, restart — `size()`
      * answers 0, the next flush delivers 0 and exits zero, which is what an idle minute also
      * looks like. Persistence appeared nowhere in this package's documentation or output, and
@@ -120,7 +120,7 @@ final class TestConnectionCommand extends Command
         $aof = is_array($appendonly) ? ($appendonly['appendonly'] ?? $appendonly[1] ?? null) : null;
         $rdb = is_array($save) ? ($save['save'] ?? $save[1] ?? null) : null;
 
-        // A CONFIG renamed away answers false under phpredis rather than throwing, and an
+        // A config renamed away answers false under phpredis rather than throwing, and an
         // `appendonly` that could not be read is not `no`: the setting is unchecked, not off.
         if (! is_string($aof)) {
             $this->redisSettingUnchecked('persistence', 'returned nothing usable', $confirm);
@@ -184,7 +184,7 @@ final class TestConnectionCommand extends Command
     /**
      * How much is waiting, and how much has been given up on.
      *
-     * THE PACKAGE SHIPPED NO SUPPORTED WAY TO ASK EITHER QUESTION. `HitBuffer::size()` had
+     * The package shipped no supported way to ask either question. `HitBuffer::size()` had
      * exactly one caller in the shipped tree — the load simulator — and `matomo:flush` reports
      * only the pass it just made, so "the buffer grows and never drains", which the
      * troubleshooting guide names as a symptom, could not be observed with anything the
@@ -197,7 +197,7 @@ final class TestConnectionCommand extends Command
      */
     private function reportBacklog(): void
     {
-        // EACH COUNT IS ITS OWN try, AND NEITHER MAY FAIL THE COMMAND. This is a
+        // Each count is its own try, and neither may fail the command. This is a
         // diagnostic: an unreachable Redis, a spool that is not there yet, a database with no
         // migration run — every one of those is a normal state for somebody typing
         // `matomo:test`, and turning any of them into an exception removes the connectivity
@@ -207,7 +207,7 @@ final class TestConnectionCommand extends Command
         // buffer being unreachable says nothing about whether the dead-letter table can be
         // read, and one shared catch would hide the second number behind the first.
         //
-        // NOT FAILING IS NOT THE SAME AS SAYING NOTHING. A store that could not be read used to
+        // Not failing is not the same as saying nothing. A store that could not be read used to
         // count as empty, so with the buffer's Redis down this command printed "Matomo OK" and
         // not a word about the buffer, while every hit the application tracked failed to go in.
         if (Config::string('matomo-analytics.mode', 'queue') === 'batch') {
@@ -272,7 +272,7 @@ final class TestConnectionCommand extends Command
     /**
      * Say that a Redis setting the buffer depends on could not be read, and what to confirm.
      *
-     * The buffer itself never needs CONFIG; only these two diagnostics read it.
+     * The buffer itself never needs config; only these two diagnostics read it.
      */
     private function redisSettingUnchecked(string $setting, string $why, string $confirm): void
     {
@@ -291,9 +291,9 @@ final class TestConnectionCommand extends Command
     /**
      * Whether the host this package talks to is reachable without TLS.
      *
-     * THIS IS A WARNING AND NOT A REFUSAL, DELIBERATELY. Matomo on a private network without
+     * This is a warning and not a refusal, deliberately. Matomo on a private network without
      * TLS is a legitimate deployment, and refusing it would break installations that are fine.
-     * What is NOT fine is that it happens silently: `token_auth` travels in the request BODY on
+     * What is not fine is that it happens silently: `token_auth` travels in the request body on
      * every hit, so a plaintext host puts an admin-capable credential on the wire each time —
      * and until now the only feedback was this command answering "Matomo OK".
      *
@@ -323,7 +323,7 @@ final class TestConnectionCommand extends Command
      * cache; under an `allkeys-*` `maxmemory-policy` that makes them exactly as evictable as
      * everything else in the keyspace.
      *
-     * WHAT AN EVICTION LOOKS LIKE IS NOTHING. `LLEN` answers 0, the claim comes back empty,
+     * What an eviction looks like is nothing. `LLEN` answers 0, the claim comes back empty,
      * the flush ends, and `matomo:flush` prints "Flushed 0 Matomo hit(s)." and exits zero --
      * the same output an idle minute produces. Hits vanish and every signal stays green,
      * which is why this belongs in the command someone runs when they are already wondering
@@ -331,7 +331,7 @@ final class TestConnectionCommand extends Command
      *
      * Advisory, never fatal, like every other line this command prints: it is a diagnostic,
      * and a diagnostic that fails the run removes the diagnosis. A Redis that does not answer
-     * CONFIG is usually a managed instance with the command renamed or denied, which is not
+     * config is usually a managed instance with the command renamed or denied, which is not
      * itself a finding, so it gets a line rather than a warning: printing nothing would read
      * as a policy that was checked and found safe.
      */
@@ -375,15 +375,15 @@ final class TestConnectionCommand extends Command
     }
 
     /**
-     * Warn about settings the SHIPPED config declares that the running application cannot see.
+     * Warn about settings the shipped config declares that the running application cannot see.
      *
-     * WHAT THIS CATCHES, and it is narrower than it first looks. A published config that simply
-     * omits a newer key is NOT a problem: `mergeConfigRecursivelyFrom()` puts it back, which is
+     * What this catches, and it is narrower than it first looks. A published config that simply
+     * omits a newer key is not a problem: `mergeConfigRecursivelyFrom()` puts it back, which is
      * measurable — override the whole `batch` block without `dead_letter.retention_days` and the
      * value still reads 30. That recursion exists precisely for this.
      *
      * The gap is one layer further out: the merge does not run at all when the configuration is
-     * CACHED. A cache built before a package update, and never rebuilt, is then the whole truth,
+     * cached. A cache built before a package update, and never rebuilt, is then the whole truth,
      * and a key added since is simply absent. Nothing throws — an absent key yields the code
      * fallback, which `ConfigFallbackParityTest` forces to equal the shipped value, so it is
      * usually even correct. Usually is not always, and the exceptions are exactly the settings
@@ -427,7 +427,7 @@ final class TestConnectionCommand extends Command
     }
 
     /**
-     * Every SETTING path in a config array, with a list counted as one leaf rather than walked.
+     * Every setting path in a config array, with a list counted as one leaf rather than walked.
      *
      * `Arr::dot()` would expand `privacy.redact.keys` into `.0`, `.1`, … and then report every
      * element a consumer trimmed from a list as a missing setting, which is noise: a list is a

@@ -14,7 +14,7 @@ final readonly class BufferBatch
      * @param  list<array<string, scalar>>  $payloads
      * @param  int  $skipped  Claimed entries whose payload would not decode and were dropped.
      *
-     * `skipped` EXISTS BECAUSE DROPPING THEM WAS SILENT, AND ACKING DELETED THEM ANYWAY.
+     * `skipped` exists because dropping them was silent, and acking deleted them anyway.
      * A driver that decodes stored bytes skips what it cannot read, and `ack()` then removes
      * every entry of the claim — the readable ones because they were delivered, the skipped
      * one because it shares the ref. Measured with three rows and one corrupt payload:
@@ -44,8 +44,8 @@ final readonly class BufferBatch
     /**
      * Nothing was claimed at all — the buffer is drained.
      *
-     * NOT THE SAME AS `isEmpty()`, and conflating the two wedges the buffer. A batch that
-     * claimed rows whose payloads no longer decode is empty of payloads and NOT empty of
+     * Not the same as `isEmpty()`, and conflating the two wedges the buffer. A batch that
+     * claimed rows whose payloads no longer decode is empty of payloads and not empty of
      * work: it holds a ref, those rows are marked claimed, and a caller that reads
      * `isEmpty()` as "drained" stops there — leaving the rows to go stale, be reclaimed, fail
      * to decode again, and stop the next run at the same place. One unreadable row would have

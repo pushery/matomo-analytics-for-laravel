@@ -15,7 +15,7 @@ use MatomoAnalytics\Reporting\ReportQuery;
  * are the protocol; everything below them is a curated shortcut expressed in terms
  * of get(), and the two are separated by a comment rather than by two interfaces.
  *
- * IMPLEMENTING THIS IS STILL A FIVE-METHOD JOB. `use ResolvesCommonReports` supplies
+ * Implementing this is still a five-method job. `use ResolvesCommonReports` supplies
  * every shortcut from get() alone -- it declares get() abstract for exactly
  * that reason -- so an implementer writes the protocol and one use statement. Both
  * shipped implementations do precisely that.

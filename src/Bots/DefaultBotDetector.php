@@ -80,7 +80,7 @@ final class DefaultBotDetector implements BotDetector
     }
 
     /**
-     * `mb_strtolower`, NOT `strtolower`, BECAUSE THE FRAMEWORK USES IT AND THIS DIVERGED.
+     * `mb_strtolower`, NOT `strtolower`, because the framework uses it and this diverged.
      * `strtolower` is byte-wise: it lowercases ASCII and leaves every other codepoint alone.
      * So a configured token spelled with non-ASCII capitals matched under `Str::contains` and
      * not here — `ЯНДЕКС-РОБОТ` against `Яндекс`, to name the case that was measured. Ten real
@@ -101,19 +101,19 @@ final class DefaultBotDetector implements BotDetector
     }
 
     /**
-     * A COMPILE-TIME token list, lowercased once for the whole process.
+     * A compile-time token list, lowercased once for the whole process.
      *
-     * ONE `mb_strtolower()` CALL PER TOKEN PER HIT, ON VALUES THAT CANNOT CHANGE. The lowering
+     * One `mb_strtolower()` call per token per hit, on values that cannot change. The lowering
      * sat inside the match loop over `AiCrawlers::TOKENS` — 0.0035ms per hit, about 4% of
      * `track()`, spent turning the same constants into the same strings over and over.
      *
-     * AND THE SIZE OF THAT LIST IS DELIBERATELY NOT WRITTEN DOWN HERE. This paragraph said
+     * And the size of that list is deliberately not written down here. This paragraph said
      * "164 entries" twice, and it was wrong the day the upstream sync landed eight more — a
-     * comment that names the size of a list a BOT maintains is a claim nobody re-checks, and it
+     * comment that names the size of a list a bot maintains is a claim nobody re-checks, and it
      * goes stale on a schedule. The cost is one call per token, which is the part that does not
      * move. `AiCrawlersTest` holds the rule with a derived arm.
      *
-     * Only the CONSTANTS go through here. A configured list (`bots.allow`, `bots.deny`, a
+     * Only the constants go through here. A configured list (`bots.allow`, `bots.deny`, a
      * custom chatbot list) is read from config on every call and is short, and memoizing it
      * would serve a stale list to the next test — or, under Octane, to the next request — the
      * moment somebody changed it.

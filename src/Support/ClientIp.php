@@ -69,7 +69,7 @@ final class ClientIp
     /**
      * The client address a forwarding header names, or null when it names none.
      *
-     * READ FROM THE RIGHT. A proxy APPENDS the address it received the request from to whatever
+     * Read from the right. A proxy appends the address it received the request from to whatever
      * `X-Forwarded-For` the request already carried: nginx's `$proxy_add_x_forwarded_for`, an AWS
      * load balancer in its default mode and Cloudflare all do. So the entries on the left are
      * whatever the client chose to send, and only the ones the trusted proxies appended can be

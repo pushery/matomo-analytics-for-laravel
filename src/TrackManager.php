@@ -134,7 +134,7 @@ final class TrackManager implements Tracker
             return;
         }
 
-        // BATCH MODE COLLECTS TOO, and used to write straight through. `push()` is a database
+        // Batch mode collects too, and used to write straight through. `push()` is a database
         // INSERT or a Redis round trip depending on the driver, so every tracked hit put one
         // of those on the critical request path — while queue mode, three lines down, had
         // always deferred its dispatch to `terminating()`. The two modes paid very different
@@ -155,20 +155,20 @@ final class TrackManager implements Tracker
         $payloads = $this->pending;
         $this->pending = [];
 
-        // THE HANDOVER IS WRAPPED TOO, AND IT WAS THE ONE ENTRY POINT THAT WAS NOT.
+        // The handover is wrapped too, and it was the one entry point that was not.
         // `track()` and `aiChatbot()` have always run inside `safe()`; this did not — and in
-        // `batch` and `queue` the actual work happens HERE, not there. Only `sync` sends from
+        // `batch` and `queue` the actual work happens here, not there. Only `sync` sends from
         // inside `track()`, which is why every arm around `never_throw` passed over it.
         //
         // What escaped: this runs from the provider's `terminating()` callback, and
         // `Application::terminate()` has no try/catch of its own. So a `RedisException` from a
-        // brief queue outage — the SHIPPED DEFAULT is `queue` — reached PHP's uncaught handler,
-        // which reports UNCONDITIONALLY: around `never_throw`, around `report_after_attempts`,
+        // brief queue outage — the shipped default is `queue` — reached PHP's uncaught handler,
+        // which reports unconditionally: around `never_throw`, around `report_after_attempts`,
         // around the per-signature throttle, around `channel => 'silent'`. One unthrottled
         // error-tracker event per tracked request, and then an error page rendered onto a
         // response whose body had already been sent, which on a JSON API corrupts the payload.
         //
-        // `$pending` is cleared BEFORE the work on purpose: a failed handover must not leave the
+        // `$pending` is cleared before the work on purpose: a failed handover must not leave the
         // hits queued for a second attempt that would double-count them.
         $this->safe(function () use ($payloads): void {
             if (Config::bool('matomo-analytics.events', true)) {

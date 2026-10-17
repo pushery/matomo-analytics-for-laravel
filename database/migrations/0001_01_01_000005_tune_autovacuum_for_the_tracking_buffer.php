@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\TableLookup;
 
-// A QUEUE TABLE IS THE WORST SHAPE FOR POSTGRESQL'S DEFAULT AUTOVACUUM, and this one is a
+// A queue table is the worst shape for PostgreSQL's default autovacuum, and this one is a
 // queue: every row is inserted, claimed (an UPDATE, which writes a new tuple) and deleted.
 // The default trigger is 20% of the table plus fifty rows, so on a one-million-row backlog
 // autovacuum waits for 200,050 dead tuples before it runs at all.
@@ -24,7 +24,7 @@ use MatomoAnalytics\Support\TableLookup;
 // first claim of a run pays it. It is still a graveyard sitting exactly where the claim walks,
 // and the table that creates it set no per-table tuning.
 //
-// POSTGRESQL ONLY, AND SILENT EVERYWHERE ELSE. `ALTER TABLE … SET (autovacuum_…)` is
+// PostgreSQL only, and silent everywhere else. `ALTER TABLE … SET (autovacuum_…)` is
 // Postgres syntax; MySQL and SQLite have no equivalent and need none — InnoDB's purge thread
 // and SQLite's free-list do this work without a knob. A migration that ran it unconditionally
 // would fail every MySQL install.

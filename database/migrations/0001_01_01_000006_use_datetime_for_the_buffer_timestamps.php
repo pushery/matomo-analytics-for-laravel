@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\TableLookup;
 
-// MYSQL'S `TIMESTAMP` IS NOT AN ABSOLUTE MOMENT, AND THIS SCHEMA TREATED IT AS ONE.
+// MySQL's `TIMESTAMP` is not an absolute moment, and this schema treated it as one.
 //
 // Two measured consequences, both on real servers:
 //
-//  1. It shifts with the SESSION time zone. Written `12:00:00`, read back after
+//  1. It shifts with the session time zone. Written `12:00:00`, read back after
 //     `SET time_zone = '+05:00'`: MySQL answers `16:00:00`, PostgreSQL answers `12:00:00`.
 //     The session zone is `SYSTEM` by default and follows the operating system's, DST
 //     included. The stale-claim arithmetic is built on these columns, so after a DST change

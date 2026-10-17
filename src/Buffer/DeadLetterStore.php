@@ -26,7 +26,7 @@ final class DeadLetterStore
     /**
      * Park a batch, and say whether it landed.
      *
-     * THE RETURN VALUE IS THE POINT. `pruneOlderThan()` has always tolerated a missing
+     * The return value is the point. `pruneOlderThan()` has always tolerated a missing
      * table, and for a long time it was the only method here that did — so an installation
      * that suppresses the package migrations got a clean nightly prune and an "Undefined
      * table" out of the delivery path, which is the half that matters. Both callers park a
@@ -98,8 +98,8 @@ final class DeadLetterStore
     /**
      * Walk up to $limit parked batches (null = all), decoded back into payloads.
      *
-     * A GENERATOR, NOT AN ARRAY, and the difference is measured rather than stylistic.
-     * `->get()` over the whole table materialized every row AND its decoded payload tree
+     * A generator, not an array, and the difference is measured rather than stylistic.
+     * `->get()` over the whole table materialized every row and its decoded payload tree
      * at once: with a realistic Matomo payload (493 bytes of JSON, 50 payloads to a row,
      * so 24 KB on disk) a decoded row costs about 86 KB in PHP, and the raw result set
      * stays alive alongside it. Two thousand rows — an ordinary backlog after one outage
@@ -170,7 +170,7 @@ final class DeadLetterStore
      * something filters on age (a retention window)". This is that day.
      *
      * A row whose `failed_at` is NULL is never pruned, and that comes from SQL rather than
-     * from a clause here: `NULL < x` evaluates to UNKNOWN, not TRUE, so such a row never
+     * from a clause here: `NULL < x` evaluates to unknown, not TRUE, so such a row never
      * matches. An explicit `whereNotNull()` would change nothing about which rows go, and it
      * would read like a safeguard the query depends on, so there is none.
      *
@@ -180,7 +180,7 @@ final class DeadLetterStore
      */
     public function pruneOlderThan(int $days): int
     {
-        // A MISSING TABLE IS NOTHING TO CLEAN UP, not an error. An installation can suppress
+        // A missing table is nothing to clean up, not an error. An installation can suppress
         // the package migrations (`ignoreMigrations()`) or switch the store off entirely, and
         // the daily prune then ran against a table that was never created — throwing
         // "Undefined table" into the application's error dashboard every night.
@@ -191,13 +191,13 @@ final class DeadLetterStore
             return 0;
         }
 
-        // DELETED IN STEPS, and over the primary key rather than with `DELETE ... LIMIT`,
+        // Deleted in steps, and over the primary key rather than with `DELETE ... LIMIT`,
         // which PostgreSQL does not have. One unbounded statement held a lock on the whole
         // table for as long as it took — and each row here carries a `longText` holding an
         // entire batch, so "as long as it took" scales with the outage that filled it. On
         // Postgres it also leaves the dead tuples behind until autovacuum catches up.
         //
-        // The cutoff is computed ONCE, before the loop. Recomputing `now()` per step would
+        // The cutoff is computed once, before the loop. Recomputing `now()` per step would
         // widen the window slightly on every pass, so a long prune would delete rows that
         // were not old enough when it started.
         $cutoff = Date::now()->subDays($days);
