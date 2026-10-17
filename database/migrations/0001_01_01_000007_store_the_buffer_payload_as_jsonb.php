@@ -22,7 +22,7 @@ use MatomoAnalytics\Support\TableLookup;
 // The other two findings of that audit are decisions, and they stay.
 //
 // `claimed_at`, `created_at` and `failed_at` are `timestamp without time zone` on purpose. The
-// migration two files up moved them there FROM `timestamp` because MySQL's `TIMESTAMP` shifts
+// migration two files up moved them there from `timestamp` because MySQL's `TIMESTAMP` shifts
 // with the session time zone and ends in 2038, and `timestamptz` is not the way back: MySQL
 // has no such type, so a shared definition would hand MySQL that defect again. On PostgreSQL
 // alone it would only be correct when the connection's session zone matches `app.timezone`,

@@ -17,7 +17,9 @@ next release.
 
 - Keep the public API stable, or call out the break explicitly.
 - Add tests for any behavior change.
-- Update `README.md` and the `CHANGELOG.md` `## [Unreleased]` section.
+- Update `README.md` where your change alters what it describes. Leave `CHANGELOG.md` as it
+  is: it lists released versions, and the entry for your change is written when the change is
+  carried into the development repository.
 - Keep each commit focused.
 
 ## Local requirements

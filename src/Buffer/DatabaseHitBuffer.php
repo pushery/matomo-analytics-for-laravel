@@ -129,7 +129,7 @@ final class DatabaseHitBuffer implements ErasableHitBuffer
      */
     private function attemptClaim(int $limit, string $ref, DateTimeInterface $stale, ?string $lock): ?BufferBatch
     {
-        // BOTH READS GO TO THE WRITE CONNECTION. Laravel sends a query builder SELECT to the read
+        // Both reads go to the write connection. Laravel sends a query builder SELECT to the read
         // connection unless a transaction is open or `sticky` is set and this request has
         // written. On a connection with a `read` replica and no `sticky`, the read-back below
         // asked a replica that had not seen the UPDATE yet, came back with nothing, and the
@@ -168,7 +168,7 @@ final class DatabaseHitBuffer implements ErasableHitBuffer
             ]);
 
         if ($claimed === 0) {
-            // Rows were there and a rival stamped them first. NOT an empty buffer.
+            // Rows were there and a rival stamped them first. Not an empty buffer.
             return null;
         }
 

@@ -53,12 +53,12 @@ final class SendHitsJob implements ShouldQueue
      * distinguishable from the application's own work — the package's jobs are then
      * visible only as a share of a number nobody can attribute.
      *
-     * THIS METHOD MUST NOT THROW. It runs while the job is being pushed, and this
+     * This method must not throw. It runs while the job is being pushed, and this
      * package's whole stance is that tracking never breaks the caller. `Config::int`
      * is total — it answers with its default for a missing, null or non-numeric value —
      * so the site id cannot turn a dispatch into an exception.
      *
-     * The site id is included because it is BOUNDED: one tag per configured site.
+     * The site id is included because it is bounded: one tag per configured site.
      * Anything per-batch (a hit count, a payload digest) would mint a new tag on every
      * dispatch, and Horizon indexes tags.
      *
@@ -148,11 +148,11 @@ final class SendHitsJob implements ShouldQueue
     }
 
     /**
-     * A delivery failure is ABSORBED rather than rethrown.
+     * A delivery failure is absorbed rather than rethrown.
      *
      * Rethrowing is what reached the host application, and no setting in this package
      * could stop it: `Worker::runJob` catches whatever a job throws and hands it to the
-     * app's OWN ExceptionHandler, so every failed attempt became one entry in the app's
+     * app's own ExceptionHandler, so every failed attempt became one entry in the app's
      * error dashboard — past this package's `report_after_attempts` gate, past its
      * per-signature throttle, and past `channel => 'silent'`. It also made
      * `resilience.never_throw` untrue for the queued sender while it held for the
@@ -225,9 +225,9 @@ final class SendHitsJob implements ShouldQueue
      */
     private function exhaust(DeadLetterStore $deadLetters, Throwable $e): void
     {
-        // THE OPT-OUT, honored on the queue path too. The dead-letter migration has always
+        // The opt-out, honored on the queue path too. The dead-letter migration has always
         // documented `batch.dead_letter.enabled = false`, and `BufferFlusher` has always
-        // respected it — but only for BATCH mode. Queue mode reached `record()`
+        // respected it — but only for batch mode. Queue mode reached `record()`
         // unconditionally, so an installation that switched the store off still had rows
         // written to it, and an installation that suppressed the package migrations got
         // "Undefined table" in place of its actual delivery error.
@@ -237,7 +237,7 @@ final class SendHitsJob implements ShouldQueue
         // the ordinary way, which is what `fail()` does: the batch lands in `failed_jobs`,
         // visible and re-runnable.
         //
-        // `fail()` and NOT `throw`, deliberately. Rethrowing would hand the exception to the
+        // `fail()` and not `throw`, deliberately. Rethrowing would hand the exception to the
         // application's own handler — exactly the behavior 0.20.0 removed, and it would make
         // `resilience.never_throw` untrue again for the mode most installations run.
         if (! Config::bool('matomo-analytics.batch.dead_letter.enabled', true)) {
@@ -250,7 +250,7 @@ final class SendHitsJob implements ShouldQueue
         // deleted nor released, so the worker's own handling still owns the batch and
         // the hits are not lost between the two steps.
         //
-        // AND A WRITE THAT COULD NOT HAPPEN IS NOT A WRITE. `record()` answers false when
+        // And a write that could not happen is not a write. `record()` answers false when
         // there is no table — the state an installation reaches by calling
         // `ignoreMigrations()` while leaving the store switched on, which the installation
         // guide suggests and nothing here used to reconcile. Parking was impossible, so the
@@ -263,14 +263,14 @@ final class SendHitsJob implements ShouldQueue
         }
 
         if (Config::bool('matomo-analytics.events', true)) {
-            // BOTH events, and neither stands in for the other. `TrackingFailed` says this
+            // Both events, and neither stands in for the other. `TrackingFailed` says this
             // batch will not be attempted again; `HitsDeadLettered` says where it went. The
             // queue path fired only the first, so the listener the documentation recommends
             // for exactly this alarm — "a HitsDeadLettered event fires whenever a batch is
             // dead-lettered" — never fired in the shipped default mode.
             //
-            // THIS SENTENCE USED TO END "the batch path has dispatched both all along",
-            // AND THE BATCH PATH HAD NEVER DISPATCHED `TrackingFailed` AT ALL. A comment
+            // This sentence used to end "the batch path has dispatched both all along",
+            // and the batch path had never dispatched `TrackingFailed` at all. A comment
             // asserting a neighbor's behavior is a claim nothing checks, and this one sent
             // three readers past the defect: the config file, the provider and the 0.24.0
             // changelog all repeated it. `BufferFlusher::deadLetter()` dispatches both now.

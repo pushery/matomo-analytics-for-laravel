@@ -32,7 +32,7 @@ return new class extends Migration
             $table->unsignedInteger('hits');
             $table->unsignedInteger('attempts');
             $table->text('error')->nullable();
-            // Deliberately UNINDEXED. Every read of this table goes by id — the recent
+            // Deliberately unindexed. Every read of this table goes by id — the recent
             // list orders by id, the replay walks by id, the cleanup deletes by id — so an
             // index here would be paid for on every insert and used by nothing. It earns
             // one the day something filters on age (a retention window); until then it is
@@ -47,7 +47,7 @@ return new class extends Migration
     }
 
     /**
-     * Refuse BEFORE any DDL when the prefixed identifiers would not fit.
+     * Refuse before any DDL when the prefixed identifiers would not fit.
      *
      * `Schema::create()` sends more than one statement, and MySQL reports
      * `supportsSchemaTransactions: false` -- so a failure halfway leaves the table created,
@@ -56,7 +56,7 @@ return new class extends Migration
      * by hand. Measured: with a table prefix of 22 characters it runs, at 23 it falls, and a
      * `tenant_<uuid>_` prefix is about 44.
      *
-     * PostgreSQL is not safe either, it is merely recoverable: past 63 characters it TRUNCATES
+     * PostgreSQL is not safe either, it is merely recoverable: past 63 characters it truncates
      * silently, which collided two index names at a prefix of 32, and its transactional DDL
      * then rolled the whole thing back.
      *

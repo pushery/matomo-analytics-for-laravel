@@ -17,7 +17,7 @@
      LeanDependencyContractTest scans the shipped tree, and a Blade comment is not a PHP
      comment, so it cannot be stripped the way a docblock is.
 
-     The paragraph asserts a legal conclusion that holds for the SHIPPED
+     The paragraph asserts a legal conclusion that holds for the shipped
      configuration — cookieless, anonymized IPs, no user id, nothing shared. If
      you change those, change the text. --}}
 <section class="matomo-analytics-privacy">

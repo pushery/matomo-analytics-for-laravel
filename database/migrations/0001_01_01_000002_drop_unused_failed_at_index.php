@@ -22,11 +22,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Conditional in BOTH directions, and not as belt-and-braces. On a fresh database
+        // Conditional in both directions, and not as belt-and-braces. On a fresh database
         // the create migration above no longer adds the index at all, so this would drop
         // something that never existed and take `migrate` down with it — a migration has to
         // run from zero as cleanly as it runs on an installation that has the old shape.
-        // Matched by COLUMNS, not by name. hasIndex() compares against both, and the
+        // Matched by columns, not by name. hasIndex() compares against both, and the
         // column form is the only one that is independent of how the name was derived.
         if (! TableLookup::exists($this->table()) || ! Schema::hasIndex(TableLookup::qualified($this->table()), ['failed_at'])) {
             return;
@@ -62,7 +62,7 @@ return new class extends Migration
     /**
      * The name of the index over exactly these columns, or null when there is none.
      *
-     * DERIVED FROM THE CONNECTION, NOT FROM THE COLUMN NAMES. `hasIndex()` matches on columns
+     * Derived from the connection, not from the column names. `hasIndex()` matches on columns
      * and `dropIndex([...])` builds `<table>_<columns>_index`, so the two agree only when
      * Laravel created the index. A DBA who created it by hand -- likely, since the package ran
      * without it for eight releases -- got a clean guard and a drop that died with "index does

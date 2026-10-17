@@ -49,7 +49,7 @@ final readonly class Snippet
         $path = $this->js(URL::to(Config::string('matomo-analytics.web_vitals.path', 'matomo-analytics/web-vitals')));
         $names = '['.implode(',', array_map($this->js(...), Config::stringList('matomo-analytics.web_vitals.metrics'))).']';
 
-        // THE GLUE WAITS INSTEAD OF ASSUMING. It read `window.webVitals` the instant it
+        // The glue waits instead of assuming. It read `window.webVitals` the instant it
         // parsed, which only works if the library above it blocked the parser — so the
         // measurement of Core Web Vitals was itself costing a render-blocking request, and
         // the numbers it reported were worse for its own presence. Deferring the library and
@@ -191,13 +191,13 @@ final readonly class Snippet
      * `script()` already appends this pixel when `js.noscript` is on, so most integrations
      * need nothing here. This method exists for one specific and legitimate complaint: the
      * documented place for `script()` is `<head>`, and inside `<head>` the HTML spec allows
-     * a `noscript` to contain ONLY `link`, `style` and `meta`. An `img` there is a parse
+     * a `noscript` to contain only `link`, `style` and `meta`. An `img` there is a parse
      * error that ends the head early.
      *
      * The measured impact is validator noise rather than breakage — a parser's "after head"
      * rules push the following head-ish elements back where they belong, so browsers
      * recover, and the case only arises with JavaScript disabled to begin with. That is why
-     * the default is unchanged and this is an ADDITION: silently dropping the pixel from
+     * the default is unchanged and this is an addition: silently dropping the pixel from
      * `script()` would cost every consumer their no-JS tracking to fix validator output,
      * and most of them will never read the release note that explains it.
      *
@@ -419,7 +419,7 @@ final readonly class Snippet
         $lines = [
             '(function(){',
             // Seed the referrer with the hard-load URL. It is what the first soft navigation
-            // navigated away FROM, and leaving it empty made that first virtual page view look
+            // navigated away from, and leaving it empty made that first virtual page view look
             // like a direct entry — breaking exactly the flow reports the referrer chain exists
             // for. It also gives the listener guard below a value to compare against.
             '  window.__matomoSpaRef=window.location.href;',
@@ -469,7 +469,7 @@ final readonly class Snippet
         // that to `livewire:navigated` — so every hard load of a Livewire app emits the event
         // once, at the URL the page already tracked. Firing on it counted every hard load
         // twice. The URL is the only honest signal that a soft navigation occurred, so the
-        // adapters track on a CHANGE of it; window.matomoTrackPageView() stays unguarded for
+        // adapters track on a change of it; window.matomoTrackPageView() stays unguarded for
         // the screens a URL cannot express.
         $lines[] = '  var onNav=function(){if(window.location.href===window.__matomoSpaRef){return;}track();};';
 
@@ -538,7 +538,7 @@ final readonly class Snippet
      * Keeps a tag from being re-executed on every client-side navigation.
      *
      * Livewire's navigate plugin re-runs every <script> in the body it swaps in, unless the
-     * tag carries this attribute AND the plugin has already seen that tag's hash. Both
+     * tag carries this attribute and the plugin has already seen that tag's hash. Both
      * snippets here register listeners on `document`, which survives the swap — so a re-run
      * never replaces the old registration, it adds another one beside it.
      *
@@ -548,7 +548,7 @@ final readonly class Snippet
      *
      * The hash ignores `data-csrf`, `nonce` and `aria-hidden`, so a per-request CSP nonce does
      * not defeat it. Everything else these snippets emit comes from configuration and is
-     * therefore identical between two pages of one app. Where it is NOT — a per-page site id,
+     * therefore identical between two pages of one app. Where it is not — a per-page site id,
      * say — the hash differs, Livewire re-runs the tag, and the new configuration applies:
      * the attribute degrades toward today's behavior rather than into a stale tracker.
      *

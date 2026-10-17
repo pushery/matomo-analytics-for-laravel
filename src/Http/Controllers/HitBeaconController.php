@@ -49,7 +49,7 @@ final class HitBeaconController
             throw new NotFoundHttpException;
         }
 
-        // The origin of the REQUEST, which the sending page cannot write, before the payload it can.
+        // The origin of the request, which the sending page cannot write, before the payload it can.
         if (! BeaconOrigin::isOwn($request)) {
             return new Response(status: Response::HTTP_FORBIDDEN);
         }

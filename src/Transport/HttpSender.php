@@ -41,10 +41,10 @@ final class HttpSender implements Sender
      * handshake — up to forty of them against the same host in one flush run, where one
      * connection would have done.
      *
-     * SHARED HANDLER, NOT A SHARED CLIENT, and the difference decides whether `Http::fake()`
+     * Shared handler, not a shared client, and the difference decides whether `Http::fake()`
      * still works. `PendingRequest::setClient()` bypasses `buildHandlerStack()` entirely, and
-     * the fake IS a handler-stack middleware — so reusing a client would have silently turned
-     * every faked request in the suite into a real one. `setHandler()` sits UNDER that
+     * the fake is a handler-stack middleware — so reusing a client would have silently turned
+     * every faked request in the suite into a real one. `setHandler()` sits under that
      * middleware instead: the stub is pushed on top of it and short-circuits before the
      * handler is ever reached, so a faked send never opens a socket and a real one reuses the
      * curl handle.
@@ -65,8 +65,8 @@ final class HttpSender implements Sender
         ?callable $handler = null,
         ?bool $curl = null,
     ) {
-        // Injectable so a test can watch it: the property that matters is that CONSECUTIVE
-        // sends go through the SAME handler, and that is invisible from the outside unless
+        // Injectable so a test can watch it: the property that matters is that consecutive
+        // sends go through the same handler, and that is invisible from the outside unless
         // something can hold it.
         //
         // Stored as a Closure because PHP has no `callable` property type — an invokable
@@ -125,7 +125,7 @@ final class HttpSender implements Sender
     /**
      * What a 200 says about itself.
      *
-     * THE BODY WAS NEVER READ, AND MATOMO ANSWERS 200 TO A BULK REQUEST IT PARTLY REFUSED.
+     * The body was never read, and Matomo answers 200 to a bulk request it partly refused.
      * `successful()` alone made every one of those a delivery: the batch was acked out of the
      * buffer, never dead-lettered, and the hits were gone with every signal green.
      *
@@ -135,7 +135,7 @@ final class HttpSender implements Sender
      *   `status: error`   unambiguous under any reading — Matomo refusing inside a 200 is not
      *                     a delivery, so the batch takes the ordinary failure path.
      *   `invalid: N`      carried out as a number for the caller to report. It does not say
-     *                     WHICH hits, so no accounting is built on it and the batch is still
+     *                     which hits, so no accounting is built on it and the batch is still
      *                     a success: the ones that landed did land.
      *
      * Anything else — an empty body, an image, a non-JSON string, JSON without these keys —
@@ -198,14 +198,14 @@ final class HttpSender implements Sender
             ->connectTimeout($this->connection->connectTimeout)
             ->timeout($this->connection->timeout)
             ->withOptions(['version' => 1.1])
-            // A 307 OR 308 KEEPS THE METHOD AND THE BODY, AND THE TOKEN IS IN THE BODY.
+            // A 307 OR 308 keeps the method and the body, and the token is in the body.
             // Guzzle's `RedirectMiddleware` hands back an empty modifier set for any status
             // above 302, so the POST is replayed verbatim at whatever host the Location names.
             // Its cross-origin stripping covers `Authorization` and `Cookie` — headers — and
             // this token is a form field, so it traveled. Measured end to end: a 307 sent
             // `token_auth` to a foreign host, and `protocols` allowed the downgrade to http.
             //
-            // The trigger is a RESPONSE FROM THE MATOMO HOST, which on Matomo Cloud is a third
+            // The trigger is a response from the Matomo host, which on Matomo Cloud is a third
             // party — and the same token is an admin token, because the GDPR deletion path
             // requires one. A redirect is not an expected state here, so it is refused rather
             // than sanitized.

@@ -4,6 +4,20 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] - 2026-10-17
+
+### ✨ Added
+
+- **The job's attempts, its retry window and the reclaim time of a claimed batch can be set from the environment.** `MATOMO_QUEUE_TRIES` sets `queue.tries`, `MATOMO_QUEUE_RETRY_UNTIL_MINUTES` sets `queue.retry_until_minutes`, and `MATOMO_BATCH_STALE_AFTER_MINUTES` sets `batch.stale_after_minutes`. A value that is not a whole number of at least 1 keeps the shipped one.
+
+### 🔧 Changed
+
+- **A negative `MATOMO_DEAD_LETTER_RETENTION_DAYS` keeps the shipped 30 days.** It used to switch the daily prune off the way `0` does. Only `0` keeps dead letters without limit, as the configuration reference states.
+
+### 🐛 Fixed
+
+- **The migrations the package publishes call no internal class any more.** `MatomoAnalytics\Support\TableLookup`, which those migrations call, is part of the public API now. Once published, a migration runs in the application's own namespace, and an application whose static analysis reads its migrations was told that every one of those calls was a call into an internal class, which it could not fix without editing a published file.
+
 ## [0.34.0] - 2026-10-15
 
 Beacon limiters an application can register again for each tenant, beacon routes that leave the session alone, and Guzzle options of your own on every tracking call, together with prerendered pages counted when the reader opens them and a redaction pattern that can no longer let a URL through.
@@ -1688,7 +1702,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.32.1...v0.33.0

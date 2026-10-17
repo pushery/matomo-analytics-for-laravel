@@ -129,6 +129,22 @@ Reading requires `MATOMO_TOKEN`. Tracking works without it, but only a token let
 the package send the visitor's IP address (`cip`); without one, Matomo records the
 address of your server for every server-side hit.
 
+### 6. Operate
+
+- `php artisan matomo:replay --list` shows the batches that failed for good and sit in the
+  dead-letter queue; `matomo:replay` sends them again, and `--prune-older-than=30` deletes the
+  older ones.
+- `php artisan matomo:report VisitsSummary.get --period=day --date=today` prints what a
+  Reporting API method returns, the quickest check that `MATOMO_TOKEN` reads.
+- `php artisan matomo:annotate "Pricing page relaunched"` puts a note on the reports timeline;
+  `--release` marks a deployment with the application's version where `annotations.release`
+  allows it.
+- `php artisan matomo:forget "userId==alice@example.com"` erases a data subject's data through
+  Matomo's GDPR tools after a confirmation, and `--export` exports it instead.
+- `php artisan matomo:load-sim --hits=5000 --driver=database` drives synthetic hits through the
+  real buffer and flush and reports the throughput; `--against=fake`, the default, sends nothing
+  to Matomo.
+
 ## Testing in the consuming application
 
 Every facade has a fake, so tracking is asserted rather than mocked:

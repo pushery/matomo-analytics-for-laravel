@@ -44,7 +44,7 @@ final readonly class PayloadBuilder
      * The site this hit belongs to: whatever the configured resolver answers, else the
      * connection's own id.
      *
-     * THIS RUNS ON THE REQUEST PATH AND MUST NOT THROW. A resolver is application code the
+     * This runs on the request path and must not throw. A resolver is application code the
      * package cannot see, so anything it does other than naming a positive site id -- throwing,
      * returning null, a negative, any other string -- falls back rather than propagating. An
      * extension point that can break tracking is worse than no extension point.
@@ -186,7 +186,7 @@ final readonly class PayloadBuilder
 
     /**
      * Builds an AI-chatbot telemetry hit (recMode) — a bot-only Tracking API request
-     * that Matomo records as telemetry WITHOUT creating a visitor or session. It
+     * that Matomo records as telemetry without creating a visitor or session. It
      * deliberately omits the visit parameters (_id / urlref / uid / cip); no
      * token_auth is required. Returns an empty array unless AI-chatbot tracking is
      * enabled and the instance is configured.
@@ -309,15 +309,15 @@ final readonly class PayloadBuilder
     /**
      * Keep the first 48 bits and zero the rest, the way Matomo's own two-byte mask does.
      *
-     * NORMALIZED THROUGH inet_pton RATHER THAN SPLIT ON COLONS. Splitting is correct only
+     * Normalized through inet_pton rather than split on colons. Splitting is correct only
      * for the fully written-out form: any address carrying a `::` run explodes into empty
      * elements, so `2001:db8::1` came out as `2001:db8:::` — not an address at all. That is
      * the ordinary way IPv6 is written, so most anonymized addresses left here malformed,
      * and neither side complains: Matomo stores what it is sent and the geolocation simply
      * misses.
      *
-     * REJECTION IS `inet_pton` RATHER THAN `filter_var`, and the difference is one class:
-     * a zone id. `filter_var` refuses `fe80::1%eth0`, so it used to leave here VERBATIM — a
+     * Rejection is `inet_pton` rather than `filter_var`, and the difference is one class:
+     * a zone id. `filter_var` refuses `fe80::1%eth0`, so it used to leave here verbatim — a
      * whole link-local address surviving the setting that exists to cut it. It is an address
      * with an interface qualifier, not a non-address, and it is now masked like one. What is
      * not an address is not sent at all.
@@ -353,8 +353,8 @@ final readonly class PayloadBuilder
             // useless data: every mapped address has 48 zero bits in front, so all of them
             // would collapse to the same `::`.
             //
-            // THE TEST USED TO BE `str_contains($ip, '.')`, AND RFC 4291 LETS **ANY** IPv6
-            // ADDRESS END IN DOTTED-QUAD NOTATION. `2001:db8::192.0.2.1` is an ordinary
+            // The test used to be `str_contains($ip, '.')`, AND RFC 4291 lets **any** IPv6
+            // address end in dotted-quad notation. `2001:db8::192.0.2.1` is an ordinary
             // global address that merely writes its last 32 bits the familiar way — it took
             // this branch and left with 112 of its 128 bits intact, on the one setting whose
             // whole job is to remove them.

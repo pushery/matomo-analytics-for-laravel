@@ -45,9 +45,9 @@ final class MatomoReports implements ReportClient
             fn (): ?array => $this->fetch($method, $params),
         );
 
-        // A CACHE HIT NEVER REACHED THE ONE PLACE THAT CLEARS `lastError`. `remember()`
+        // A cache hit never reached the one place that clears `lastError`. `remember()`
         // returns before the resolver runs, and `call()` — inside the resolver — held the only
-        // `lastError = null` there was. So a read that SUCCEEDED left a previous failure
+        // `lastError = null` there was. So a read that succeeded left a previous failure
         // standing for as long as the entry lived, and the contract promises "null when
         // healthy". The documented use is a dashboard banner, which is exactly what kept
         // showing.

@@ -94,9 +94,9 @@ final class Config
             return $value;
         }
 
-        // THE STRING FORMS ARE THE POINT, AND LEAVING THEM OUT INVERTED FIVE SWITCHES.
+        // The string forms are the point, and leaving them out inverted five switches.
         // Laravel's `Env::get()` converts only `true`/`false`/`(true)`/`(false)`/`null`/`empty`,
-        // so `1`, `0`, `on`, `off`, `yes`, `no` arrive here as STRINGS — and this used to hand
+        // so `1`, `0`, `on`, `off`, `yes`, `no` arrive here as strings — and this used to hand
         // back the default, which for five shipped keys points the other way. `MATOMO_ENABLED=1`
         // tracked nobody; `MATOMO_JS_ENABLED=0` kept the client tracker rendering, which is a
         // privacy setting answering with its opposite and no diagnostic anywhere.
@@ -104,9 +104,9 @@ final class Config
         // It was an asymmetry rather than a policy: `int()` above has an `is_numeric` fallback
         // for exactly this shape, and this had none.
         //
-        // NULL AND THE EMPTY STRING ARE HANDLED BEFORE `filter_var`, NOT BY IT. Measured:
+        // Null and the empty string are handled before `filter_var`, NOT BY IT. Measured:
         // `filter_var(null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE)` returns **false**, and
-        // so does `''`. Leaving them to it would turn a key that is merely PRESENT AND NULL — the
+        // so does `''`. Leaving them to it would turn a key that is merely present and null — the
         // shape `env('X')` with no fallback produces, which is most of this package's config —
         // into a hard `false`, silently overriding every default. Three arms in `SnippetTest`
         // caught exactly that when this was written the short way.
@@ -120,7 +120,7 @@ final class Config
     }
 
     /**
-     * A list-of-strings option, falling back to what the package SHIPS for that key.
+     * A list-of-strings option, falling back to what the package ships for that key.
      *
      * The fallback matters in exactly one situation, and it is a bad one: a `config:cache`
      * built before this package's recursive merge existed and never rebuilt. The merge runs

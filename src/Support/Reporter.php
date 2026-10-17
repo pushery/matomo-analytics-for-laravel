@@ -61,7 +61,7 @@ final class Reporter
             );
 
             if ($channel === 'report') {
-                // NOT the report() helper: that one is Foundation-only, and this package
+                // Not the report() helper: that one is Foundation-only, and this package
                 // requires illuminate components rather than laravel/framework. The helper
                 // does exactly this — resolve the handler and call report on it.
                 App::make(ExceptionHandler::class)->report($e);
@@ -129,13 +129,13 @@ final class Reporter
     /**
      * A message reduced to what stays the same across repetitions of one failure.
      *
-     * THE THROTTLE PROMISES A SIGNATURE AND A CONNECTION FAILURE HAS NO STABLE MESSAGE.
+     * The throttle promises a signature and a connection failure has no stable message.
      * Guzzle writes the elapsed time into it — `Operation timed out after 2002 milliseconds` —
      * so hashing the raw message gives a sustained outage a fresh key on almost every attempt,
      * which is exactly the flood `throttle_minutes` exists to prevent. Measured: three
      * identical failures produced two keys and four log records.
      *
-     * AND THE OBVIOUS FIX IS THE WRONG ONE. Stripping every digit run would fold
+     * And the obvious fix is the wrong one. Stripping every digit run would fold
      * `HTTP 400` and `HTTP 500` into one signature, so the second, different failure would be
      * silenced by the first — a worse defect than the one being repaired, and a silent one.
      * Only a number attached to a time unit is normalized, because only that varies while the

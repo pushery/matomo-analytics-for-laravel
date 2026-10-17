@@ -11,7 +11,7 @@ use MatomoAnalytics\Support\TableLookup;
 // The claim path reads and writes by claimed_by, and until now nothing indexed it.
 //
 // The create migration added one secondary index, ['claimed_at', 'id'], which is the one
-// the claim itself uses. What it does not cover is everything that happens AFTER a claim,
+// the claim itself uses. What it does not cover is everything that happens after a claim,
 // and all three of those filter on claimed_by: reading the payloads back
 // (DatabaseHitBuffer::claim), ack() deleting the batch, and release() handing it back. So
 // a delivered batch cost two full scans of the buffer table and a released one cost two
@@ -22,14 +22,14 @@ use MatomoAnalytics\Support\TableLookup;
 // max_per_flush / batch.size batches (2000/50 = 40 on the shipped defaults), so a backlog
 // turns into up to eighty full scans a minute, at the moment the table is at its largest.
 //
-// Deliberately a SEPARATE migration rather than an edit to the create migration, for the
+// Deliberately a separate migration rather than an edit to the create migration, for the
 // reason the retention index one migration up gives: editing that one would leave every
 // existing installation without the index while recording the schema as current.
 return new class extends Migration
 {
     public function up(): void
     {
-        // Matched by COLUMNS rather than by a hand-built name — Laravel's createIndexName()
+        // Matched by columns rather than by a hand-built name — Laravel's createIndexName()
         // prepends the connection's table prefix when `prefix_indexes` is set (the shipped
         // default for mysql and pgsql), so a name assembled here would miss the real index and
         // add a second one beside it.

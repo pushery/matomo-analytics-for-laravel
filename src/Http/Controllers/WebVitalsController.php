@@ -40,14 +40,14 @@ final class WebVitalsController
     public function __invoke(Request $request, Tracker $tracker): Response
     {
         if (! Config::bool('matomo-analytics.web_vitals.enabled', false)) {
-            // NOT abort(): that helper ships only with laravel/framework's Foundation,
+            // Not abort(): that helper ships only with laravel/framework's Foundation,
             // and this package requires illuminate components instead. abort() does
             // exactly this — it throws the Symfony exception Laravel's handler renders
             // as a 404, which arrives here through illuminate/http either way.
             throw new NotFoundHttpException;
         }
 
-        // The origin of the REQUEST, which the sending page cannot write, before the payload it can.
+        // The origin of the request, which the sending page cannot write, before the payload it can.
         if (! BeaconOrigin::isOwn($request)) {
             return new Response(status: Response::HTTP_FORBIDDEN);
         }

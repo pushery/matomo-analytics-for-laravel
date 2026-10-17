@@ -19,7 +19,7 @@ final class TrackingSendException extends RuntimeException
      * Its own constructor rather than `status(200)`, because the two are different events and
      * an error dashboard should not merge them: one is a request that failed, this is a
      * request that succeeded while some of its contents did not. It is also the only failure
-     * shape here that does NOT mean the batch should be retried — the hits that landed landed,
+     * shape here that does not mean the batch should be retried — the hits that landed landed,
      * and re-sending would double-count them.
      */
     public static function rejected(int $count): self

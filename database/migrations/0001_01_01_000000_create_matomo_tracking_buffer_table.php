@@ -34,7 +34,7 @@ return new class extends Migration
     }
 
     /**
-     * Refuse BEFORE any DDL when the prefixed identifiers would not fit.
+     * Refuse before any DDL when the prefixed identifiers would not fit.
      *
      * `Schema::create()` sends more than one statement, and MySQL reports
      * `supportsSchemaTransactions: false` -- so a failure halfway leaves the table created,
@@ -43,7 +43,7 @@ return new class extends Migration
      * by hand. Measured: with a table prefix of 22 characters it runs, at 23 it falls, and a
      * `tenant_<uuid>_` prefix is about 44.
      *
-     * PostgreSQL is not safe either, it is merely recoverable: past 63 characters it TRUNCATES
+     * PostgreSQL is not safe either, it is merely recoverable: past 63 characters it truncates
      * silently, which collided two index names at a prefix of 32, and its transactional DDL
      * then rolled the whole thing back.
      *

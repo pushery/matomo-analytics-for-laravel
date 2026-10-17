@@ -30,7 +30,7 @@ final class WorkCommand extends Command
      *
      * The flag stays private; the door is `stopAfterCurrentRun()`, which is what both the
      * signal handler and a test go through. With it already set, the loop must perform
-     * exactly ONE flush and return — that is the whole contract a delivered SIGTERM buys.
+     * exactly one flush and return — that is the whole contract a delivered SIGTERM buys.
      */
     private bool $shouldStop = false;
 
@@ -58,14 +58,14 @@ final class WorkCommand extends Command
         // `trap()` passes the argument through `value()`, so a closure is evaluated only where
         // the constants exist.
         //
-        // The HANDLER is a first-class callable rather than a closure for a second,
+        // The handler is a first-class callable rather than a closure for a second,
         // unrelated reason: a closure body here is only ever entered by a delivered
         // signal, which no test can trigger without risking the runner itself. Pointing
         // at a named method gives the stop path a seam a test can drive directly.
         $this->trap(fn (): array => [SIGTERM, SIGINT], $this->stopAfterCurrentRun(...));
 
-        // THIS LOOP USED TO CALL `flush()`, DISCARD ITS COUNT, AND RETURN SUCCESS NO MATTER
-        // WHAT. Measured with three buffered hits: Matomo answering 400 gave exit 0 and no
+        // This loop used to call `flush()`, discard its count, and return success no matter
+        // what. Measured with three buffered hits: Matomo answering 400 gave exit 0 and no
         // output; Matomo answering 200 gave exit 0 and no output. Byte-identical. Under a
         // supervisor, a daemon losing every hit was indistinguishable from a healthy one, and
         // `matomo:flush` in the same state exited 1 with a diagnosis.

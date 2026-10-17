@@ -32,7 +32,7 @@ final readonly class TrackSiteSearch
      */
     public function handle(Request $request, Closure $next, string $keywordKey = 'q', ?string $categoryKey = null): Response
     {
-        // The parameters arrive HERE and are needed THERE: Laravel resolves a terminable
+        // The parameters arrive here and are needed there: Laravel resolves a terminable
         // middleware by class and calls `terminate($request, $response)` with no middleware
         // arguments, so `matomo.search:q,category` would otherwise silently fall back to its
         // defaults. Carried on the request rather than on `$this`, which is `readonly` and

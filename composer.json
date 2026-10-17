@@ -28,7 +28,8 @@
     "support": {
         "issues": "https://github.com/pushery/matomo-analytics-for-laravel/issues",
         "source": "https://github.com/pushery/matomo-analytics-for-laravel",
-        "docs": "https://docs.pushery.com/matomo-analytics-for-laravel/"
+        "docs": "https://docs.pushery.com/matomo-analytics-for-laravel/",
+        "security": "https://github.com/pushery/matomo-analytics-for-laravel/security/policy"
     },
     "require": {
         "php": "^8.4",
@@ -78,8 +79,9 @@
         "pestphp/pest-plugin-phpstan": "5.2.2",
         "pestphp/pest-plugin-rector": "5.0.4",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "phpstan/phpstan": "2.2.16",
-        "rector/rector": "2.6.7",
+        "phpstan/phpstan": "2.3.1",
+        "pushery/sqlens-for-laravel": "^0.29",
+        "rector/rector": "2.7.0",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {
@@ -91,37 +93,6 @@
         "psr-4": {
             "MatomoAnalytics\\": "src/"
         }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "MatomoAnalytics\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/",
-            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
-            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
-        }
-    },
-    "scripts": {
-        "test": "pest",
-        "test:coverage": "@php -d pcov.directory=. -d pcov.exclude='~/(vendor|tests|workbench)/~' vendor/bin/pest --coverage --min=100",
-        "test:type-coverage": "pest --type-coverage --min=100",
-        "test:browser": "pest tests/Browser",
-        "test:integration": "pest tests/Integration",
-        "test:performance": "pest tests/Performance",
-        "test:database": "pest --testsuite=Postgres,MySql,Redis",
-        "analyse": "phpstan analyse --memory-limit=1G",
-        "format": "pint",
-        "format:test": "pint --test",
-        "rector": "rector process",
-        "rector:test": "rector process --dry-run",
-        "mutate": "@php -d pcov.directory=src vendor/bin/pest --mutate --everything --covered-only --path=src --min=96",
-        "mutate:detect": "@php -d pcov.directory=src vendor/bin/pest --mutate --everything --covered-only --path=src --parallel --processes=4 --min=96",
-        "qa": [
-            "@format:test",
-            "@rector:test",
-            "@analyse",
-            "@test:type-coverage",
-            "@test:coverage"
-        ]
     },
     "config": {
         "sort-packages": true,

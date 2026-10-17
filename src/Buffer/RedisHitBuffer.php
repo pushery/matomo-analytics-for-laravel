@@ -66,7 +66,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
 
         $processing = $this->key().':processing:'.Str::uuid();
 
-        // Register the processing list BEFORE moving items into it, so a crash at any
+        // Register the processing list before moving items into it, so a crash at any
         // point during the claim still leaves a reclaimable entry — never an orphan.
         $connection->command('zadd', [$this->processingSet(), Date::now()->getTimestamp(), $processing]);
 
@@ -170,7 +170,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
      */
     private function reclaimStale(Connection $connection): void
     {
-        // A FLOOR OF ONE MINUTE, because zero inverts the guarantee. `stale_after_minutes`
+        // A floor of one minute, because zero inverts the guarantee. `stale_after_minutes`
         // was the only batch value with no lower bound, and at 0 every claim is already
         // expired the moment it is made: the next flush reclaims a batch that the current
         // one is still sending, so at-least-once delivery becomes guaranteed double delivery
@@ -223,7 +223,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
 
     private function drainBackToQueue(Connection $connection, string $processing): void
     {
-        // ASK HOW MANY FIRST. The loop used to walk one LMOVE at a time until the server said
+        // Ask how many first. The loop used to walk one LMOVE at a time until the server said
         // "empty", which cannot be pipelined because the stop condition is the previous reply.
         // `LLEN` turns an unknown count into a known one, and a known count is one round trip.
         //
@@ -243,7 +243,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
     /**
      * Move up to $limit items between two lists, in as few round trips as the client allows.
      *
-     * ONE ROUND TRIP INSTEAD OF $limit OF THEM, where the client can do it. The claim path used
+     * One round trip instead of $limit of them, where the client can do it. The claim path used
      * to issue a separate `LMOVE` per hit — fifty sequential requests for a default batch, and
      * the same again on every release and every reclaim. On a local server that is microseconds;
      * against a managed Redis with a millisecond of latency it is fifty milliseconds per batch
@@ -252,12 +252,12 @@ final class RedisHitBuffer implements ErasableHitBuffer
      * The pipelined answers are the items, in order, and a non-string is one `LMOVE` that found
      * nothing — so asking for more than exists is safe rather than merely tolerable.
      *
-     * IT IS NOT A TERMINATOR, AND READING IT AS ONE LOST HITS. That sentence used to end "a
+     * It is not a terminator, and reading it as one lost hits. That sentence used to end "a
      * non-string ends the take", and the loop below broke on it. Under concurrency a later
      * `LMOVE` in the same batch can still succeed, because a pipeline is not atomic — see the
      * comment at the loop for what that cost.
      *
-     * `pipeline()` IS DECLARED ONLY ON THE PHPREDIS CONNECTION. Predis reaches it through
+     * `pipeline()` is declared only on the phpredis connection. Predis reaches it through
      * `Connection::__call`, so it would work there too — but not in a way the analyzer can see,
      * and a package that narrows a data path on an unchecked assumption has learned nothing from
      * the rest of this class. The sequential path below is therefore kept, not as dead code but
@@ -281,18 +281,18 @@ final class RedisHitBuffer implements ErasableHitBuffer
 
             $moved = [];
 
-            // EVERY STRING REPLY, NOT EVERY REPLY UNTIL THE FIRST GAP — and the difference was
+            // Every string reply, not every reply until the first gap — and the difference was
             // silent data loss. This loop used to `break` on the first non-string, which is only
             // sound if the batch is atomic. It is not: Redis executes a pipeline command by
             // command and lets other clients interleave once it spans more than one server-side
-            // read. So an `LMOVE` against a momentarily empty source answers false while LATER
+            // read. So an `LMOVE` against a momentarily empty source answers false while later
             // ones — already sent, and beyond recall — still move items a concurrent `push()` has
             // just appended. Breaking left those items in the processing list, absent from the
             // batch, and `ack()` then deleted the list.
             //
             // Measured before the fix with three writers against three claimers and closed-book
             // accounting: 12.6% of hits lost at `batch.size=250`, 30.1% at 1000. The threshold is
-            // a BYTE boundary rather than a command count — a longer key prefix loses 4.8% at a
+            // a byte boundary rather than a command count — a longer key prefix loses 4.8% at a
             // limit of 100 — so there was no batch size anyone could have called safe.
             //
             // A gap is one command that found nothing, not a terminator. Collecting every string

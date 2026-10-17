@@ -37,7 +37,7 @@ if (Config::throttle('matomo-analytics.web_vitals.throttle') !== null) {
     $webVitals->middleware('throttle:'.MatomoAnalyticsServiceProvider::WEB_VITALS_LIMITER);
 }
 
-// THIS ROUTE IS IN NO MIDDLEWARE GROUP, and that has a consequence worth stating rather
+// This route is in no middleware group, and that has a consequence worth stating rather
 // than discovering. `loadRoutesFrom()` is a bare require, so nothing here starts a session:
 // the gate's `track_authenticated` and `except_abilities` rules see a guest on this path
 // no matter who is logged in. That is deliberate — the browser beacons this with
@@ -52,7 +52,7 @@ if ($middleware !== []) {
 // The page-view beacon for a page the browser served out of a speculation-rules prefetch.
 // Same shape as the route above and for the same reasons — always registered so toggling the
 // feature needs no route-cache rebuild, the controller 404s while it is off, throttled through
-// a NAMED limiter registered in the provider (a `RateLimiter::for()` written here would not
+// a named limiter registered in the provider (a `RateLimiter::for()` written here would not
 // survive `route:cache`), and in no middleware group, because sendBeacon carries no CSRF token.
 $prefetchPageView = Route::post(
     Config::string('matomo-analytics.prefetch_beacon.path', 'matomo-analytics/page-view'),

@@ -15,7 +15,7 @@ use MatomoAnalytics\Support\Config;
  * Date-aware caching for the Reporting client. Failed calls (null) are never
  * cached so they self-heal on the next request, and a fresh period (today/live)
  * gets a short TTL while archived history is held longer. Invalidation bumps a
- * version segment in the cache key, which is store-agnostic — no SCAN or LIKE.
+ * version segment in the cache key, which is store-agnostic — no scan or LIKE.
  */
 final class ReportCache
 {

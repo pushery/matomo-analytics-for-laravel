@@ -16,7 +16,7 @@ final class InstallCommand extends Command
     {
         $this->call('vendor:publish', ['--tag' => 'matomo-analytics-config']);
 
-        // MATOMO_ENABLED is named FIRST and on its own line: the package ships
+        // MATOMO_ENABLED is named first and on its own line: the package ships
         // dormant, so host and site id alone track nothing. Listing only those two
         // (as this command used to) sends the reader off to configure a package
         // that then stays silent, with nothing telling them why.

@@ -51,12 +51,12 @@ final readonly class TrackPageViews
 
         $response = $next($request);
 
-        // THE ELAPSED TIME IS TAKEN HERE AND THE TRACKING HAPPENS IN `terminate()`, AND THE
-        // SPLIT IS THE POINT. `pf_srv` is meant to be generation time; read in `terminate()`
+        // The elapsed time is taken here and the tracking happens in `terminate()`, and the
+        // split is the point. `pf_srv` is meant to be generation time; read in `terminate()`
         // it would also include flushing the response to the web server, so the one number
         // that must be measured before the response leaves is measured before it leaves.
         //
-        // Carried on the REQUEST rather than on `$this`: this class is `readonly`, and a
+        // Carried on the request rather than on `$this`: this class is `readonly`, and a
         // property on a middleware instance is exactly the shape that leaks between requests
         // under Octane.
         $request->attributes->set(self::SERVER_TIME, $this->serverTime($request));
@@ -75,17 +75,17 @@ final readonly class TrackPageViews
     }
 
     /**
-     * TRACKED AFTER THE RESPONSE IS SENT, not merely after it is built.
+     * Tracked after the response is sent, not merely after it is built.
      *
-     * THIS USED TO SIT IN `handle()` BEHIND `$next()`, WHICH READS AS "AFTERWARDS" AND IS
-     * NOT. The visitor waits through the gate, the payload build and the buffer write — and in
+     * This used to sit in `handle()` behind `$next()`, which reads as "AFTERWARDS" and is
+     * not. The visitor waits through the gate, the payload build and the buffer write — and in
      * `sync` mode through the whole HTTP call to Matomo. Measured against an instance
      * answering in 20ms: 24.08ms of request time in `sync` against 0.096ms in `queue`, a
      * factor of 250, counted at the far end as 140 POSTs.
      *
      * `TrackAiChatbots` and `TrackSiteSearch` track in `terminate()` for the same reason.
      *
-     * Laravel terminates middleware BEFORE it runs the application's own terminating
+     * Laravel terminates middleware before it runs the application's own terminating
      * callbacks, so a hit queued here is still picked up by the flush the service provider
      * registers there. The ordering `queue` and `batch` mode depend on is unchanged.
      */
@@ -165,13 +165,13 @@ final readonly class TrackPageViews
             return true;
         }
 
-        // TWO HEADERS, AND THE SECOND ONE IS NOT A PREFIX OF THE FIRST AS A HEADER KEY.
-        // `hasHeader('X-Livewire')` matches an ordinary component update and does NOT match
-        // `X-Livewire-Navigate`, which is what a `wire:navigate` PREFETCH sends — a separate
+        // Two headers, and the second one is not a prefix of the first as a header key.
+        // `hasHeader('X-Livewire')` matches an ordinary component update and does not match
+        // `X-Livewire-Navigate`, which is what a `wire:navigate` prefetch sends — a separate
         // key, not a longer value of the same one.
         //
         // A prefetch got past all three gates: it is a GET, it was not "a Livewire request" by
-        // that test, and it carries a full 200 HTML body. Livewire prefetches on MOUSEDOWN for
+        // that test, and it carries a full 200 HTML body. Livewire prefetches on mousedown for
         // every `wire:navigate` link and after 60ms of hover with `.hover`, so an abandoned
         // click — or, on a hover link, the pointer passing over it — counted a page view for a
         // page nobody ever saw.
@@ -184,23 +184,23 @@ final readonly class TrackPageViews
             return true;
         }
 
-        // SPECULATION RULES ARE THE SAME HAZARD WITH A DIFFERENT HEADER, AND THE BROWSER SAYS
-        // SO ITSELF. A prefetch from `<script type="speculationrules">` is an ordinary GET with
+        // Speculation rules are the same hazard with a different header, and the browser says
+        // so itself. A prefetch from `<script type="speculationrules">` is an ordinary GET with
         // a full 200 HTML body — every other test here passes it — and Chrome marks it with
         // `Sec-Purpose: prefetch`. With `eagerness: moderate` that request is sent when the
-        // POINTER RESTS ON A LINK, so a reader who hovers a menu and clicks nothing counted a
+        // pointer RESTs on a link, so a reader who hovers a menu and clicks nothing counted a
         // page view for every link they passed over. Measured in a consumer with Playwright
         // Chromium against its own test server.
         //
         // `Purpose: prefetch` is checked beside it because that is the header Chrome sent
         // before `Sec-Purpose` was specified, and some proxies and older engines still send
-        // it. The match is on the token rather than on equality: a PRERENDER announces itself
+        // it. The match is on the token rather than on equality: a prerender announces itself
         // as `Sec-Purpose: prefetch;prerender`, and a prerendered page has exactly the same
         // problem — the bytes are fetched now and may never be looked at.
         //
-        // AND SKIPPING IT ALONE WOULD TRADE ONE WRONG NUMBER FOR ANOTHER, which is why this
+        // And skipping it alone would trade one wrong number for another, which is why this
         // ships with {@see \MatomoAnalytics\View\Snippet::prefetchPageView()}. When the
-        // reader does click, the page is served FROM the prefetch and the server hears nothing
+        // reader does click, the page is served from the prefetch and the server hears nothing
         // at all — so without the beacon the view is simply missing. The documentation's page
         // on prefetched pages says so.
         if (Config::bool('matomo-analytics.middleware.skip_prefetch', true) && SpeculativeRequest::is($request)) {
@@ -211,7 +211,7 @@ final readonly class TrackPageViews
             return true;
         }
 
-        // A DELIVERED PAGE IS 2xx OR 304 -- and `isSuccessful()` alone is strictly 200-299.
+        // A delivered `PAGE` is 2xx or 304 -- and `isSuccessful()` alone is strictly 200-299.
         //
         // A 304 means the reader has the page; the server only declined to resend the bytes, and
         // on a site with cache validators that is the second and every later view of a page.
@@ -221,9 +221,9 @@ final readonly class TrackPageViews
         //
         // NOT `>= 400`, though `TrackSiteSearch` uses that and the difference looks like an
         // inconsistency worth flattening. It is not. A redirect delivers no page: the browser
-        // follows it and the TARGET is tracked on its own request, so counting the 3xx as well
+        // follows it and the target is tracked on its own request, so counting the 3xx as well
         // would record two page views for one page. Site search asks a different question --
-        // the search HAPPENED, whatever the response rendered -- so counting a redirect there
+        // the search happened, whatever the response rendered -- so counting a redirect there
         // is right and counting one here is not. Both directions are pinned by arms.
         return Config::bool('matomo-analytics.middleware.only_successful', true)
             && ! $response->isSuccessful()
@@ -349,10 +349,10 @@ final readonly class TrackPageViews
             return null;
         }
 
-        // BOUNDED, BECAUSE AN UNANCHORED SCAN OVER A BODY WITH NO `<title>` IS LINEAR IN
-        // THE WHOLE BODY. Measured: 49 KB → 0.0531ms, 195 KB → 0.2146ms, 977 KB → 1.0654ms,
+        // Bounded, because an unanchored scan over a body with no `<title>` is linear in
+        // the whole body. Measured: 49 KB → 0.0531ms, 195 KB → 0.2146ms, 977 KB → 1.0654ms,
         // perfectly linear, against a constant 0.0011ms when a title is present near the top.
-        // It is the pages LEAST likely to have one that pay: HTML fragments, error pages, and
+        // It is the pages least likely to have one that pay: HTML fragments, error pages, and
         // HTMX or Turbo responses.
         //
         // 64 KB rather than a `stripos` precheck, because a precheck is a second full scan on
