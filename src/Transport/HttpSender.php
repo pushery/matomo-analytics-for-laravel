@@ -36,7 +36,7 @@ final class HttpSender implements Sender
     /**
      * The Guzzle handler every send goes through, built once.
      *
-     * NOT `readonly` any more, and that is the whole change: a fresh `PendingRequest` per send
+     * Not `readonly` any more, and that is the whole change: a fresh `PendingRequest` per send
      * meant a fresh handler stack, a fresh curl handle and therefore a fresh TCP and TLS
      * handshake — up to forty of them against the same host in one flush run, where one
      * connection would have done.
@@ -198,7 +198,7 @@ final class HttpSender implements Sender
             ->connectTimeout($this->connection->connectTimeout)
             ->timeout($this->connection->timeout)
             ->withOptions(['version' => 1.1])
-            // A 307 OR 308 keeps the method and the body, and the token is in the body.
+            // A 307 or 308 keeps the method and the body, and the token is in the body.
             // Guzzle's `RedirectMiddleware` hands back an empty modifier set for any status
             // above 302, so the POST is replayed verbatim at whatever host the Location names.
             // Its cross-origin stripping covers `Authorization` and `Cookie` — headers — and

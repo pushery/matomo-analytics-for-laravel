@@ -9,7 +9,7 @@ use RuntimeException;
 /**
  * The buffer holds work but could not be claimed from.
  *
- * Its own class because the alternative reads as "DRAINED", which is the opposite. A
+ * Its own class because the alternative reads as "drained", which is the opposite. A
  * driver that cannot claim has nothing to hand back but an empty batch, and an empty batch
  * is how the flusher learns the buffer is empty — so a spool nobody can write to produced
  * `Flushed 0 Matomo hit(s).` and exit zero, every minute, forever, while the hits sat in the

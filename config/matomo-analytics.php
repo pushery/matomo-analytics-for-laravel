@@ -319,7 +319,7 @@ return [
         // page instead, so these two cover Livewire's endpoint itself.
         'except_routes' => ['horizon*', 'telescope*', 'nova*', 'up', 'health*', 'livewire/*', 'livewire-*/*'],
 
-        // The consent seam, and it can only ever say NO. Consulted last, after every
+        // The consent seam, and it can only ever say no. Consulted last, after every
         // rule above it, and server-side only: return false to refuse tracking; true and
         // null both leave the earlier verdict exactly as it was. It cannot re-admit a
         // visitor the bot check, the opt-out cookie or Do-Not-Track already turned away.

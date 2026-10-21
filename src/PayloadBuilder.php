@@ -353,7 +353,7 @@ final readonly class PayloadBuilder
             // useless data: every mapped address has 48 zero bits in front, so all of them
             // would collapse to the same `::`.
             //
-            // The test used to be `str_contains($ip, '.')`, AND RFC 4291 lets **any** IPv6
+            // The test used to be `str_contains($ip, '.')`, and RFC 4291 lets **any** IPv6
             // address end in dotted-quad notation. `2001:db8::192.0.2.1` is an ordinary
             // global address that merely writes its last 32 bits the familiar way — it took
             // this branch and left with 112 of its 128 bits intact, on the one setting whose

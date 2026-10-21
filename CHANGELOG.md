@@ -4,6 +4,14 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] - 2026-10-21
+
+### ✨ Added
+
+- **`Support\MigrationLocks::bound()` bounds how long a migration waits for a lock.** A migration of this package that alters a table calls it first in `up()` and `down()`: on PostgreSQL the transaction then waits three seconds for its lock and holds it thirty at most, on MySQL the session waits three seconds. An ALTER that cannot take its lock fails instead of stalling every query behind it, and running the migration again is the remedy. A published copy of such a migration calls it from the application's namespace, so it is part of the public API.
+
+- **Every line of the package reads the language of a regional locale, not only the privacy partial.** The partial read `pt` for `pt_BR` through its own helper, while `__()` and `Lang::get()` on a `matomo-analytics::` key in an application's own view still went from the regional locale straight to `app.fallback_locale`. The package now wraps the translation loader for its namespace, so every lookup of its lines reads `pt` for `pt-BR` and `de` for `de_AT`, a region nobody listed included, and a file published for the region under `lang/vendor/matomo-analytics/` still wins key by key. Every other namespace keeps Laravel's lookup.
+
 ## [0.35.0] - 2026-10-17
 
 ### ✨ Added
@@ -1702,7 +1710,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.0...v0.33.1

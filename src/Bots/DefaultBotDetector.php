@@ -80,7 +80,7 @@ final class DefaultBotDetector implements BotDetector
     }
 
     /**
-     * `mb_strtolower`, NOT `strtolower`, because the framework uses it and this diverged.
+     * `mb_strtolower`, not `strtolower`, because the framework uses it and this diverged.
      * `strtolower` is byte-wise: it lowercases ASCII and leaves every other codepoint alone.
      * So a configured token spelled with non-ASCII capitals matched under `Str::contains` and
      * not here — `ЯНДЕКС-РОБОТ` against `Яндекс`, to name the case that was measured. Ten real

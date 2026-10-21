@@ -77,7 +77,7 @@ final readonly class TrackPageViews
     /**
      * Tracked after the response is sent, not merely after it is built.
      *
-     * This used to sit in `handle()` behind `$next()`, which reads as "AFTERWARDS" and is
+     * This used to sit in `handle()` behind `$next()`, which reads as "afterwards" and is
      * not. The visitor waits through the gate, the payload build and the buffer write — and in
      * `sync` mode through the whole HTTP call to Matomo. Measured against an instance
      * answering in 20ms: 24.08ms of request time in `sync` against 0.096ms in `queue`, a
@@ -219,7 +219,7 @@ final readonly class TrackPageViews
         // ETag middleware behind the tracker to keep the 200, and the 304 has to count here.
         // The title is read in handle() for the same reason, where the page is still whole.
         //
-        // NOT `>= 400`, though `TrackSiteSearch` uses that and the difference looks like an
+        // Not `>= 400`, though `TrackSiteSearch` uses that and the difference looks like an
         // inconsistency worth flattening. It is not. A redirect delivers no page: the browser
         // follows it and the target is tracked on its own request, so counting the 3xx as well
         // would record two page views for one page. Site search asks a different question --

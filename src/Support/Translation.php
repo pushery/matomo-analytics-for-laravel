@@ -10,10 +10,12 @@ use Illuminate\Support\Facades\Lang;
  * The package's own lines, with the language of a regional locale between that locale and the
  * fallback locale.
  *
- * Laravel looks a line up in the current locale and then in the fallback locale, and nowhere in
- * between, so `pt_BR`, `de_AT` or `fr-CA` never reach the `pt`, `de` or `fr` this package ships,
- * and a regional site would render its privacy paragraph in the fallback locale. A line published
- * for the region itself is still read first.
+ * The provider's loader answers a regional locale with its language whenever the translator loads
+ * this package's lines from their files. A line added at run time, with `Lang::addLines()`, passes
+ * no loader, and for it Laravel looks in the current locale and then in the fallback locale,
+ * nowhere in between, so `pt_BR`, `de_AT` or `fr-CA` would not reach the `pt`, `de` or `fr` this
+ * package ships. This reads the language for such a line as well. A line published or added for
+ * the region itself is still read first.
  */
 final class Translation
 {

@@ -104,7 +104,7 @@ final class Config
         // It was an asymmetry rather than a policy: `int()` above has an `is_numeric` fallback
         // for exactly this shape, and this had none.
         //
-        // Null and the empty string are handled before `filter_var`, NOT BY IT. Measured:
+        // Null and the empty string are handled before `filter_var`, not by it. Measured:
         // `filter_var(null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE)` returns **false**, and
         // so does `''`. Leaving them to it would turn a key that is merely present and null — the
         // shape `env('X')` with no fallback produces, which is most of this package's config —
