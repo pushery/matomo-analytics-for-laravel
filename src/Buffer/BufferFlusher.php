@@ -95,7 +95,7 @@ final readonly class BufferFlusher
             // decode cannot be sent to Matomo by anyone. So it is reported once and acked
             // away, which is the only disposal that lets the rest of the buffer move.
             //
-            // The report is driven by `skipped`, NOT BY `isEmpty()`, and that is the half
+            // The report is driven by `skipped`, not by `isEmpty()`, and that is the half
             // 0.24.0 left behind. The all-or-nothing case was fixed and the partial one was
             // not: two readable rows and one corrupt row delivered two hits, acked all three
             // — `ack()` deletes by claim ref, so the skipped row goes with them — and ended

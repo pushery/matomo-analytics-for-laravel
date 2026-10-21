@@ -10,8 +10,8 @@
      Translation::line() rather than the global double-underscore translation helper, and
      fully qualified. That helper is declared in Illuminate\Foundation\helpers.php, which
      this package deliberately does not depend on, so a component-only install would fatal
-     on this view. Translation::line() also reads the language of a regional locale, which
-     Lang::get() never falls back to.
+     on this view. Translation::line() also reads the language of a regional locale for a
+     line added at run time, which no translation loader sees.
 
      Writing the helper's name here in full would trip the very guard that enforces this —
      LeanDependencyContractTest scans the shipped tree, and a Blade comment is not a PHP

@@ -10,6 +10,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
+use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobProcessed;
@@ -52,6 +53,7 @@ use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Reporting\MatomoReports;
 use MatomoAnalytics\Reporting\ReportCache;
 use MatomoAnalytics\Support\Config;
+use MatomoAnalytics\Support\LanguageFallbackLoader;
 use MatomoAnalytics\Support\RateLimits;
 use MatomoAnalytics\Support\Reporter;
 use MatomoAnalytics\Transport\HttpSender;
@@ -92,7 +94,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      *
      * Without it the output of both commands goes to /dev/null and nothing can change that.
      * Laravel's `CommandBuilder` redirects to `$event->output` in `buildForegroundCommand()`
-     * AND `buildBackgroundCommand()`, so the diagnosis `matomo:flush` prints is discarded on
+     * and `buildBackgroundCommand()`, so the diagnosis `matomo:flush` prints is discarded on
      * the scheduled path in both modes — `schedule.run_in_background` buys back the exit code,
      * not the message. And because this package registers the two events itself, every seam
      * Laravel offers for a scheduled task was out of reach for exactly these two:
@@ -113,6 +115,10 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigRecursivelyFrom(__DIR__.'/../config/matomo-analytics.php', 'matomo-analytics');
+
+        // A regional locale reads this package's catalog of its language, `pt-BR` from `pt`, in this package's
+        // namespace only. Registered here so it wraps the loader before the translator is built from it.
+        $this->app->extend('translation.loader', static fn (Loader $loader): Loader => new LanguageFallbackLoader($loader, 'matomo-analytics'));
 
         $this->app->singleton(Connection::class, static fn (): Connection => Connection::fromConfig());
         $this->app->singleton(Reporter::class);
@@ -411,7 +417,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * What that meant in practice, and why this is not cosmetic:
      *
      *   - `privacy.redact.query_params` / `.keys` — URL redaction silently off, entirely
-     *   - `spa.adapters` — a config older than the `spa` block got NO adapter
+     *   - `spa.adapters` — a config older than the `spa` block got no adapter
      *   - `bots.allow` / `bots.deny`, `web_vitals.metrics` — empty rather than defaulted
      *
      * The obvious framework alternative is a trap: `replaceConfigRecursivelyFrom` uses

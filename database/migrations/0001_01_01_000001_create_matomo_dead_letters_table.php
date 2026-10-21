@@ -12,7 +12,7 @@ use MatomoAnalytics\Support\Config;
 // hits sit here for inspection and can be re-queued with `matomo:replay`.
 //
 // Opt out with batch.dead_letter.enabled=false. What that means depends on the delivery
-// MODE, and the two are not the same sentence: in `batch` mode the failed batch stays in
+// mode, and the two are not the same sentence: in `batch` mode the failed batch stays in
 // the buffer; in `queue` mode there is no buffer to stay in, so the job fails the ordinary
 // way and the batch lands in `failed_jobs`. Both are visible, neither loses the hits.
 //
