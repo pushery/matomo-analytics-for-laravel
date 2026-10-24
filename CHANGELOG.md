@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.0] - 2026-10-24
+
+### 🔒 Security
+
+- **A token in the path of any route is redacted, the confirmation page of a magic link among them.** The built-in path redaction knew only the password-reset link, so `/magic-link/verify/<token>` reached Matomo with a token that still signed its holder in, as the page address and as the referrer of the next page. Every registered route whose URI names a parameter from the new `privacy.redact.path_params` list (`token` by default) now has that segment redacted, on the server and in the browser; a configuration published earlier reads the shipped list.
+
 ## [0.36.0] - 2026-10-21
 
 ### ✨ Added
@@ -1710,7 +1716,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.33.1...v0.34.0

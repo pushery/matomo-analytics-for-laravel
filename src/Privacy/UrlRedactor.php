@@ -48,13 +48,15 @@ final class UrlRedactor
 
     /**
      * Patterns for a secret that stands in a path, where no parameter name reaches it: the token
-     * of a password-reset link. Each captures the path up to the token and matches the token, in
-     * a syntax PHP and JavaScript read alike, so the browser applies the same list.
+     * of a password-reset link or of a magic link. Each captures the path up to the secret and
+     * matches the secret, in a syntax PHP and JavaScript read alike, so the browser applies the
+     * same list.
      *
-     * Built in rather than configured. Laravel's starter kits put the reset token in the path,
-     * and `matomo:install` publishes the configuration, so a default added there would never
-     * reach most installations. The pattern follows the path the application registers for
-     * `password.reset`, and the two the starter kits use stand beside it.
+     * Every registered route whose URI names one of the parameters in `privacy.redact.path_params`
+     * gives one pattern, `token` by default, so a magic-link route such as
+     * `magic-link/verify/{token}` is covered without a pattern of its own. The reset link is built
+     * in beside them: the path the application registers for `password.reset` and the two the
+     * starter kits use, whatever the list says.
      *
      * @return list<string>
      */
@@ -72,11 +74,32 @@ final class UrlRedactor
             array_unshift($uris, $route->uri());
         }
 
-        $patterns = [];
+        $candidates = [];
 
         foreach ($uris as $uri) {
-            $pattern = $this->tokenPattern($uri);
+            $candidates[] = $this->tokenPattern($uri, ['token']);
+        }
 
+        $params = array_values(array_filter(
+            Config::stringList('matomo-analytics.privacy.redact.path_params'),
+            static fn (string $param): bool => $param !== '',
+        ));
+
+        if ($params !== []) {
+            try {
+                $routes = Route::getRoutes()->getRoutes();
+            } catch (Throwable) {
+                $routes = [];
+            }
+
+            foreach ($routes as $registered) {
+                $candidates[] = $this->tokenPattern($registered->uri(), $params);
+            }
+        }
+
+        $patterns = [];
+
+        foreach ($candidates as $pattern) {
             if ($pattern !== null && ! in_array($pattern, $patterns, true)) {
                 $patterns[] = $pattern;
             }
@@ -194,15 +217,18 @@ final class UrlRedactor
     }
 
     /**
-     * `(/reset-password/)[^/?#&]+` for `reset-password/{token}`: the path up to the token, then
-     * the token. Another parameter before it matches any one segment; null without a `{token}`.
+     * `(/reset-password/)[^/?#&]+` for `reset-password/{token}`: the path up to the first segment
+     * that is one of the parameters given, then that segment. Another parameter before it matches
+     * any one segment; null when the URI names none of them.
+     *
+     * @param  list<string>  $params
      */
-    private function tokenPattern(string $uri): ?string
+    private function tokenPattern(string $uri, array $params): ?string
     {
         $prefix = '/';
 
         foreach (explode('/', trim($uri, '/')) as $segment) {
-            if ($segment === '{token}' || $segment === '{token?}') {
+            if (preg_match('/^\{([^}?]+)\??\}$/', $segment, $name) === 1 && in_array($name[1], $params, true)) {
                 return '('.$prefix.')[^/?#&]+';
             }
 
