@@ -373,6 +373,12 @@ return [
                 'X-Amz-Signature', 'X-Amz-Credential', 'X-Amz-Security-Token',
                 'X-Goog-Signature', 'X-Goog-Credential',
             ],
+            // Route parameters whose value is a secret that stands in a path, where no query
+            // parameter reaches it: every registered route whose URI names one of them has that
+            // segment redacted, on the server and in the browser. `token` covers the confirmation
+            // route of a magic link, `magic-link/verify/{token}`. The password-reset link is
+            // covered whatever this list says.
+            'path_params' => ['token'],
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
             // The payload fields redacted. `urlref` covers `_ref` as well, the referrer matomo.js
             // keeps for conversion attribution and sends with every request; `c_t` is the
