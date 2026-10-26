@@ -275,10 +275,11 @@ return [
 
     // On by default, and the truncation happens here — in this application, before
     // the hit is sent. That is the answer to the question an EU deployment actually
-    // asks: the full address never leaves your server. (Matomo can also anonymize
-    // server-side; that is its own setting and independent of this one.) A value that
-    // is not an address cannot be truncated, so it is not sent at all. Turn this off
-    // deliberately if you have a basis to store full addresses.
+    // asks: the full address never leaves your server, neither as `cip` nor inside the
+    // cookieless visitor id. (Matomo can also anonymize server-side; that is its own
+    // setting and independent of this one.) A value that is not an address cannot be
+    // truncated, so it is not sent at all. Turn this off deliberately if you have a
+    // basis to store full addresses.
     'anonymize_ip' => true,
 
     // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
@@ -379,6 +380,11 @@ return [
             // route of a magic link, `magic-link/verify/{token}`. The password-reset link is
             // covered whatever this list says.
             'path_params' => ['token'],
+            // Domains whose subdomains name a tenant, as `<slug>.example.test` does: every label
+            // in front of one of them is redacted, on the server and in the browser, in each field
+            // `keys` lists. `northwind.example.test` becomes `REDACTED.example.test`, and the domain
+            // itself and every other host stay. In the environment as a comma-separated list.
+            'base_domains' => env('MATOMO_REDACT_BASE_DOMAINS', []),
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
             // The payload fields redacted. `urlref` covers `_ref` as well, the referrer matomo.js
             // keeps for conversion attribution and sends with every request; `c_t` is the

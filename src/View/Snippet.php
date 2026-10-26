@@ -634,7 +634,8 @@ final readonly class Snippet
      *
      * Those requests never pass the server, so `setCustomRequestProcessing` takes each one's
      * query string after the tracker built it and before it is sent. The function decodes the
-     * parameters named in `privacy.redact.keys`, replaces the value of every name in
+     * parameters named in `privacy.redact.keys`, replaces the tenant labels of a host under
+     * `privacy.redact.base_domains`, the secret of a path and the value of every name in
      * `privacy.redact.query_params` with the server's grammar, and encodes them again.
      * `privacy.redact.patterns` are PCRE and apply on the server only.
      */
@@ -648,16 +649,19 @@ final readonly class Snippet
         $names = array_values(array_filter(Config::stringList('matomo-analytics.privacy.redact.query_params'), static fn (string $name): bool => $name !== ''));
         $keys = $redactor->keys();
         $paths = $redactor->pathPatterns();
+        $hosts = $redactor->hostPatterns();
 
-        if (($names === [] && $paths === []) || $keys === []) {
+        if (($names === [] && $paths === [] && $hosts === []) || $keys === []) {
             return null;
         }
 
         $process = <<<'JS'
-            _paq.push(['setCustomRequestProcessing', (function(names, keys, forms, replacement, paths){
+            _paq.push(['setCustomRequestProcessing', (function(names, keys, forms, replacement, paths, hosts){
               var rx = names.length ? new RegExp('([?&#](?:' + names.map(function(n){ return n.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&'); }).join('|') + ')' + forms + '=)[^&#]*', 'gi') : null;
               var px = paths.map(function(p){ return new RegExp(p); });
+              var hx = hosts.map(function(h){ return new RegExp(h, 'i'); });
               var redact = function(url){
+                hx.forEach(function(h){ url = url.replace(h, function(match, prefix, domain){ return prefix + replacement + domain; }); });
                 px.forEach(function(p){ url = url.replace(p, function(match, prefix){ return prefix + replacement; }); });
                 var start = url.search(/[?#]/);
                 return start < 0 || !rx ? url : url.slice(0, start) + url.slice(start).replace(rx, function(match, key){ return key + replacement; });
@@ -669,7 +673,7 @@ final readonly class Snippet
                   try { return pair.slice(0, at + 1) + encodeURIComponent(redact(decodeURIComponent(pair.slice(at + 1)))); } catch (e) { return pair; }
                 }).join('&');
               };
-            })(__NAMES__, __KEYS__, __FORMS__, __REPLACEMENT__, __PATHS__)]);
+            })(__NAMES__, __KEYS__, __FORMS__, __REPLACEMENT__, __PATHS__, __HOSTS__)]);
             JS;
 
         return strtr($process, [
@@ -678,6 +682,7 @@ final readonly class Snippet
             '__FORMS__' => $this->js(UrlRedactor::ARRAY_FORMS),
             '__REPLACEMENT__' => $this->js(rawurlencode(Config::string('matomo-analytics.privacy.redact.replacement', 'REDACTED'))),
             '__PATHS__' => $this->jsList($paths),
+            '__HOSTS__' => $this->jsList($hosts),
         ]);
     }
 

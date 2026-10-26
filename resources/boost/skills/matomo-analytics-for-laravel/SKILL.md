@@ -48,6 +48,14 @@ So the package stays inert in local and CI environments on its own, and you
 should not add conditionals around it for that. Verify a real connection with
 `php artisan matomo:test`, which names whichever of the three is holding it back.
 
+An application that serves each tenant on a subdomain of its own, such as
+`<slug>.example.test`, names the base domain, so no tenant's name reaches Matomo
+with the host of a page or a referrer:
+
+```dotenv
+MATOMO_REDACT_BASE_DOMAINS=example.test
+```
+
 Publish everything at once, or one part of it:
 
 ```bash
