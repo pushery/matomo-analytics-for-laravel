@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Privacy;
 
+use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Route;
 use InvalidArgumentException;
 use MatomoAnalytics\Support\Config;
@@ -14,7 +15,8 @@ use Throwable;
  * query parameters (api tokens, passwords, signatures, …) keep their key but have
  * their value replaced, and arbitrary regex patterns can scrub anything else. The
  * key segment is preserved so reports still show "a token was present" without
- * leaking its value into analytics, logs, or shared dashboards.
+ * leaking its value into analytics, logs, or shared dashboards. Under a base domain
+ * the host loses the labels that name a tenant.
  *
  * A pattern that fails on a URL closes rather than opens: `preg_replace()` answers null without a
  * warning when the subject makes it fail, with bytes that are no UTF-8 under `/u` or past a
@@ -35,6 +37,9 @@ final class UrlRedactor
     /** The paths Laravel's starter kits give the route `password.reset`. */
     private const array RESET_PASSWORD_URIS = ['reset-password/{token}', 'password/reset/{token}'];
 
+    /** A domain name as `privacy.redact.base_domains` holds one: labels of letters, digits and inner hyphens. */
+    private const string DOMAIN_NAME = '/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/';
+
     public function redact(string $url): string
     {
         if (! Config::bool('matomo-analytics.privacy.redact.enabled', true)) {
@@ -43,7 +48,32 @@ final class UrlRedactor
 
         $replacement = Config::string('matomo-analytics.privacy.redact.replacement', 'REDACTED');
 
-        return $this->redactPatterns($this->redactPaths($this->redactQueryParams($url, $replacement), $replacement), $replacement);
+        $url = $this->redactHosts($url, $replacement);
+        $url = $this->redactQueryParams($url, $replacement);
+        $url = $this->redactPaths($url, $replacement);
+
+        return $this->redactPatterns($url, $replacement);
+    }
+
+    /**
+     * Patterns for the host of a URL under one of the domains in `privacy.redact.base_domains`,
+     * where a tenant's name stands in a subdomain. Each captures what comes before the host, the
+     * scheme and any credentials, and the base domain itself, and matches every label between
+     * them: `northwind.example.test` becomes `REDACTED.example.test`, and the base domain on its
+     * own stays. In a syntax PHP and JavaScript read alike, without regard to case, so the
+     * browser applies the same list.
+     *
+     * @return list<string>
+     */
+    public function hostPatterns(): array
+    {
+        $patterns = [];
+
+        foreach ($this->baseDomains() as $domain) {
+            $patterns[] = '^((?:[a-z][a-z0-9+.-]*:)?//(?:[^/?#@]*@)?)[^/?#@:]+(\.'.str_replace('.', '\.', $domain).')(?=[:/?#]|$)';
+        }
+
+        return $patterns;
     }
 
     /**
@@ -270,5 +300,55 @@ final class UrlRedactor
         }
 
         return $patterns;
+    }
+
+    private function redactHosts(string $url, string $replacement): string
+    {
+        foreach ($this->hostPatterns() as $pattern) {
+            $url = preg_replace('~'.$pattern.'~i', '${1}'.rawurlencode($replacement).'${2}', $url) ?? $replacement;
+        }
+
+        return $url;
+    }
+
+    /**
+     * The domains in `privacy.redact.base_domains`, lowercased: a list in a published config, or
+     * the comma-separated value of `MATOMO_REDACT_BASE_DOMAINS`. A leading `*.` or `.` is
+     * dropped, so `*.example.test` names `example.test`. An entry that is still no domain name is
+     * refused with its own wording, as a pattern PCRE cannot compile is.
+     *
+     * @return list<string>
+     */
+    private function baseDomains(): array
+    {
+        $value = ConfigFacade::get('matomo-analytics.privacy.redact.base_domains');
+        $entries = is_string($value) ? explode(',', $value) : (is_array($value) ? $value : []);
+        $domains = [];
+
+        foreach ($entries as $entry) {
+            if (! is_string($entry)) {
+                continue;
+            }
+
+            $domain = strtolower(trim($entry));
+            $domain = str_starts_with($domain, '*.') ? substr($domain, 2) : ltrim($domain, '.');
+
+            if ($domain === '') {
+                continue;
+            }
+
+            if (preg_match(self::DOMAIN_NAME, $domain) !== 1) {
+                throw new InvalidArgumentException(sprintf(
+                    'matomo-analytics.privacy.redact.base_domains holds [%s], which is no domain name: name the domain alone, as example.test, without a scheme, a port or a path',
+                    trim($entry),
+                ));
+            }
+
+            if (! in_array($domain, $domains, true)) {
+                $domains[] = $domain;
+            }
+        }
+
+        return $domains;
     }
 }

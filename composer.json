@@ -72,7 +72,7 @@
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
         "orchestra/testbench": "^11.0",
-        "pestphp/pest": "^5.0 <5.3.1",
+        "pestphp/pest": "^5.0",
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.0",
         "pestphp/pest-plugin-laravel": "^5.0",
@@ -82,7 +82,8 @@
         "phpstan/phpstan": "2.3.1",
         "pushery/sqlens-for-laravel": "^0.31",
         "rector/rector": "2.7.0",
-        "spaze/phpstan-disallowed-calls": "4.14.0"
+        "spaze/phpstan-disallowed-calls": "4.14.0",
+        "symfony/yaml": "^7.4.17 || ^8.1.5"
     },
     "suggest": {
         "ext-pcntl": "Lets matomo:work stop between two runs on SIGTERM or SIGINT, instead of wherever the signal lands.",

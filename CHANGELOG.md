@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.0] - 2026-10-26
+
+### ✨ Added
+
+- **A tenant's subdomain can be kept out of Matomo.** `privacy.redact.base_domains`, or `MATOMO_REDACT_BASE_DOMAINS` as a comma-separated list, names the domains whose subdomains name a tenant. Every label in front of one is redacted, on the server and in the browser, in the page address, the referrer and every other field `privacy.redact.keys` lists, so `northwind.example.test` reaches Matomo as `REDACTED.example.test`. The domain itself and every other host stay, and an external referrer still shows where a visit came from. An entry that is no domain name is refused with its own wording.
+
+### 🔒 Security
+
+- **The cookieless visitor id no longer carries the full client address.** It was a hash of the address with `APP_KEY` and the date, so anyone holding the key could tell from an id which address it belonged to, and with `anonymize_ip` on that undid the truncation `cip` promises. The id is derived from the address as `cip` carries it now, truncated with `anonymize_ip` on. Visitor ids change once with the update, so a visit that spans it counts as two.
+
 ## [0.37.0] - 2026-10-24
 
 ### 🔒 Security
@@ -1716,7 +1726,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.34.0...v0.35.0
