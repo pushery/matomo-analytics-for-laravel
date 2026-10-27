@@ -377,8 +377,9 @@ return [
             // Route parameters whose value is a secret that stands in a path, where no query
             // parameter reaches it: every registered route whose URI names one of them has that
             // segment redacted, on the server and in the browser. `token` covers the confirmation
-            // route of a magic link, `magic-link/verify/{token}`. The password-reset link is
-            // covered whatever this list says.
+            // route of a magic link, `magic-link/verify/{token}`. A parameter in the first
+            // segment, as the slug in `{workspace}/members`, is redacted in a path of that
+            // route's shape only. The password-reset link is covered whatever this list says.
             'path_params' => ['token'],
             // Domains whose subdomains name a tenant, as `<slug>.example.test` does: every label
             // in front of one of them is redacted, on the server and in the browser, in each field
