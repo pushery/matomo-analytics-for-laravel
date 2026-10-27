@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Privacy;
 
 use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
 use MatomoAnalytics\Support\Config;
 use Throwable;
@@ -39,6 +40,12 @@ final class UrlRedactor
 
     /** A domain name as `privacy.redact.base_domains` holds one: labels of letters, digits and inner hyphens. */
     private const string DOMAIN_NAME = '/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/';
+
+    /** One segment of a path, up to the next separator. */
+    private const string SEGMENT = '[^/?#&]+';
+
+    /** What a URL carries in front of its path: a scheme, `//` and the authority, or nothing in a bare path. */
+    private const string ORIGIN = '(?:(?:[a-zA-Z][a-zA-Z0-9+.-]*:)?//[^/?#]*)?';
 
     public function redact(string $url): string
     {
@@ -83,7 +90,7 @@ final class UrlRedactor
      * same list.
      *
      * Every registered route whose URI names one of the parameters in `privacy.redact.path_params`
-     * gives one pattern, `token` by default, so a magic-link route such as
+     * gives a pattern for each of them, `token` by default, so a magic-link route such as
      * `magic-link/verify/{token}` is covered without a pattern of its own. The reset link is built
      * in beside them: the path the application registers for `password.reset` and the two the
      * starter kits use, whatever the list says.
@@ -104,10 +111,13 @@ final class UrlRedactor
             array_unshift($uris, $route->uri());
         }
 
+        $base = $this->basePath();
         $candidates = [];
 
         foreach ($uris as $uri) {
-            $candidates[] = $this->tokenPattern($uri, ['token']);
+            foreach ($this->tokenPatterns($uri, ['token'], $base) as $pattern) {
+                $candidates[] = $pattern;
+            }
         }
 
         $params = array_values(array_filter(
@@ -123,14 +133,16 @@ final class UrlRedactor
             }
 
             foreach ($routes as $registered) {
-                $candidates[] = $this->tokenPattern($registered->uri(), $params);
+                foreach ($this->tokenPatterns($registered->uri(), $params, $base) as $pattern) {
+                    $candidates[] = $pattern;
+                }
             }
         }
 
         $patterns = [];
 
         foreach ($candidates as $pattern) {
-            if ($pattern !== null && ! in_array($pattern, $patterns, true)) {
+            if (! in_array($pattern, $patterns, true)) {
                 $patterns[] = $pattern;
             }
         }
@@ -247,27 +259,85 @@ final class UrlRedactor
     }
 
     /**
-     * `(/reset-password/)[^/?#&]+` for `reset-password/{token}`: the path up to the first segment
-     * that is one of the parameters given, then that segment. Another parameter before it matches
-     * any one segment; null when the URI names none of them.
+     * One pattern for each segment of a route URI that names one of the parameters given:
+     * `(/reset-password/)[^/?#&]+` for `reset-password/{token}`, the path up to that segment and
+     * then the segment, wherever the path stands in a URL. Another parameter before it matches any
+     * one segment.
+     *
+     * A parameter in the first segment has no path in front of it to place it, so its pattern
+     * starts where the paths of the application start, behind the host and the path the
+     * application is served under, and asks for the rest of the route behind the segment.
+     * `{workspace}/instances/{instance}` redacts `northwind` in `/northwind/instances/42` and leaves
+     * the host, the other segments and a path such as `/login` alone. A route that is the
+     * parameter alone matches the first segment of every path.
      *
      * @param  list<string>  $params
+     * @return list<string>
      */
-    private function tokenPattern(string $uri, array $params): ?string
+    private function tokenPatterns(string $uri, array $params, string $base): array
     {
+        $segments = explode('/', trim($uri, '/'));
+        $patterns = [];
         $prefix = '/';
 
-        foreach (explode('/', trim($uri, '/')) as $segment) {
+        foreach ($segments as $index => $segment) {
             if (preg_match('/^\{([^}?]+)\??\}$/', $segment, $name) === 1 && in_array($name[1], $params, true)) {
-                return '('.$prefix.')[^/?#&]+';
+                $patterns[] = $index === 0
+                    ? '^('.self::ORIGIN.$base.'/)'.self::SEGMENT.'(?='.$this->shapeOf(array_slice($segments, 1)).'(?:[/?#&]|$))'
+                    : '('.$prefix.')'.self::SEGMENT;
             }
 
-            $prefix .= (preg_match('/^\{[^}]*\}$/', $segment) === 1
-                ? '[^/?#&]+'
-                : (string) preg_replace('#[.*+?^$|(){}\[\]\\\\/~]#', '\\\\$0', $segment)).'/';
+            $prefix .= $this->segmentPattern($segment).'/';
         }
 
-        return null;
+        return $patterns;
+    }
+
+    /**
+     * The segments of a route behind its first, as the pattern a path has to continue with: a
+     * literal as written, a parameter as any one segment, an optional one as a segment that may be
+     * missing.
+     *
+     * @param  list<string>  $segments
+     */
+    private function shapeOf(array $segments): string
+    {
+        $shape = '';
+
+        foreach ($segments as $segment) {
+            $shape .= preg_match('/^\{[^}]*\?\}$/', $segment) === 1
+                ? '(?:/'.self::SEGMENT.')?'
+                : '/'.$this->segmentPattern($segment);
+        }
+
+        return $shape;
+    }
+
+    private function segmentPattern(string $segment): string
+    {
+        return preg_match('/^\{[^}]*\}$/', $segment) === 1 ? self::SEGMENT : $this->escaped($segment);
+    }
+
+    private function escaped(string $literal): string
+    {
+        return (string) preg_replace('#[.*+?^$|(){}\[\]\\\\/~]#', '\\\\$0', $literal);
+    }
+
+    /**
+     * The path the application is served under, escaped for a pattern: empty at the root of a
+     * host, `\/app` for an application that answers at `https://example.test/app`. The URL
+     * generator reads the router as it is built, so where the routes cannot be read the root of
+     * the host stands in.
+     */
+    private function basePath(): string
+    {
+        try {
+            $path = (string) parse_url(URL::to('/'), PHP_URL_PATH);
+        } catch (Throwable) {
+            $path = '';
+        }
+
+        return $this->escaped(rtrim($path, '/'));
     }
 
     private function redactPatterns(string $url, string $replacement): string

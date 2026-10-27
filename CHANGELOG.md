@@ -4,6 +4,12 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.1] - 2026-10-27
+
+### 🐛 Fixed
+
+- **A route parameter in the first segment no longer redacts every URL.** With a parameter from `privacy.redact.path_params` in the first segment of a route, as the slug in `{workspace}/members`, the pattern matched every segment of every URL on the server, the host included, and in the browser it redacted the host and left the slug. The pattern now starts behind the host and the path the application is served under and asks for the rest of the route, so `https://app.example.test/acme/members` reaches Matomo as `https://app.example.test/REDACTED/members`, and `/login` stays as it is. A route that names several parameters from the list now has each of them redacted, not only the first.
+
 ## [0.38.0] - 2026-10-26
 
 ### ✨ Added
@@ -1726,7 +1732,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...HEAD
+[0.38.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.35.0...v0.36.0
