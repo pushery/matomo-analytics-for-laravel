@@ -386,6 +386,12 @@ return [
             // `keys` lists. `northwind.example.test` becomes `REDACTED.example.test`, and the domain
             // itself and every other host stay. In the environment as a comma-separated list.
             'base_domains' => env('MATOMO_REDACT_BASE_DOMAINS', []),
+            // What stands in front of one of those domains in a host of the application itself,
+            // which stays: with `app` here, `app.example.test` reaches Matomo as it is, while
+            // `northwind.example.test` still becomes `REDACTED.example.test`. An entry has to match
+            // everything in front of the domain, so `eu.app` keeps `eu.app.example.test` and `app`
+            // does not. In the environment as a comma-separated list.
+            'kept_labels' => env('MATOMO_REDACT_KEPT_LABELS', []),
             'patterns' => [], // e.g. ['/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/'] to scrub emails
             // The payload fields redacted. `urlref` covers `_ref` as well, the referrer matomo.js
             // keeps for conversion attribution and sends with every request; `c_t` is the
@@ -443,7 +449,8 @@ return [
         'only_get' => true,         // only GET requests
         'only_successful' => true,  // only delivered pages: 2xx and 304
         'only_html' => true,        // only pages: HTML or an Inertia visit, no JSON, file or download
-        'skip_livewire' => true,    // skip Livewire update requests
+        'skip_livewire' => true,    // skip Livewire component updates (X-Livewire)
+        'skip_navigate' => false,   // skip wire:navigate page loads (X-Livewire-Navigate), the one request a navigation sends
         'skip_partials' => true,    // skip htmx fragments, Turbo Frames, XHR and Inertia partial reloads
         'skip_prefetch' => true,    // skip a speculative request (Sec-Purpose/Purpose: prefetch)
         'strip_query' => false,     // drop the query string from the tracked URL, campaign parameters too

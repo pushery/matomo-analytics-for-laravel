@@ -22,19 +22,9 @@ use MatomoAnalytics\Exceptions\TrackingSendException;
 use MatomoAnalytics\Jobs\SendHitsJob;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
-use MatomoAnalytics\Tracking\ContentImpression;
-use MatomoAnalytics\Tracking\ContentInteraction;
-use MatomoAnalytics\Tracking\Download;
-use MatomoAnalytics\Tracking\EcommerceCartUpdate;
-use MatomoAnalytics\Tracking\EcommerceItem;
-use MatomoAnalytics\Tracking\EcommerceOrder;
+use MatomoAnalytics\Tracking\Concerns\TracksCommonHits;
 use MatomoAnalytics\Tracking\EcommerceView;
-use MatomoAnalytics\Tracking\Event;
-use MatomoAnalytics\Tracking\Goal;
 use MatomoAnalytics\Tracking\Hit;
-use MatomoAnalytics\Tracking\Outlink;
-use MatomoAnalytics\Tracking\PageView;
-use MatomoAnalytics\Tracking\Ping;
 use MatomoAnalytics\Tracking\RequiredFields;
 use MatomoAnalytics\Tracking\SiteSearch;
 use Throwable;
@@ -48,6 +38,8 @@ use Throwable;
  */
 final class TrackManager implements Tracker
 {
+    use TracksCommonHits;
+
     /**
      * @var list<array<string, scalar>>
      */
@@ -185,79 +177,6 @@ final class TrackManager implements Tracker
 
             Bus::dispatch(new SendHitsJob($payloads));
         });
-    }
-
-    public function pageView(string $title, ?string $url = null): static
-    {
-        return $this->track(new PageView($title, $url));
-    }
-
-    public function event(string $category, string $action, ?string $name = null, int|float|null $value = null): static
-    {
-        return $this->track(new Event($category, $action, $name, $value));
-    }
-
-    public function contentImpression(string $name, ?string $piece = null, ?string $target = null): static
-    {
-        return $this->track(new ContentImpression($name, $piece, $target));
-    }
-
-    public function contentInteraction(string $interaction, string $name, ?string $piece = null, ?string $target = null): static
-    {
-        return $this->track(new ContentInteraction($interaction, $name, $piece, $target));
-    }
-
-    public function siteSearch(string $keyword, ?string $category = null, ?int $count = null): static
-    {
-        return $this->track(new SiteSearch($keyword, $category, $count));
-    }
-
-    public function goal(int $id, ?float $revenue = null): static
-    {
-        return $this->track(new Goal($id, $revenue));
-    }
-
-    public function download(string $url): static
-    {
-        return $this->track(new Download($url));
-    }
-
-    public function outlink(string $url): static
-    {
-        return $this->track(new Outlink($url));
-    }
-
-    public function ping(): static
-    {
-        return $this->track(new Ping);
-    }
-
-    public function searchFromRequest(?Request $request = null, string $keywordKey = 'q', ?string $categoryKey = null, ?int $count = null): static
-    {
-        $search = SiteSearch::fromRequest($request ?? RequestFacade::instance(), $keywordKey, $categoryKey, $count);
-
-        return $search instanceof SiteSearch ? $this->track($search) : $this;
-    }
-
-    public function ecommerceView(?string $sku = null, ?string $name = null, ?string $category = null, ?float $price = null, ?string $title = null, ?string $url = null): static
-    {
-        return $this->track(new EcommerceView($sku, $name, $category, $price, $title, $url));
-    }
-
-    /**
-     * @param  list<EcommerceItem>  $items
-     */
-    public function ecommerceCartUpdate(float $grandTotal, array $items = []): static
-    {
-        return $this->track(new EcommerceCartUpdate($grandTotal, $items));
-    }
-
-    /**
-     * @param  list<EcommerceItem>  $items
-     */
-    public function ecommerceOrder(string $orderId, float $grandTotal, array $items = [], ?float $subTotal = null, ?float $tax = null, ?float $shipping = null, ?float $discount = null): static
-    {
-        return $this->track(new EcommerceOrder($orderId, $grandTotal, $items, $subTotal, $tax, $shipping, $discount));
     }
 
     /**

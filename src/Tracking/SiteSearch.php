@@ -76,7 +76,8 @@ final readonly class SiteSearch implements Hit
     {
         $params = ['search' => $this->keyword];
 
-        if ($this->category !== null) {
+        // An empty category is no category, as matomo-php-tracker reads it.
+        if ($this->category !== null && $this->category !== '') {
             $params['search_cat'] = $this->category;
         }
 

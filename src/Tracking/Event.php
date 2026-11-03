@@ -20,7 +20,9 @@ final readonly class Event implements Hit
             'e_a' => $this->action,
         ];
 
-        if ($this->name !== null) {
+        // An empty name is no name, as matomo-php-tracker reads it: Matomo would otherwise show
+        // an event with a blank name beside the same event without one.
+        if ($this->name !== null && $this->name !== '') {
             $params['e_n'] = $this->name;
         }
 

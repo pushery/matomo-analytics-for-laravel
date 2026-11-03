@@ -60,8 +60,10 @@ final readonly class RateLimits
                 [$max, $minutes] = $throttle;
                 $ip = ClientIp::resolve($request);
 
+                // The client by its keyed hash, an IPv6 address by its /64 as before: the key is
+                // what an error tracker records with every count (KeyedDigest).
                 return Limit::perMinutes($minutes, $max)
-                    ->by($ip === null ? 'matomo-analytics:unknown-client' : ClientIp::rateLimitKey($ip));
+                    ->by($ip === null ? 'matomo-analytics:unknown-client' : KeyedDigest::of(ClientIp::rateLimitKey($ip)));
             });
         }
     }

@@ -23,7 +23,7 @@ use MatomoAnalytics\Reporting\ReportQuery;
  * The shortcuts are declared here because the alternative was measured against the
  * defect and does not fix it. A second interface carrying them would leave anyone
  * who injects ReportClient -- the bound name, the documented one, the obvious one --
- * looking at the same five methods while the facade advertises twenty-seven. That is
+ * looking at the same five methods while the facade advertises every shortcut. That is
  * a discoverability defect, and it is not repaired by adding a second name a reader
  * has to discover first.
  */
@@ -106,6 +106,38 @@ interface ReportClient
      * @return array<array-key, mixed>|null
      */
     public function siteSearchKeywords(array $params = []): ?array;
+
+    /**
+     * The pages visits began on, one row per URL (`flat=1` unless `$params` says otherwise).
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function entryPageUrls(array $params = []): ?array;
+
+    /**
+     * The pages visits ended on, one row per URL (`flat=1` unless `$params` says otherwise).
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function exitPageUrls(array $params = []): ?array;
+
+    /**
+     * What visitors searched for and found nothing.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function siteSearchNoResultKeywords(array $params = []): ?array;
+
+    /**
+     * How visitors reached one page and where they went from it.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function transitionsForPageUrl(string $pageUrl, array $params = []): ?array;
 
     /**
      * @param  array<string, scalar>  $params

@@ -50,10 +50,13 @@ should not add conditionals around it for that. Verify a real connection with
 
 An application that serves each tenant on a subdomain of its own, such as
 `<slug>.example.test`, names the base domain, so no tenant's name reaches Matomo
-with the host of a page or a referrer:
+with the host of a page or a referrer. Its own hosts under that domain, such as
+`app.example.test`, keep their name where the labels in front of the domain are
+listed:
 
 ```dotenv
 MATOMO_REDACT_BASE_DOMAINS=example.test
+MATOMO_REDACT_KEPT_LABELS=app,api
 ```
 
 Publish everything at once, or one part of it:

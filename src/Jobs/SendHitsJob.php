@@ -36,6 +36,21 @@ final class SendHitsJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** Seconds a send may take beyond its two HTTP timeouts before the worker ends it. */
+    private const int TIMEOUT_MARGIN = 5;
+
+    /**
+     * Seconds the worker gives this job: the HTTP timeout and the connect timeout of the one
+     * request a batch makes, and a margin.
+     *
+     * Without it the worker's `--timeout` applied, and where that was shorter than the two HTTP
+     * timeouts together, the worker killed the job in the middle of the send. The client never
+     * gave up on its own, so neither the report nor the dead letter ran, and the batch went back
+     * to the queue as a killed job. Set here, the HTTP call always ends first. The connection's
+     * `retry_after` has to stay above it, or a slow send is handed to a second worker as well.
+     */
+    public int $timeout;
+
     /**
      * @param  list<array<string, scalar>>  $payloads
      */
@@ -44,6 +59,10 @@ final class SendHitsJob implements ShouldQueue
     ) {
         $this->onConnection(Config::nullableString('matomo-analytics.queue.connection'));
         $this->onQueue(Config::string('matomo-analytics.queue.queue', 'matomo'));
+        // The same two keys Connection reads, so the bound and the request cannot drift apart.
+        $this->timeout = max(1, Config::int('matomo-analytics.timeout', 5))
+            + max(1, Config::int('matomo-analytics.resilience.connect_timeout', 2))
+            + self::TIMEOUT_MARGIN;
     }
 
     /**

@@ -29,7 +29,13 @@ final readonly class TrackPageViews
     /** Where `handle()` leaves the elapsed time for `terminate()` to read. */
     private const string SERVER_TIME = 'matomo-analytics.server_time';
 
-    private const string TITLE = 'matomo-analytics.title';
+    /**
+     * Where the page's title travels from handle() to terminate(), and where a middleware inside
+     * this one that answers a 304 of its own sets the title it knows. That middleware never renders
+     * the page, the empty 304 names nothing, and the page view would otherwise take the route name,
+     * so Matomo counted one page under two titles. A rendered page's own title wins.
+     */
+    public const string TITLE = 'matomo-analytics.title';
 
     /** Where `handle()` leaves whether the response is a page, for `terminate()` to read. */
     private const string PAGE = 'matomo-analytics.page';
@@ -68,7 +74,7 @@ final readonly class TrackPageViews
         // 304 before terminate() runs: `cache.headers` renders the page, compares the validator
         // and drops the body and its Content-Type. A tracker listed inside it therefore keeps the
         // title of the page the reader revalidated, and a revalidated JSON response stays no page.
-        $request->attributes->set(self::TITLE, $this->fromHtml($response));
+        $request->attributes->set(self::TITLE, $this->fromHtml($response) ?? $this->givenTitle($request));
         $request->attributes->set(self::PAGE, $this->isPage($request, $response));
 
         return $response;
@@ -165,18 +171,21 @@ final readonly class TrackPageViews
             return true;
         }
 
-        // Two headers, and the second one is not a prefix of the first as a header key.
-        // `hasHeader('X-Livewire')` matches an ordinary component update and does not match
-        // `X-Livewire-Navigate`, which is what a `wire:navigate` prefetch sends — a separate
-        // key, not a longer value of the same one.
-        //
-        // A prefetch got past all three gates: it is a GET, it was not "a Livewire request" by
-        // that test, and it carries a full 200 HTML body. Livewire prefetches on mousedown for
-        // every `wire:navigate` link and after 60ms of hover with `.hover`, so an abandoned
-        // click — or, on a hover link, the pointer passing over it — counted a page view for a
-        // page nobody ever saw.
-        if (Config::bool('matomo-analytics.middleware.skip_livewire', true)
-            && ($request->hasHeader('X-Livewire') || $request->hasHeader('X-Livewire-Navigate'))) {
+        // A component update carries `X-Livewire`. It is no navigation, and it is skipped.
+        if (Config::bool('matomo-analytics.middleware.skip_livewire', true) && $request->hasHeader('X-Livewire')) {
+            return true;
+        }
+
+        // A `wire:navigate` page load carries `X-Livewire-Navigate`, a separate header key, not a
+        // longer value of the one above. It is counted unless `skip_navigate` says otherwise,
+        // because it is the only request a navigation sends: Livewire fetches the page when the
+        // link is pressed and shows that HTML when it is released, and `Livewire.navigate()` and
+        // a redirect with `navigate: true` fetch it the same way. Skipped with the updates, every
+        // page after the first one was lost. The price is that a press somebody abandons, and on
+        // a `.hover` link the pointer resting on it, count a page nobody saw; the server cannot
+        // tell a used prefetch from an abandoned one, and an application that prefetches on hover
+        // tracks its navigations in the browser instead.
+        if (Config::bool('matomo-analytics.middleware.skip_navigate', false) && $request->hasHeader('X-Livewire-Navigate')) {
             return true;
         }
 
@@ -311,6 +320,14 @@ final readonly class TrackPageViews
         $mediaType = strtolower(trim(explode(';', $contentType, 2)[0]));
 
         return $mediaType === 'text/html' || $mediaType === 'application/xhtml+xml';
+    }
+
+    /** The title a middleware inside this one set on the request, held to one line, or null. */
+    private function givenTitle(Request $request): ?string
+    {
+        $given = $request->attributes->get(self::TITLE);
+
+        return is_string($given) && Str::squish($given) !== '' ? Str::squish($given) : null;
     }
 
     private function title(Request $request, Response $response): string

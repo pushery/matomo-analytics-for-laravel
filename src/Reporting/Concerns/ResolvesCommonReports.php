@@ -79,6 +79,52 @@ trait ResolvesCommonReports
     }
 
     /**
+     * The pages visits began on, one row per URL. Matomo groups a page report into folders
+     * unless it is asked for the flat form, so this one asks; a `flat` in `$params` still wins.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function entryPageUrls(array $params = []): ?array
+    {
+        return $this->get('Actions.getEntryPageUrls', array_merge(['flat' => 1], $params));
+    }
+
+    /**
+     * The pages visits ended on, one row per URL, flat like {@see entryPageUrls()}.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function exitPageUrls(array $params = []): ?array
+    {
+        return $this->get('Actions.getExitPageUrls', array_merge(['flat' => 1], $params));
+    }
+
+    /**
+     * What visitors searched for and found nothing.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function siteSearchNoResultKeywords(array $params = []): ?array
+    {
+        return $this->get('Actions.getSiteSearchNoResultKeywords', $params);
+    }
+
+    /**
+     * How visitors reached one page and where they went from it. Matomo needs the page's full
+     * URL; a `pageUrl` in `$params` wins over the argument.
+     *
+     * @param  array<string, scalar>  $params
+     * @return array<array-key, mixed>|null
+     */
+    public function transitionsForPageUrl(string $pageUrl, array $params = []): ?array
+    {
+        return $this->get('Transitions.getTransitionsForPageUrl', array_merge(['pageUrl' => $pageUrl], $params));
+    }
+
+    /**
      * @param  array<string, scalar>  $params
      * @return array<array-key, mixed>|null
      */

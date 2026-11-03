@@ -4,6 +4,40 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0] - 2026-11-03
+
+### ✨ Added
+
+- **`Matomo::forUser()` names a user the request does not know yet.** `visitor.user_id => 'auth'` reads the user from the request, so the registration that creates an account, or the callback of a social login before the session starts, sent its hits without a User ID, and the only way round was a `CustomParameters` wrapper documented for jobs. `Matomo::forUser($user)->event(…)` puts the user, or an id, as `uid` on every hit sent through it, whatever `visitor.user_id` says. The user named wins over the one logged in, and a hit with a `uid` of its own keeps it.
+
+  **Upgrade:** an own `Tracker` implementation adds `forUser()`. `TracksCommonHits` supplies it with the typed hit methods, from `track()` alone, and the tracker and the fake both use it.
+
+- **Four more report helpers: `entryPageUrls()`, `exitPageUrls()`, `siteSearchNoResultKeywords()` and `transitionsForPageUrl()`.** They answer where visits begin and end, what visitors searched for without a result, and how they reached one page and where they went from it. The two page reports ask for the flat list, one row per URL, and `transitionsForPageUrl()` takes the page's URL as its first argument. All four were reachable through `get()` before; as helpers they sit on `ReportClient`, on the `MatomoReports` facade and on the fake like the others.
+
+  **Upgrade:** an own `ReportClient` implementation that does not use `ResolvesCommonReports` adds the four methods. Both shipped implementations use the trait.
+
+- **A middleware that answers `304` itself can name the page view.** The tracker reads the title from the response, and a `304` that a middleware inside it answers without rendering the page has none, so the visit took the route name and Matomo counted one page under two titles. Such a middleware sets the title it knows as `TrackPageViews::TITLE` on the request, and the tracker keeps it where the response names nothing.
+
+- **The application's own hosts under a base domain keep their name.** With `privacy.redact.base_domains` set, every host under the domain lost its labels, so `app.example.test` and `api.example.test` reached Matomo as `REDACTED.example.test` like every tenant, and a site that tracks only listed URLs dropped those page views. `privacy.redact.kept_labels`, or `MATOMO_REDACT_KEPT_LABELS` as a comma-separated list, names what stands in front of the domain in those hosts, and they stay, on the server and in the browser: with `app` listed, `https://app.example.test/` is kept and `https://northwind.example.test/` still becomes `https://REDACTED.example.test/`. An entry has to match everything in front of the domain, and one that is no label is refused with its own wording. Without the list nothing changes.
+
+### 🐛 Fixed
+
+- **The worker no longer kills a hit batch in the middle of its send.** `SendHitsJob` set no timeout, so the worker's `--timeout` applied, and where it was shorter than `timeout` and `resilience.connect_timeout` together the worker ended the job before the HTTP client gave up, and neither the report nor the dead letter ran. The job now sets its own: the two timeouts and five seconds.
+
+  **Upgrade:** keep the queue connection's `retry_after` above that sum, 12 seconds with the shipped values, or a slow send is handed to a second worker as well.
+
+- **An empty event name and an empty search category are sent as none.** `Event` sent `e_n=` and `SiteSearch` `search_cat=` for `''`, where matomo-php-tracker leaves both out, so an application moving over from it saw events with a blank name in Matomo beside the same events without one.
+
+- **A page view over `wire:navigate` is counted again.** `middleware.skip_livewire` skipped every request with `X-Livewire-Navigate` along with the component updates, to leave out an abandoned prefetch. That header is on the one request every `wire:navigate` navigation sends, a used prefetch, `Livewire.navigate()` and a redirect with `navigate: true` alike, so server-side tracking lost every page after the first. `skip_livewire` now means the component updates, and the new `middleware.skip_navigate`, `false` by default, decides about the page loads.
+
+  **Upgrade:** expect more page views in an application that uses `wire:navigate`. Set `middleware.skip_navigate` to `true` to keep the old count, and do so where links prefetch on hover, whose resting pointer counts a page as well.
+
+### 🔒 Security
+
+- **The beacon limiters no longer name the client's address in their cache key.** The three of them keyed the address raw, which the framework turns into `md5()` of the limiter's name and the address, and Sentry and Flare record every cache key they see, so the address was tried back from it in minutes. The client is keyed with the application key now, an IPv6 address still by its /64.
+
+  **Upgrade:** the beacon counts start afresh once with this version.
+
 ## [0.38.1] - 2026-10-27
 
 ### 🐛 Fixed
@@ -1732,7 +1766,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.36.0...v0.37.0
