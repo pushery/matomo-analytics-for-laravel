@@ -17,7 +17,7 @@ use Throwable;
  * their value replaced, and arbitrary regex patterns can scrub anything else. The
  * key segment is preserved so reports still show "a token was present" without
  * leaking its value into analytics, logs, or shared dashboards. Under a base domain
- * the host loses the labels that name a tenant.
+ * the host loses the labels that name a tenant, and keeps those of the application's own hosts.
  *
  * A pattern that fails on a URL closes rather than opens: `preg_replace()` answers null without a
  * warning when the subject makes it fail, with bytes that are no UTF-8 under `/u` or past a
@@ -38,7 +38,10 @@ final class UrlRedactor
     /** The paths Laravel's starter kits give the route `password.reset`. */
     private const array RESET_PASSWORD_URIS = ['reset-password/{token}', 'password/reset/{token}'];
 
-    /** A domain name as `privacy.redact.base_domains` holds one: labels of letters, digits and inner hyphens. */
+    /**
+     * A domain name as `privacy.redact.base_domains` holds one, and an entry of
+     * `privacy.redact.kept_labels`: labels of letters, digits and inner hyphens, joined by dots.
+     */
     private const string DOMAIN_NAME = '/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/';
 
     /** One segment of a path, up to the next separator. */
@@ -70,14 +73,29 @@ final class UrlRedactor
      * own stays. In a syntax PHP and JavaScript read alike, without regard to case, so the
      * browser applies the same list.
      *
+     * A host of the application itself stays as well: where `privacy.redact.kept_labels` names
+     * `app`, a lookahead refuses the match for `app.example.test`, and only for a host whose labels
+     * in front of the domain are exactly that entry. It adds no group, so the two the browser reads
+     * are still the prefix and the domain.
+     *
      * @return list<string>
      */
     public function hostPatterns(): array
     {
+        $domains = $this->baseDomains();
+
+        if ($domains === []) {
+            return [];
+        }
+
+        $kept = array_map(static fn (string $label): string => str_replace('.', '\.', $label), $this->keptLabels());
         $patterns = [];
 
-        foreach ($this->baseDomains() as $domain) {
-            $patterns[] = '^((?:[a-z][a-z0-9+.-]*:)?//(?:[^/?#@]*@)?)[^/?#@:]+(\.'.str_replace('.', '\.', $domain).')(?=[:/?#]|$)';
+        foreach ($domains as $domain) {
+            $escaped = str_replace('.', '\.', $domain);
+            $stays = $kept === [] ? '' : '(?!(?:'.implode('|', $kept).')\.'.$escaped.'(?:[:/?#]|$))';
+
+            $patterns[] = '^((?:[a-z][a-z0-9+.-]*:)?//(?:[^/?#@]*@)?)'.$stays.'[^/?#@:]+(\.'.$escaped.')(?=[:/?#]|$)';
         }
 
         return $patterns;
@@ -420,5 +438,47 @@ final class UrlRedactor
         }
 
         return $domains;
+    }
+
+    /**
+     * The entries of `privacy.redact.kept_labels`, lowercased: a list in a published config, or the
+     * comma-separated value of `MATOMO_REDACT_KEPT_LABELS`. Each names what stands in front of a
+     * base domain in a host of the application itself, `app` for `app.example.test` or `eu.app`
+     * for `eu.app.example.test`. An entry that is no such name is refused with its own wording, as
+     * a base domain is. Read only while a base domain is set, because only then does it keep
+     * anything.
+     *
+     * @return list<string>
+     */
+    private function keptLabels(): array
+    {
+        $value = ConfigFacade::get('matomo-analytics.privacy.redact.kept_labels');
+        $entries = is_string($value) ? explode(',', $value) : (is_array($value) ? $value : []);
+        $labels = [];
+
+        foreach ($entries as $entry) {
+            if (! is_string($entry)) {
+                continue;
+            }
+
+            $label = strtolower(trim($entry));
+
+            if ($label === '') {
+                continue;
+            }
+
+            if (preg_match(self::DOMAIN_NAME, $label) !== 1) {
+                throw new InvalidArgumentException(sprintf(
+                    'matomo-analytics.privacy.redact.kept_labels holds [%s], which is no label: name what stands in front of a base domain, as app for app.example.test',
+                    trim($entry),
+                ));
+            }
+
+            if (! in_array($label, $labels, true)) {
+                $labels[] = $label;
+            }
+        }
+
+        return $labels;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Contracts;
 
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 use MatomoAnalytics\Tracking\EcommerceItem;
 use MatomoAnalytics\Tracking\Hit;
@@ -11,6 +12,12 @@ use MatomoAnalytics\Tracking\Hit;
 interface Tracker
 {
     public function track(Hit $hit): static;
+
+    /**
+     * A tracker that names `$user`, or the id given, as the Matomo User ID (`uid`) on every hit
+     * sent through it: for a hit the request cannot name, before a login or in a job.
+     */
+    public function forUser(Authenticatable|int|string $user): Tracker;
 
     public function aiChatbot(?Request $request = null): static;
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Facades;
 
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Facade;
 use MatomoAnalytics\Contracts\Tracker;
@@ -13,6 +14,7 @@ use MatomoAnalytics\Tracking\Hit;
 
 /**
  * @method static Tracker track(Hit $hit)
+ * @method static Tracker forUser(Authenticatable|int|string $user)
  * @method static Tracker aiChatbot(?Request $request = null)
  * @method static Tracker pageView(string $title, ?string $url = null)
  * @method static Tracker event(string $category, string $action, ?string $name = null, int|float|null $value = null)
