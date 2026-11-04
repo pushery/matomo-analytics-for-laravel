@@ -72,8 +72,8 @@ final class Reporter
     }
 
     /**
-     * What failed, by the stage the caller names. A request to the reporting, GDPR or
-     * annotations API is not tracking, and a line that called it tracking would send the reader
+     * What failed, by the stage the caller names. A request to the reporting, GDPR, annotations
+     * or sites API is not tracking, and a line that called it tracking would send the reader
      * to the wrong part of the package.
      *
      * @param  array<string, scalar>  $context
@@ -84,6 +84,7 @@ final class Reporter
             'gdpr' => 'Matomo GDPR request failed: ',
             'reporting' => 'Matomo reporting request failed: ',
             'annotations' => 'Matomo annotation request failed: ',
+            'sites' => 'Matomo sites request failed: ',
             default => 'Matomo tracking failed: ',
         };
     }

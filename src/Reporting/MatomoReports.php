@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Reporting;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 use MatomoAnalytics\Connection;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Exceptions\ReportRequestException;
@@ -97,6 +98,15 @@ final class MatomoReports implements ReportClient
     public function lastError(): ?string
     {
         return $this->lastError;
+    }
+
+    public function forSite(int $siteId): self
+    {
+        if ($siteId < 1) {
+            throw new InvalidArgumentException("A Matomo site id is 1 or more, and {$siteId} was given.");
+        }
+
+        return new self($this->connection->forSite($siteId), $this->reporter, $this->cache);
     }
 
     /**

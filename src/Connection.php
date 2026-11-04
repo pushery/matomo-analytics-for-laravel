@@ -42,6 +42,25 @@ final readonly class Connection
         );
     }
 
+    /**
+     * The same connection for another site of the instance: the host, the token and the transport
+     * stay, the site changes.
+     */
+    public function forSite(int $siteId): self
+    {
+        return new self(
+            host: $this->host,
+            siteId: $siteId,
+            token: $this->token,
+            trackerPath: $this->trackerPath,
+            timeout: $this->timeout,
+            connectTimeout: $this->connectTimeout,
+            reportingPath: $this->reportingPath,
+            requireTls: $this->requireTls,
+            httpOptions: $this->httpOptions,
+        );
+    }
+
     public function isConfigured(): bool
     {
         if ($this->host === '' || $this->siteId <= 0) {

@@ -15,6 +15,7 @@ use MatomoAnalytics\Testing\MatomoReportsFake;
  * @method static list<array<array-key, mixed>|null> bulk(list<string|array<string, scalar>> $requests)
  * @method static void flushCache()
  * @method static string|null lastError()
+ * @method static ReportClient forSite(int $siteId)
  * @method static array<array-key, mixed>|null visitsSummary(array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null liveCounters(int $lastMinutes = 30, array<string, scalar> $params = [])
  * @method static array<array-key, mixed>|null lastVisits(int $count = 10, array<string, scalar> $params = [])

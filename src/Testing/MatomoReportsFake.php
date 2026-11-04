@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Testing;
 
 use Closure;
 use Illuminate\Support\Testing\Fakes\Fake;
+use InvalidArgumentException;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Reporting\Concerns\ResolvesCommonReports;
 use MatomoAnalytics\Reporting\ReportQuery;
@@ -15,6 +16,10 @@ use PHPUnit\Framework\Assert;
  * In-memory ReportClient for tests: records every request and returns stubbed
  * responses. A method without a stub fails the way a call to the real client fails: it
  * returns null and sets lastError(). Swap it in with MatomoReports::fake().
+ *
+ * A copy from forSite() answers with this fake's stubs and logs into this fake's requests,
+ * with the site it asks for as `idSite`, the way the real client sends it. Its lastError() is
+ * its own, as on the real client.
  */
 final class MatomoReportsFake implements Fake, ReportClient
 {
@@ -33,6 +38,12 @@ final class MatomoReportsFake implements Fake, ReportClient
     /** The message a failed call reports; see setLastError(). */
     private ?string $failureMessage = null;
 
+    /** The site a copy from forSite() asks for. */
+    private ?int $siteId = null;
+
+    /** The fake a copy from forSite() came from, which logs its requests and holds its stubs. */
+    private ?self $origin = null;
+
     /**
      * Pre-program the response for a method. Null makes the call fail: it returns null and sets
      * lastError(), as the real client does.
@@ -41,7 +52,8 @@ final class MatomoReportsFake implements Fake, ReportClient
      */
     public function stub(string $method, ?array $response): self
     {
-        $this->stubs[$method] = $response;
+        $origin = $this->origin ?? $this;
+        $origin->stubs[$method] = $response;
 
         return $this;
     }
@@ -51,7 +63,8 @@ final class MatomoReportsFake implements Fake, ReportClient
      */
     public function setLastError(?string $message): self
     {
-        $this->failureMessage = $message;
+        $origin = $this->origin ?? $this;
+        $origin->failureMessage = $message;
         $this->lastError = $message;
 
         return $this;
@@ -59,13 +72,19 @@ final class MatomoReportsFake implements Fake, ReportClient
 
     public function get(string $method, array $params = []): ?array
     {
-        $this->requests[] = ['method' => $method, 'params' => $params];
+        $origin = $this->origin ?? $this;
 
-        $response = $this->stubs[$method] ?? null;
+        if ($this->siteId !== null) {
+            $params = array_merge($params, ['idSite' => $this->siteId]);
+        }
+
+        $origin->requests[] = ['method' => $method, 'params' => $params];
+
+        $response = $origin->stubs[$method] ?? null;
 
         // Like the real client: a failed call returns null with a reason, and an answer clears it.
         $this->lastError = $response === null
-            ? ($this->failureMessage ?? sprintf('Nothing answers [%s] in the fake, so the call fails.', $method))
+            ? ($origin->failureMessage ?? sprintf('Nothing answers [%s] in the fake, so the call fails.', $method))
             : null;
 
         return $response;
@@ -88,12 +107,26 @@ final class MatomoReportsFake implements Fake, ReportClient
 
     public function flushCache(): void
     {
-        $this->flushed++;
+        $origin = $this->origin ?? $this;
+        $origin->flushed++;
     }
 
     public function lastError(): ?string
     {
         return $this->lastError;
+    }
+
+    public function forSite(int $siteId): self
+    {
+        if ($siteId < 1) {
+            throw new InvalidArgumentException("A Matomo site id is 1 or more, and {$siteId} was given.");
+        }
+
+        $copy = new self;
+        $copy->siteId = $siteId;
+        $copy->origin = $this->origin ?? $this;
+
+        return $copy;
     }
 
     /**
@@ -102,7 +135,7 @@ final class MatomoReportsFake implements Fake, ReportClient
     public function assertRequested(string $method, ?Closure $callback = null): void
     {
         $matches = array_filter(
-            $this->requests,
+            ($this->origin ?? $this)->requests,
             static fn (array $request): bool => $request['method'] === $method
                 && (! $callback instanceof Closure || $callback($request['params'])),
         );
@@ -112,11 +145,11 @@ final class MatomoReportsFake implements Fake, ReportClient
 
     public function assertNothingRequested(): void
     {
-        Assert::assertSame([], $this->requests, 'Expected no Matomo report requests, but some were made.');
+        Assert::assertSame([], ($this->origin ?? $this)->requests, 'Expected no Matomo report requests, but some were made.');
     }
 
     public function assertRequestedCount(int $count): void
     {
-        Assert::assertCount($count, $this->requests);
+        Assert::assertCount($count, ($this->origin ?? $this)->requests);
     }
 }

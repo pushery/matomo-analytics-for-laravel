@@ -4,6 +4,22 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] - 2026-11-04
+
+### ⚠️ Breaking
+
+- **`ReportClient` declares `forSite()`.** The contract gained `forSite(int $siteId): ReportClient`, which answers the same client for another site of the instance. The shipped client and the fake implement it, so an application that injects the contract or calls the `MatomoReports` facade has nothing to change.
+
+  **Upgrade:** an application's own `ReportClient` implementation adds `forSite()`, answering a client whose reports ask Matomo for that site, and refuses an id below 1.
+
+### ✨ Added
+
+- **Reports for another site of the instance.** `MatomoReports::forSite($id)` answers the same client for that site: every report, single or bulk, asks Matomo for it, its cache entries are its own, and the configured `site_id` stays as it is. An application that counts each tenant on a site of its own through `site_id_resolver` reads that tenant's reports this way. The fake logs the requests of a site copy with the site as `idSite`, so `assertRequested()` can ask for it.
+
+- **The sites of the instance through `SitesClient`.** It creates a site with its name and addresses and answers the new id, changes a site's name or addresses, and deletes a site with every visit Matomo recorded for it, through the SitesManager API with the token in the request body. A failed call answers `null` or `false`, with the reason in `lastError()`.
+
+- **A link preview is told apart from the other bots.** A messenger or a social network that shows a card for a shared link fetches the page without anybody opening it, and the package counted that fetch as a bot without saying which kind. `UserAgentClassifier::classify()` answers `UserAgentKind::Human`, `UserAgentKind::Bot` or `UserAgentKind::LinkPreview`, for an application that counts the previews of its links on their own, a link shortener for instance. The fetchers stand in `LinkPreviews::USER_AGENTS`, each with the page that documents it: WhatsApp, Signal, Slack, Facebook with Instagram and Messenger, X, LinkedIn, Telegram, Discord, Skype, VK and Viber. A preview still counts as a bot for every visit, and Viber's fetcher, which carried no other signal of a bot, is now kept out of the visits as well.
+
 ## [0.39.0] - 2026-11-03
 
 ### ✨ Added
@@ -1766,7 +1782,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.37.0...v0.38.0

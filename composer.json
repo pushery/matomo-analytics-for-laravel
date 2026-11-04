@@ -72,7 +72,7 @@
         "laravel/pint": "^1.0",
         "matomo/device-detector": "^6.4",
         "orchestra/testbench": "^11.2",
-        "pestphp/pest": "^5.0",
+        "pestphp/pest": "^5.2.1",
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.2",
         "pestphp/pest-plugin-laravel": "^5.0",
