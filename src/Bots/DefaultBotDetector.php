@@ -11,8 +11,9 @@ use MatomoAnalytics\Support\Config;
 
 /**
  * Cheap substring bot detection: an explicit allow/deny list, the maintained
- * AI-crawler tokens, generic crawler signals, and an optional custom detector
- * (e.g. a matomo/device-detector wrapper) wired through config.
+ * AI-crawler tokens, generic crawler signals with the link-preview fetchers of
+ * LinkPreviews among them, and an optional custom detector (e.g. a
+ * matomo/device-detector wrapper) wired through config.
  */
 final class DefaultBotDetector implements BotDetector
 {
@@ -25,11 +26,9 @@ final class DefaultBotDetector implements BotDetector
 
     private const array GENERIC = [
         'crawler', 'spider', 'slurp', 'crawl', '+http', 'python-requests',
-        'curl/', 'wget', 'go-http-client', 'java/', 'headlesschrome', 'facebookexternalhit',
+        'curl/', 'wget', 'go-http-client', 'java/', 'headlesschrome',
         'googlebot', 'bingbot', 'yandexbot', 'duckduckbot', 'baiduspider', 'semrushbot',
         'ahrefsbot', 'mj12bot', 'dotbot',
-        // Social/link-preview fetchers that carry none of the generic signals above.
-        'whatsapp', 'skypeuripreview', 'vkshare',
     ];
 
     /**
@@ -59,7 +58,7 @@ final class DefaultBotDetector implements BotDetector
         }
 
         if (Config::bool('matomo-analytics.bots.detect_generic', true)
-            && ($this->matchesAny($userAgent, $this->lowered('generic', self::GENERIC)) || preg_match(self::GENERIC_BOT, $userAgent) === 1)) {
+            && (LinkPreviews::matches($userAgent) || $this->matchesAny($userAgent, $this->lowered('generic', self::GENERIC)) || preg_match(self::GENERIC_BOT, $userAgent) === 1)) {
             return true;
         }
 

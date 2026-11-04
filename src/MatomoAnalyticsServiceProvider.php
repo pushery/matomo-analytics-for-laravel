@@ -40,6 +40,7 @@ use MatomoAnalytics\Contracts\GdprClient;
 use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\ReportClient;
 use MatomoAnalytics\Contracts\Sender;
+use MatomoAnalytics\Contracts\SitesClient;
 use MatomoAnalytics\Contracts\Tracker;
 use MatomoAnalytics\Contracts\TrackingGate;
 use MatomoAnalytics\Contracts\VisitorIdResolver;
@@ -52,6 +53,7 @@ use MatomoAnalytics\Privacy\GdprManager;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Reporting\MatomoReports;
 use MatomoAnalytics\Reporting\ReportCache;
+use MatomoAnalytics\Sites\SitesManager;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\LanguageFallbackLoader;
 use MatomoAnalytics\Support\RateLimits;
@@ -150,6 +152,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->app->scoped(ReportClient::class, MatomoReports::class);
         $this->app->scoped(GdprClient::class, GdprManager::class);
         $this->app->scoped(AnnotationsClient::class, AnnotationsManager::class);
+        $this->app->scoped(SitesClient::class, SitesManager::class);
     }
 
     public function boot(): void

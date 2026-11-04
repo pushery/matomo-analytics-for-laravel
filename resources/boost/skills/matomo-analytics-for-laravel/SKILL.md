@@ -140,6 +140,11 @@ Reading requires `MATOMO_TOKEN`. Tracking works without it, but only a token let
 the package send the visitor's IP address (`cip`); without one, Matomo records the
 address of your server for every server-side hit.
 
+An application that counts each tenant on a site of its own reads that site through
+`MatomoReports::forSite($tenant->matomo_site_id)`, and creates, changes and deletes the
+sites through the `SitesClient` contract. Take the site id from the tenant, never from
+a request parameter: the token reads every site it was granted.
+
 ### 6. Operate
 
 - `php artisan matomo:replay --list` shows the batches that failed for good and sit in the

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MatomoAnalytics\Contracts;
 
+use InvalidArgumentException;
 use MatomoAnalytics\Reporting\ReportQuery;
 
 /**
@@ -11,11 +12,11 @@ use MatomoAnalytics\Reporting\ReportQuery;
  * Calls POST form-encoded with token_auth in the body (never the query string),
  * decode JSON, surface Matomo error envelopes, and never cache a failed result.
  *
- * The contract has two halves. get(), query(), bulk(), flushCache() and lastError()
- * are the protocol; everything below them is a curated shortcut expressed in terms
+ * The contract has two halves. get(), query(), bulk(), flushCache(), lastError() and
+ * forSite() are the protocol; everything below them is a curated shortcut expressed in terms
  * of get(), and the two are separated by a comment rather than by two interfaces.
  *
- * Implementing this is still a five-method job. `use ResolvesCommonReports` supplies
+ * Implementing this is still a six-method job. `use ResolvesCommonReports` supplies
  * every shortcut from get() alone -- it declares get() abstract for exactly
  * that reason -- so an implementer writes the protocol and one use statement. Both
  * shipped implementations do precisely that.
@@ -60,6 +61,19 @@ interface ReportClient
      * The last error surfaced by a failed call, for a dashboard banner; null when healthy.
      */
     public function lastError(): ?string;
+
+    /**
+     * The same client for another site of the instance. Every report it reads, single or bulk,
+     * asks Matomo for `idSite` $siteId, and its cache entries are its own. The configured site
+     * stays where it was, and so does this client's lastError().
+     *
+     * Take the id from the tenant a request belongs to, never from what a user sent: the token
+     * reads every site it was granted, so an id from a form or a query string reads another
+     * tenant's numbers.
+     *
+     * @throws InvalidArgumentException for an id below 1
+     */
+    public function forSite(int $siteId): self;
 
     // ---------------------------------------------------------------------------------
     // Curated shortcuts. Each is one call to get() with a fixed Matomo method name, and
