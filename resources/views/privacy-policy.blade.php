@@ -18,8 +18,8 @@
      comment, so it cannot be stripped the way a docblock is.
 
      The paragraph asserts a legal conclusion that holds for the shipped
-     configuration — cookieless, anonymized IPs, no user id, nothing shared. If
-     you change those, change the text. --}}
+     configuration — cookieless, no device features read, anonymized IPs, no
+     user id, nothing shared. If you change those, change the text. --}}
 <section class="matomo-analytics-privacy">
     <h2>{{ $heading ?? \MatomoAnalytics\Support\Translation::line('matomo-analytics::messages.privacy_policy.heading') }}</h2>
     <p>

@@ -4,6 +4,22 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0] - 2026-11-06
+
+### ✨ Added
+
+- **How much of the address is cut is a setting.** `anonymize_ip_bytes` takes 1, 2 or 3, counted the way Matomo's own setting counts them. An IPv4 address loses that many of its last octets, so 2 sends `198.51.0.0` for `198.51.100.123`, and an IPv6 address keeps its first 48 bits at 1 and 2 and its first 24 at 3. The default of 1 sends what every earlier version sent. The cookieless visitor id follows the same cut.
+
+### 🔧 Changed
+
+- **matomo.js reads nothing from the visitor's device by default.** It read the screen resolution, the browser plugins and the client hints of the device and built its visitor hash from them, while the cookieless default promised nothing to consent to: reading information on a device needs consent just as storing a cookie does. The snippet now pushes `disableBrowserFeatureDetection` before the page view while the new `privacy.browser_feature_detection` is false, its default. Matomo's reports then show no screen resolution and no plugins, and device detection works from the user agent alone. Matomo 5 lets the tracker read the device again once the visitor consents through `setConsentGiven`, `rememberConsentGiven` or `setCookieConsentGiven`. The privacy-policy partial now says that nothing is read from the device, in all seven languages.
+
+  **Upgrade:** Matomo knows the command since 4.7, and an older matomo.js stops at it and tracks nothing. Such an instance needs a newer Matomo, or `privacy.browser_feature_detection` set to true. A published privacy-policy partial keeps its own wording.
+
+- **The cookieless visitor id is salted with a secret that is gone after its period.** The id used to be salted with the application key and the date, so anyone holding the key could work out the id of a past day for an address and user agent they knew. Each day, or each week with `rotate => 'weekly'`, now gets a random secret that the cache keeps until the period ends and drops a minute later. `visitor.secret_store` (`MATOMO_VISITOR_SECRET_STORE`) names the cache store, and every server has to reach the same one. `rotate => 'never'` keeps the application key, as does a hit whose secret the cache cannot supply. On the day of the upgrade a returning visitor is counted once more, because the id changes with the salt.
+
+- **The AI crawler list follows ai.robots.txt again.** It recognizes 103 more crawlers and agents, among them `GrokBot`, `xAI-Grok`, `MoonshotBot`, `Hunyuan`, `ElevenlabsBot` and `Codex`, and keeps every entry it had. Four entries the upstream list adds are left out, because a human browser's user agent can contain them and the match is a substring: `Muse`, `olli`, `Remi` and `Spotify`, whose desktop app sends `Spotify/1.2` in its own user agent.
+
 ## [0.40.0] - 2026-11-04
 
 ### ⚠️ Breaking
@@ -1782,7 +1798,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.0...v0.38.1

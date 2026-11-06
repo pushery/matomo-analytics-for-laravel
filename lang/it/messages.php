@@ -11,14 +11,15 @@ return [
     | The only user-facing prose this package renders. It is published with
     | `vendor:publish --tag=matomo-analytics-lang` and, once published, it is
     | yours: the paragraph states a legal conclusion ("no consent banner is
-    | required") that holds for the shipped configuration — cookieless,
-    | anonymized IPs, no user id, no third-party sharing. Change any of those
-    | and the sentence stops being true; change the sentence with it.
+    | required") that holds for the shipped configuration — cookieless, no
+    | device features read, anonymized IPs, no user id, no third-party
+    | sharing. Change any of those and the sentence stops being true; change
+    | the sentence with it.
     */
 
     'privacy_policy' => [
         'heading' => 'Statistiche del sito',
-        'body' => 'Questo sito utilizza Matomo, una piattaforma di analisi open source rispettosa della privacy, per misurare come viene usato il sito. Matomo è configurato per funzionare senza cookie, anonimizza gli indirizzi IP prima di memorizzarli e non condivide mai i dati con terze parti. Poiché non vengono memorizzati dati personali né installati cookie, non è necessario alcun banner di consenso.',
+        'body' => 'Questo sito utilizza Matomo, una piattaforma di analisi open source rispettosa della privacy, per misurare come viene usato il sito. Matomo è configurato per funzionare senza cookie, non legge informazioni dal dispositivo del visitatore, anonimizza gli indirizzi IP prima di memorizzarli e non condivide mai i dati con terze parti. Poiché non vengono memorizzati dati personali, non vengono installati cookie e non vengono lette informazioni dal dispositivo, non è necessario alcun banner di consenso.',
     ],
 
 ];

@@ -64,7 +64,7 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",
-        "larastan/larastan": "3.12.2",
+        "larastan/larastan": "3.14.0",
         "laravel/ai": "^1.0.1",
         "laravel/boost": "^2.10.1",
         "laravel/mcp": "^1.0.1",
@@ -76,13 +76,13 @@
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.2",
         "pestphp/pest-plugin-laravel": "^5.0",
-        "pestphp/pest-plugin-phpstan": "5.2.2",
-        "pestphp/pest-plugin-rector": "5.0.4",
+        "pestphp/pest-plugin-phpstan": "5.3.1",
+        "pestphp/pest-plugin-rector": "5.0.6",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "phpstan/phpstan": "2.3.1",
+        "phpstan/phpstan": "2.3.5",
         "pushery/sqlens-for-laravel": "^0.31",
-        "rector/rector": "2.7.0",
-        "spaze/phpstan-disallowed-calls": "4.14.0",
+        "rector/rector": "2.8.4",
+        "spaze/phpstan-disallowed-calls": "4.15.0",
         "symfony/yaml": "^7.4.17 || ^8.1.5"
     },
     "suggest": {
