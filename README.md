@@ -74,11 +74,11 @@ large batches through a `database`, `redis` or `file` buffer; `sync` sends inlin
 A poison batch is dead-lettered rather than blocking the queue, and
 `matomo:replay` puts it back. A load simulator measures your own throughput.
 
-**Privacy by default.** Cookieless, rotating visitor identifiers. `Do-Not-Track`
-and `Sec-GPC` honored server-side. URL redaction on out of the box, on the server
-and in the browser: secret query parameters, email addresses in a query and a
-token in the path of a route, a password-reset or a magic link, are replaced before
-a URL reaches your analytics.
+**Privacy by default.** Cookieless, nothing read from the visitor's device, rotating
+visitor identifiers. `Do-Not-Track` and `Sec-GPC` honored server-side. URL redaction
+on out of the box, on the server and in the browser: secret query parameters, email
+addresses in a query and a token in the path of a route, a password-reset or a magic
+link, are replaced before a URL reaches your analytics.
 Consent postures for a cookie-based setup, a server-side opt-out cookie, a
 publishable privacy-policy partial, and GDPR erase/export through Matomo's
 PrivacyManager API.

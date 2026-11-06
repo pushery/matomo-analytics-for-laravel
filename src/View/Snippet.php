@@ -319,6 +319,12 @@ final readonly class Snippet
             $commands[] = "_paq.push(['disableCookies']);";
         }
 
+        // Without it matomo.js reads the screen, the plugins and the client hints of the device,
+        // which needs consent as a cookie does. A missing key reads as false, the shipped value.
+        if (! Config::bool('matomo-analytics.privacy.browser_feature_detection', false)) {
+            $commands[] = "_paq.push(['disableBrowserFeatureDetection']);";
+        }
+
         $consent = ConsentMode::resolve();
         if ($consent === ConsentMode::FULL) {
             $commands[] = "_paq.push(['requireConsent']);";

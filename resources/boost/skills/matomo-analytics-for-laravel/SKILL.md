@@ -93,7 +93,10 @@ $middleware->appendToGroup('web', \MatomoAnalytics\Http\Middleware\TrackPageView
 
 or set `middleware.auto` in the config so the package registers it itself.
 
-**Client-side.** One Blade directive renders the cookieless `_paq` snippet:
+**Client-side.** One Blade directive renders the cookieless `_paq` snippet. It pushes
+`disableBrowserFeatureDetection` as well, so matomo.js reads nothing from the device
+and Matomo shows no screen resolution or plugins; `privacy.browser_feature_detection`
+turns the reading back on where the application may:
 
 ```blade
 <head>

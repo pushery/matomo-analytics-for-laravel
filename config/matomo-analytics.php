@@ -267,6 +267,10 @@ return [
 
     'visitor' => [
         'rotate' => 'daily', // daily|weekly|never (cookieless salt rotation)
+        // The cache store that keeps each period's random secret for the cookieless visitor id
+        // until the period ends. null = the default cache store. Every server has to reach the
+        // same store, or each one counts its own visitors.
+        'secret_store' => env('MATOMO_VISITOR_SECRET_STORE'),
         // null by default: attaching the authenticated user id links every hit to a
         // known person, which is a deliberate step, not a starting point. Set 'auth'
         // when you have a lawful basis for it.
@@ -281,6 +285,14 @@ return [
     // truncated, so it is not sent at all. Turn this off deliberately if you have a
     // basis to store full addresses.
     'anonymize_ip' => true,
+
+    // How much of the address `anonymize_ip` cuts, in bytes as Matomo's own setting counts
+    // them: 1, 2 or 3. An IPv4 address loses that many of its last octets, so 1 keeps a /24,
+    // 2 a /16 and 3 a /8. An IPv6 address keeps its first 48 bits at 1 and 2 and its first 24
+    // at 3, never more than Matomo's mask of the same size keeps. A value below 1 reads as 1
+    // and one above 3 as 3. The cookieless visitor id follows the same cut, so a stronger cut
+    // counts more visitors of one network as one.
+    'anonymize_ip_bytes' => 1,
 
     // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
     // Cloudflare, or the standard `Forwarded`, read by its `for` parameter). A forwarding
@@ -343,6 +355,14 @@ return [
         'honor_dnt' => true,   // skip on DNT:1 / Sec-GPC:1
         'cookieless' => true,  // JS: disableCookies before trackPageView
         'consent' => 'none',   // none|cookie|full; any other value is read as full
+
+        // Whether matomo.js may read the screen resolution, the browser plugins and the client
+        // hints of the visitor's device, from which it also builds its visitor hash. Reading
+        // information on a device needs consent just as storing it does (Art. 5(3) of the
+        // ePrivacy Directive, in Germany § 25 TDDDG), so while this is false the snippet pushes
+        // disableBrowserFeatureDetection before trackPageView. Matomo knows that command since 4.7,
+        // and Matomo 5 lets the tracker read the device again once the visitor consents.
+        'browser_feature_detection' => false,
 
         // Server-side opt-out: the gate skips tracking when this first-party cookie
         // is present. Set/clear it with MatomoAnalytics\Privacy\OptOut::enable()/disable()

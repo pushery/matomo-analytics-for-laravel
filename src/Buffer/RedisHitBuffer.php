@@ -331,13 +331,24 @@ final class RedisHitBuffer implements ErasableHitBuffer
      */
     private function redis(): Connection
     {
-        $connection = RedisFacade::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
+        $connection = $this->configuredConnection();
 
         if ($connection instanceof PhpRedisClusterConnection || $connection instanceof PredisClusterConnection) {
             throw new BufferUnavailableException('The redis buffer driver does not run on Redis Cluster: a claim moves hits between two keys, which a cluster refuses across hash slots. Point matomo-analytics.batch.redis_connection at a single Redis instance, or use the database driver.');
         }
 
         return $connection;
+    }
+
+    /**
+     * The connection `batch.redis_connection` names, built for whichever client the host configures.
+     *
+     * Declared as any Redis connection, because that is what it is: phpredis or Predis, a single
+     * instance or a cluster, as `database.redis` decides.
+     */
+    private function configuredConnection(): Connection
+    {
+        return RedisFacade::connection(Config::nullableString('matomo-analytics.batch.redis_connection') ?? 'default');
     }
 
     /** The configured connection, after the eviction check: the one every other operation uses. */

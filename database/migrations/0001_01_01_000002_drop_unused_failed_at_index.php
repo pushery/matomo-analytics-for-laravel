@@ -75,7 +75,7 @@ return new class extends Migration
         $wanted = array_map(strtolower(...), (array) $columns);
         sort($wanted);
 
-        foreach (Schema::getIndexes(TableLookup::qualified($this->table())) as $index) {
+        foreach ($this->indexRows() as $index) {
             if (! is_array($index)) {
                 continue;
             }
@@ -99,6 +99,20 @@ return new class extends Migration
         }
 
         return null;
+    }
+
+    /**
+     * The table's indexes as the connection lists them, each row of a shape not yet known.
+     *
+     * Laravel declares the shape of a row, and the drivers this package is tested on keep to it.
+     * A published migration also runs on connections this package never sees, so indexNameFor()
+     * checks each row before it reads one.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function indexRows(): array
+    {
+        return Schema::getIndexes(TableLookup::qualified($this->table()));
     }
 
     private function table(): string
