@@ -80,7 +80,7 @@
         "pestphp/pest-plugin-rector": "5.0.6",
         "pestphp/pest-plugin-type-coverage": "^5.0",
         "phpstan/phpstan": "2.3.5",
-        "pushery/sqlens-for-laravel": "^0.31",
+        "pushery/sqlens-for-laravel": "^0.32.1",
         "rector/rector": "2.8.4",
         "spaze/phpstan-disallowed-calls": "4.15.0",
         "symfony/yaml": "^7.4.17 || ^8.1.5"

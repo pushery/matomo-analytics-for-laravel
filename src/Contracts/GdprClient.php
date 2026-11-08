@@ -48,9 +48,26 @@ interface GdprClient
     /**
      * Find the data subject by segment and export every matching visit's data.
      *
+     * One lookup, so for a person with more than LOOKUP_LIMIT visits the export is partial;
+     * exportAll() reads past it.
+     *
      * @return array<array-key, mixed>|null export payload, [] if nothing matched, null on failure
      */
     public function export(string $segment, int|string|null $site = null): ?array;
+
+    /**
+     * Find the data subject by segment and export every matching visit, past what one lookup returns.
+     *
+     * While a lookup comes back with LOOKUP_LIMIT visits, the visits are looked up again in ranges of
+     * the day they ended (Matomo's `visitEndServerDate`), and a range is halved while its lookup still
+     * comes back full. The visits are then exported in parts of at most LOOKUP_LIMIT. `data` holds
+     * Matomo's export with the rows of every part under their table, and `exported_visits` counts the
+     * visits. `exported_completely` is false when a single day still filled a lookup, which a date
+     * cannot divide any further, or when the lookups ran out; the export then holds what they found.
+     *
+     * @return array{data: array<array-key, mixed>, exported_visits: int, exported_completely: bool}|null null on failure
+     */
+    public function exportAll(string $segment, int|string|null $site = null): ?array;
 
     /**
      * Erase specific visits.

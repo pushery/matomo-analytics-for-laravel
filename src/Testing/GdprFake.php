@@ -45,6 +45,9 @@ final class GdprFake implements Fake, GdprClient
     /** @var array<array-key, mixed>|null what an export answers; null answers with the found rows under `log_visit` */
     private ?array $exported = null;
 
+    /** Whether exportAll() reports that it exported every visit; see stubExportIncomplete(). */
+    private bool $exportComplete = true;
+
     private bool $mutationsFail = false;
 
     private string $mutationError = 'GDPR operation failed';
@@ -106,6 +109,18 @@ final class GdprFake implements Fake, GdprClient
     }
 
     /**
+     * Make exportAll() report that it could not export every visit, as the real client does when
+     * a single day holds more visits than one lookup returns. The export still carries the
+     * stubbed rows.
+     */
+    public function stubExportIncomplete(): self
+    {
+        $this->exportComplete = false;
+
+        return $this;
+    }
+
+    /**
      * Make every call fail with this message, the way the real client fails while Matomo
      * refuses; null makes the calls succeed again.
      */
@@ -153,6 +168,22 @@ final class GdprFake implements Fake, GdprClient
         // The real client looks the subject up first, and when nothing matched it exports
         // nothing, without a second call that could fail.
         return $this->answer($this->found !== [], $this->found === [] ? [] : ($this->exported ?? ['log_visit' => $this->found]));
+    }
+
+    /**
+     * @return array{data: array<array-key, mixed>, exported_visits: int, exported_completely: bool}|null
+     */
+    public function exportAll(string $segment, int|string|null $site = null): ?array
+    {
+        $this->calls[] = ['op' => 'exportAll', 'segment' => $segment, 'site' => $site, 'visits' => count($this->found)];
+
+        // Every stubbed row is a visit, however many there are: the real client reads past the
+        // lookup limit in ranges of days. Without a match it exports nothing, as export() does.
+        return $this->answer($this->found !== [], [
+            'data' => $this->found === [] ? [] : ($this->exported ?? ['log_visit' => $this->found]),
+            'exported_visits' => count($this->found),
+            'exported_completely' => $this->exportComplete,
+        ]);
     }
 
     public function deleteVisits(array $visits): ?array

@@ -4,6 +4,22 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0] - 2026-11-08
+
+### ⚠️ Breaking
+
+- **`GdprClient` declares `exportAll()`.** The contract gained `exportAll(string $segment, int|string|null $site = null)`, which exports every visit of a person, also beyond the 401 that a single lookup returns. The shipped client and the fake implement it, so an application that injects the contract or calls the `MatomoGdpr` facade has nothing to change.
+
+  **Upgrade:** an application's own `GdprClient` implementation adds `exportAll()`, answering `data`, `exported_visits` and `exported_completely`, or null when a call failed.
+
+### ✨ Added
+
+- **A GDPR export holds every visit of a person, also beyond the 401 that a single lookup returns.** `MatomoGdpr::exportAll()` looks the visits up again in ranges of the day they ended while a lookup comes back full, halves a range that is still full, and exports them in parts of at most 401. It answers Matomo's export under `data`, the number of visits under `exported_visits`, and `exported_completely`, which is false only when a single day holds more than 401 of the person's visits or the export ran out of lookups. `GdprFake` answers it with every stubbed visit, and `stubExportIncomplete()` makes it report a partial export.
+
+### 🔧 Changed
+
+- **`matomo:forget --export` exports every visit.** It exported one lookup and failed after a full one, with a hint to export by date by hand. It now exports through `exportAll()` and fails only when the export is partial, with the number of visits it holds on the error output.
+
 ## [0.41.0] - 2026-11-06
 
 ### ✨ Added
@@ -1798,7 +1814,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.38.1...v0.39.0
