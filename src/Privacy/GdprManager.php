@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Privacy;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Http;
 use MatomoAnalytics\Connection;
@@ -26,6 +27,17 @@ final class GdprManager implements GdprClient
 {
     /** Rounds of lookup and deletion one forget() runs before it stops and says so. */
     private const int MAX_ROUNDS = 100;
+
+    /** Lookups one exportAll() runs before it stops and says so. */
+    private const int MAX_EXPORT_LOOKUPS = 200;
+
+    /**
+     * 1998-01-01, counted in days since 1970-01-01: Matomo's own lookup reads no visit before it,
+     * so a range open at its start is halved from there.
+     */
+    private const int FIRST_DAY = 10227;
+
+    private const int SECONDS_PER_DAY = 86400;
 
     private ?string $lastError = null;
 
@@ -133,6 +145,73 @@ final class GdprManager implements GdprClient
         return is_array($visits) ? $this->exportVisits($visits) : null;
     }
 
+    /**
+     * @return array{data: array<array-key, mixed>, exported_visits: int, exported_completely: bool}|null
+     */
+    public function exportAll(string $segment, int|string|null $site = null): ?array
+    {
+        // Each range is half open, from the first day it holds to the first day it does not, and
+        // either end may be open. The whole segment is the range open at both ends.
+        /** @var list<array{0: int|null, 1: int|null}> $ranges */
+        $ranges = [[null, null]];
+        /** @var array<string, array{idsite: int, idvisit: int}> $visits */
+        $visits = [];
+        $complete = true;
+        $lookups = 0;
+
+        while ($ranges !== []) {
+            if ($lookups === self::MAX_EXPORT_LOOKUPS) {
+                $complete = false;
+
+                break;
+            }
+
+            [$from, $until] = array_shift($ranges);
+            $found = $this->descriptorsFor($this->withinDays($segment, $from, $until), $site);
+            $lookups++;
+
+            if ($found === null) {
+                return null;
+            }
+
+            // A range that came back full is looked up again in its halves, and a visit in progress
+            // can move to the next day between two lookups, so a visit can turn up more than once.
+            // It is kept once.
+            foreach ($found as $visit) {
+                $visits[$visit['idsite'].':'.$visit['idvisit']] = $visit;
+            }
+
+            if (count($found) < self::LOOKUP_LIMIT) {
+                continue;
+            }
+
+            $middle = $this->middleDay($from, $until);
+
+            if ($middle === null) {
+                $complete = false;
+
+                continue;
+            }
+
+            $ranges[] = [$from, $middle];
+            $ranges[] = [$middle, $until];
+        }
+
+        $data = [];
+
+        foreach (array_chunk(array_values($visits), self::LOOKUP_LIMIT) as $part) {
+            $exported = $this->exportVisits($part);
+
+            if ($exported === null) {
+                return null;
+            }
+
+            $data = $this->joined($data, $exported);
+        }
+
+        return ['data' => $data, 'exported_visits' => count($visits), 'exported_completely' => $complete];
+    }
+
     public function deleteVisits(array $visits): ?array
     {
         $counts = $this->deleteRound($visits);
@@ -187,6 +266,55 @@ final class GdprManager implements GdprClient
         }
 
         return $visits;
+    }
+
+    /**
+     * The segment narrowed to the visits that ended on or after the day $from and before the day
+     * $until, each counted in days since 1970-01-01 and null for an open end. Matomo joins with
+     * `;` as AND and reads `,` as OR first, so the date conditions hold for the whole segment.
+     */
+    private function withinDays(string $segment, ?int $from, ?int $until): string
+    {
+        $conditions = [$segment];
+
+        if ($from !== null) {
+            $conditions[] = 'visitEndServerDate>='.gmdate('Y-m-d', $from * self::SECONDS_PER_DAY);
+        }
+
+        if ($until !== null) {
+            $conditions[] = 'visitEndServerDate<'.gmdate('Y-m-d', $until * self::SECONDS_PER_DAY);
+        }
+
+        return implode(';', $conditions);
+    }
+
+    /**
+     * The day that halves a range, or null for a range of one day, which a date cannot divide.
+     * An open start counts from FIRST_DAY, an open end from the day after today.
+     */
+    private function middleDay(?int $from, ?int $until): ?int
+    {
+        $start = $from ?? self::FIRST_DAY;
+        $end = $until ?? intdiv(Date::now()->getTimestamp(), self::SECONDS_PER_DAY) + 1;
+
+        return $end - $start > 1 ? $start + intdiv($end - $start, 2) : null;
+    }
+
+    /**
+     * Two exports as one: under each table the rows of the first, then the rows of the second.
+     *
+     * @param  array<array-key, mixed>  $into
+     * @param  array<array-key, mixed>  $export
+     * @return array<array-key, mixed>
+     */
+    private function joined(array $into, array $export): array
+    {
+        foreach ($export as $table => $rows) {
+            $held = $into[$table] ?? null;
+            $into[$table] = is_array($held) && is_array($rows) ? array_merge($held, $rows) : $rows;
+        }
+
+        return $into;
     }
 
     /**

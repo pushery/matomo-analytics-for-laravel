@@ -39,22 +39,21 @@ final class ForgetCommand extends Command
                 return self::SUCCESS;
             }
 
-            $data = $gdpr->export($segment, $site);
-            if ($data === null) {
+            $export = $gdpr->exportAll($segment, $site);
+            if ($export === null) {
                 $this->error($gdpr->lastError() ?? 'Matomo GDPR export failed.');
 
                 return self::FAILURE;
             }
 
-            $this->line((string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $this->line((string) json_encode($export['data'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-            // A lookup stops at LOOKUP_LIMIT and Matomo offers no way past it, so after a full one
-            // the export may hold only part of the person's visits. The warning goes to stderr,
+            // The export reads past one lookup in ranges of days, and only a single day that still
+            // fills a lookup, or a run out of lookups, leaves it partial. The warning goes to stderr,
             // which keeps stdout a clean JSON document where it is redirected into a file.
-            if ($count >= GdprClient::LOOKUP_LIMIT) {
+            if (! $export['exported_completely']) {
                 $stderr = $this->getOutput()->getErrorStyle();
-                $stderr->writeln('<comment>'.OutputFormatter::escape(sprintf("Possibly partial export: Matomo's lookup returns at most %d visits, and [%s] matched %d.", GdprClient::LOOKUP_LIMIT, $segment, $count)).'</comment>');
-                $stderr->writeln('<comment>'.OutputFormatter::escape(sprintf('Export in parts of fewer visits by date: [%1$s;visitEndServerDate<YYYY-MM-DD], then [%1$s;visitEndServerDate>=YYYY-MM-DD].', $segment)).'</comment>');
+                $stderr->writeln('<comment>'.OutputFormatter::escape(sprintf('Partial export: %d visit(s) of [%s]. A single day held more visits than one lookup returns (%d), or the export ran out of lookups.', $export['exported_visits'], $segment, GdprClient::LOOKUP_LIMIT)).'</comment>');
 
                 return self::FAILURE;
             }
