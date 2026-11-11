@@ -4,6 +4,13 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.1] - 2026-11-11
+
+### 🐛 Fixed
+
+- **A pattern in `privacy.redact.patterns` that PCRE refuses names the reason on every Laravel 13 release.** The check read the reason through `error_get_last()` after silencing the warning, and where the application's error handler counts a silenced warning as handled, as Laravel 13.23 does, nothing was left to read: the exception said only “Internal error”. It now catches the warning of that one call itself and names what PCRE found, such as a missing ending delimiter.
+- **The first deploy of an application that installs matomo on MySQL, MariaDB or SQLite no longer stops `sqlens:predeploy` at the autovacuum migration.** `0001_01_01_000005_tune_autovacuum_for_the_tracking_buffer` tunes PostgreSQL alone and ends before its first statement on every other engine, which SQLens reads as a migration that ran and produced nothing. It now names those engines in `#[NoSqlOnDriver]`, with the reason, and `composer.json` suggests `pushery/sqlens-for-laravel`, which reads the attribute.
+
 ## [0.42.0] - 2026-11-08
 
 ### ⚠️ Breaking
@@ -1814,7 +1821,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...HEAD
+[0.42.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.39.0...v0.40.0
