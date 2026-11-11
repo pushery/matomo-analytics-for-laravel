@@ -378,16 +378,44 @@ final class UrlRedactor
         $patterns = Config::stringList('matomo-analytics.privacy.redact.patterns');
 
         foreach ($patterns as $pattern) {
-            if (@preg_match($pattern, '') === false) {
+            $reason = $this->compileError($pattern);
+
+            if ($reason !== null) {
                 throw new InvalidArgumentException(sprintf(
                     'matomo-analytics.privacy.redact.patterns holds [%s], which is no valid regular expression: %s',
                     $pattern,
-                    error_get_last()['message'] ?? preg_last_error_msg(),
+                    $reason,
                 ));
             }
         }
 
         return $patterns;
+    }
+
+    /**
+     * Why PCRE refuses `$pattern`, or null where it compiles.
+     *
+     * The warning is caught by a handler of its own around this one call. Read through
+     * error_get_last() after silencing it, the reason depends on the application's error handler: one
+     * that counts a silenced warning as handled leaves nothing to read.
+     */
+    private function compileError(string $pattern): ?string
+    {
+        $warning = null;
+
+        set_error_handler(static function (int $level, string $message) use (&$warning): bool {
+            $warning = $message;
+
+            return true;
+        });
+
+        try {
+            $compiles = preg_match($pattern, '') !== false;
+        } finally {
+            restore_error_handler();
+        }
+
+        return $compiles ? null : ($warning ?? preg_last_error_msg());
     }
 
     private function redactHosts(string $url, string $replacement): string

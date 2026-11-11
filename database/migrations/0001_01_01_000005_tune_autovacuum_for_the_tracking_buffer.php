@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\TableLookup;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 // A queue table is the worst shape for PostgreSQL's default autovacuum, and this one is a
 // queue: every row is inserted, claimed (an UPDATE, which writes a new tuple) and deleted.
@@ -28,7 +29,11 @@ use MatomoAnalytics\Support\TableLookup;
 // Postgres syntax; MySQL and SQLite have no equivalent and need none — InnoDB's purge thread
 // and SQLite's free-list do this work without a knob. A migration that ran it unconditionally
 // would fail every MySQL install.
-return new class extends Migration
+return new
+#[NoSqlOnDriver('mysql', reason: 'autovacuum is a PostgreSQL setting; InnoDB purges dead rows without a knob')]
+#[NoSqlOnDriver('mariadb', reason: 'autovacuum is a PostgreSQL setting; InnoDB purges dead rows without a knob')]
+#[NoSqlOnDriver('sqlite', reason: 'autovacuum is a PostgreSQL setting; SQLite reuses its free pages without a knob')]
+class extends Migration
 {
     public function up(): void
     {

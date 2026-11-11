@@ -80,7 +80,7 @@
         "pestphp/pest-plugin-rector": "5.0.6",
         "pestphp/pest-plugin-type-coverage": "^5.0",
         "phpstan/phpstan": "2.3.5",
-        "pushery/sqlens-for-laravel": "^0.32.1",
+        "pushery/sqlens-for-laravel": "^0.33.1",
         "rector/rector": "2.8.4",
         "spaze/phpstan-disallowed-calls": "4.15.0",
         "symfony/yaml": "^7.4.17 || ^8.1.5"
@@ -88,7 +88,8 @@
     "suggest": {
         "ext-pcntl": "Lets matomo:work stop between two runs on SIGTERM or SIGINT, instead of wherever the signal lands.",
         "ext-redis": "The phpredis client for the redis buffer driver; predis/predis serves it as well.",
-        "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook."
+        "matomo/device-detector": "Exhaustive, upstream-maintained bot detection across every category — wire DeviceDetectorBotDetector through the bots.detector config hook.",
+        "pushery/sqlens-for-laravel": "Reads the #[NoSqlOnDriver] attributes on the migrations, which say why a migration runs no SQL on an engine. Without it they are never read."
     },
     "autoload": {
         "psr-4": {
