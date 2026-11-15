@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.0] - 2026-11-15
+
+### ✨ Added
+
+- **`MATOMO_ANONYMIZE_IP_BYTES` sets how much `anonymize_ip` cuts.** The published configuration named `anonymize_ip_bytes` as a fixed `1`, so an application could choose a stronger cut only by editing its copy, and the next update of that copy took it back. The variable takes `1`, `2` or `3`, as the setting does, and a value that is no whole number reads as `1`.
+
+### 📚 Documentation
+
+- **The start page shows the package at work.** A page view tracked on the server, from a link that carries the reader's mail address: the parameters that go to Matomo, with the address redacted and the visitor identified without a cookie.
+
 ## [0.42.1] - 2026-11-11
 
 ### 🐛 Fixed
@@ -1821,7 +1831,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...v0.43.0
 [0.42.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.40.0...v0.41.0
