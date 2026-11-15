@@ -291,8 +291,9 @@ return [
     // 2 a /16 and 3 a /8. An IPv6 address keeps its first 48 bits at 1 and 2 and its first 24
     // at 3, never more than Matomo's mask of the same size keeps. A value below 1 reads as 1
     // and one above 3 as 3. The cookieless visitor id follows the same cut, so a stronger cut
-    // counts more visitors of one network as one.
-    'anonymize_ip_bytes' => 1,
+    // counts more visitors of one network as one. MATOMO_ANONYMIZE_IP_BYTES sets it without
+    // editing this file; a value that is no whole number, or none, reads as 1.
+    'anonymize_ip_bytes' => filter_var(env('MATOMO_ANONYMIZE_IP_BYTES', 1), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 1,
 
     // Forwarding header carrying the real client IP (e.g. CF-Connecting-IP behind
     // Cloudflare, or the standard `Forwarded`, read by its `for` parameter). A forwarding
