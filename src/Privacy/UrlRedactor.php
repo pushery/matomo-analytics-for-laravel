@@ -41,6 +41,9 @@ final class UrlRedactor
     /**
      * A domain name as `privacy.redact.base_domains` holds one, and an entry of
      * `privacy.redact.kept_labels`: labels of letters, digits and inner hyphens, joined by dots.
+     *
+     * Both readers trim an entry before they match it, so no line feed is left at its end for `$`
+     * to stop before.
      */
     private const string DOMAIN_NAME = '/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/';
 
@@ -299,6 +302,9 @@ final class UrlRedactor
         $prefix = '/';
 
         foreach ($segments as $index => $segment) {
+            // A segment of a route URI, one the application registers or a reset route this class
+            // names, never a value of a request, so it ends in no line feed for `$` to stop before.
+            // The same holds in shapeOf() and segmentPattern(), which read the segments of these URIs.
             if (preg_match('/^\{([^}?]+)\??\}$/', $segment, $name) === 1 && in_array($name[1], $params, true)) {
                 $patterns[] = $index === 0
                     ? '^('.self::ORIGIN.$base.'/)'.self::SEGMENT.'(?='.$this->shapeOf(array_slice($segments, 1)).'(?:[/?#&]|$))'
@@ -323,7 +329,7 @@ final class UrlRedactor
         $shape = '';
 
         foreach ($segments as $segment) {
-            $shape .= preg_match('/^\{[^}]*\?\}$/', $segment) === 1
+            $shape .= preg_match('/^\{[^}]*\?\}$/D', $segment) === 1
                 ? '(?:/'.self::SEGMENT.')?'
                 : '/'.$this->segmentPattern($segment);
         }
@@ -333,7 +339,7 @@ final class UrlRedactor
 
     private function segmentPattern(string $segment): string
     {
-        return preg_match('/^\{[^}]*\}$/', $segment) === 1 ? self::SEGMENT : $this->escaped($segment);
+        return preg_match('/^\{[^}]*\}$/D', $segment) === 1 ? self::SEGMENT : $this->escaped($segment);
     }
 
     private function escaped(string $literal): string

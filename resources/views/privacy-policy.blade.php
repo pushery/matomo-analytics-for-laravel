@@ -14,7 +14,7 @@
      line added at run time, which no translation loader sees.
 
      Writing the helper's name here in full would trip the very guard that enforces this —
-     LeanDependencyContractTest scans the shipped tree, and a Blade comment is not a PHP
+     a test scans the shipped tree for those helpers, and a Blade comment is not a PHP
      comment, so it cannot be stripped the way a docblock is.
 
      The paragraph asserts a legal conclusion that holds for the shipped

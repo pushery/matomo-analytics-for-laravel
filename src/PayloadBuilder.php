@@ -166,7 +166,9 @@ final readonly class PayloadBuilder
     {
         $hints = [];
 
-        foreach ($request->headers->all() as $name => $values) {
+        foreach ($request->headers->all() as $key => $values) {
+            // A header whose name is made of digits arrives as an int key, the way PHP stores it.
+            $name = (string) $key;
             $value = $values[0] ?? null;
 
             if (is_string($value) && $value !== '' && (str_starts_with($name, 'sec-ch-ua') || $name === 'x-requested-with')) {

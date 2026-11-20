@@ -4,6 +4,29 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.0] - 2026-11-20
+
+### ✨ Added
+
+- **`Identity\PruneExpiredVisitorSecrets` deletes the expired secrets of the cookieless visitor id from a database or a file cache store.** The secret of a period expires a minute after the period ends, but both stores delete an expired key only when it is read again, and the package never reads the key of a past period again, so on either store the secret of every past period stayed in the table or on the disk, where whoever read it could still tell which visitor an id belonged to. Scheduled with `Schedule::call(PruneExpiredVisitorSecrets::class)->hourly()`, it deletes them from the store `visitor.secret_store` names, or the default store, within the hour after their period, and does nothing for a store of another driver.
+
+### 🔧 Changed
+
+- **`Support\EnvSwitch` and `Support\MigrationLocks` are internal.** Both shipped as public API: `EnvSwitch` for a published configuration that reads its switches through it, `MigrationLocks` for a published migration that bounds its wait for a lock through it. This package's configuration reads its switches with `env()` alone and reads each one typed where it uses it, and none of its migrations calls `MigrationLocks`, so both classes leave the public API: an application that calls one keeps working until a later release changes or removes it.
+
+### 🐛 Fixed
+
+- **A page view of a request with a header whose name is made of digits is tracked.** PHP stores such a name as an integer key, and the client hints were picked by handing every header name to string functions that refuse an integer under strict types. The hit was lost and reported as an error, and with `matomo-analytics.resilience.never_throw` off the request failed.
+
+### 📚 Documentation
+
+- **The descriptions of the documentation pages fit a search result.** Each page that described itself in more than about 160 characters says first what it answers, within that length, so a search result shows the description whole.
+- **The documentation says what the store of the visitor secret and the default store in `batch` mode have to keep, and how a store loses it.** A secret lost to an eviction, a `cache:clear` or a restart without persistence gives every visitor a new id for the rest of the period, so Matomo counts each of them again, and a lost count of failed flushes lets a stuck batch retry longer before it is dead-lettered. The pages name the three ways a store loses a key and recommend a store of its own for `visitor.secret_store`, a Redis database with `noeviction` and `appendonly yes` or a database store with a table of its own, and say that a full Redis under `noeviction` refuses writes instead.
+- **The examples that open with `use` lines import every class they name.** Six examples named a class without its import, so copied into a controller or a service provider the name resolved in the namespace of that file: `PageView` in the testing guide's assertion with a callback, `MatomoGdpr` beside the segment builder on the GDPR page, the application's own visitor id class on the contracts page, `MatomoReports` beside the segment builder, `User` in the example that tracks a registration, and `Matomo` in the Boost skill's example of the fake. Each now imports it.
+- **The Boost skill publishes the migrations once, and only after it asks for `ignoreMigrations()`.** Its configure step was one block that ran the umbrella tag `matomo-analytics` and then `matomo-analytics-migrations`, and Boost hands the skill over as a workflow whose blocks run in order, so following it published every migration twice under two dates, before the skill named `ignoreMigrations()` two steps later. The step now publishes the configuration alone and names the other tags in a table, and the block that publishes and runs the migrations stands below the paragraph that asks for `MatomoAnalyticsServiceProvider::ignoreMigrations()`. That paragraph names `matomo_tracking_buffer` and `matomo_dead_letters`, the tables a published copy without the call would create a second time, how to take over a migration a later release adds, and how to keep migrations that have already run from the package.
+- **The start page shows its example as text below the picture.** The picture of the page view, the request a visitor opens from a newsletter and the parameters that go to Matomo, carried its text only as an image, which a narrow screen shrinks below reading size and which text zoom, search and copying never reach. The same two cards now follow it as code blocks, with the visitor id and the redacted address marked as in the picture.
+- **The README says what is on by default instead of promising a result.** Its privacy paragraph says that URL redaction is on by default, as the published configuration ships it, and its closing line says what WireKit is, without a claim about what the kit gives an application.
+
 ## [0.43.0] - 2026-11-15
 
 ### ✨ Added
@@ -1831,7 +1854,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...v0.43.0
 [0.42.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.41.0...v0.42.0

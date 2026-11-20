@@ -176,7 +176,8 @@ final class DeadLetterStore
      *
      * The guarantee is worth keeping tested even though it is the database's: a later rewrite
      * that coalesces the column, or filters the other way round, would start deleting rows
-     * whose age nobody established. `DeadLetterRetentionTest` holds it.
+     * whose age nobody established. A test holds that a dead letter whose `failed_at` is unknown
+     * is never deleted.
      */
     public function pruneOlderThan(int $days): int
     {

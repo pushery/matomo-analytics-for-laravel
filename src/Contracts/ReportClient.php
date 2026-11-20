@@ -77,9 +77,9 @@ interface ReportClient
 
     // ---------------------------------------------------------------------------------
     // Curated shortcuts. Each is one call to get() with a fixed Matomo method name, and
-    // ResolvesCommonReports implements all of them. FacadeContractLockstepTest holds this
-    // list, the concern above and the facade's @method block against each other: the drift this
-    // section repairs was invisible for as long as nothing compared the three.
+    // ResolvesCommonReports implements all of them. A test holds this list, the concern
+    // above and the facade's @method block against each other: the drift this section
+    // repairs was invisible for as long as nothing compared the three.
     // ---------------------------------------------------------------------------------
 
     /**

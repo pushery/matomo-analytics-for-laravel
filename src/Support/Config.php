@@ -108,8 +108,9 @@ final class Config
         // `filter_var(null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE)` returns **false**, and
         // so does `''`. Leaving them to it would turn a key that is merely present and null — the
         // shape `env('X')` with no fallback produces, which is most of this package's config —
-        // into a hard `false`, silently overriding every default. Three arms in `SnippetTest`
-        // caught exactly that when this was written the short way.
+        // into a hard `false`, silently overriding every default. Three cases that null a key and
+        // expect the snippet to apply its default caught exactly that when this was written the
+        // short way.
         if ($value === null || $value === '') {
             return $default;
         }
@@ -180,6 +181,7 @@ final class Config
     }
 
     /**
+     * @param  mixed  $value  the setting as the configuration holds it, which a host may write as any type
      * @return list<int>
      */
     private static function numbersIn(mixed $value): array
@@ -207,6 +209,8 @@ final class Config
      *
      * The key arrives fully qualified (`matomo-analytics.privacy.redact.keys`); the leading
      * namespace is this package's own and is stripped to index into the file.
+     *
+     * @return mixed the value the shipped configuration gives the key, of whatever type it has there
      */
     private static function shipped(string $key): mixed
     {

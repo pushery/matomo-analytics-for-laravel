@@ -88,6 +88,9 @@ final class WebVitalsController
         return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
+    /**
+     * @param  mixed  $value  a measurement as the browser sent it, which may hold any JSON value
+     */
     private function plausibleMeasurement(mixed $value): ?float
     {
         if (! is_numeric($value)) {

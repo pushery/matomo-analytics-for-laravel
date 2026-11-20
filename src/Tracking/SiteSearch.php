@@ -60,7 +60,11 @@ final readonly class SiteSearch implements Hit
         return $request->attributes->get(self::TRACKED) === true;
     }
 
-    /** The value trimmed of whitespace, Unicode whitespace included, or null when nothing is left. */
+    /**
+     * The value trimmed of whitespace, Unicode whitespace included, or null when nothing is left.
+     *
+     * @param  mixed  $value  a query parameter as the request carries it, which may be a string, a list or nothing
+     */
     private static function text(mixed $value): ?string
     {
         if (! is_string($value)) {
