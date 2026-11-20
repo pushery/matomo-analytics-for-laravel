@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\App;
  */
 final class CallableResolver
 {
+    /**
+     * @param  mixed  $value  the value as the configuration holds it: a callable, a class name or anything else, which a host may write as any type
+     */
     public static function resolve(mixed $value): ?callable
     {
         if (is_callable($value)) {

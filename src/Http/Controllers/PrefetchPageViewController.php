@@ -74,6 +74,8 @@ final class PrefetchPageViewController
      * page is named by where it is rather than left blank, because an empty `action_name` shows
      * up in Matomo as a page nobody can identify. `Str::trim()` rather than `trim()`, which knows
      * only ASCII whitespace: a title of no-break, zero-width or ideographic spaces is as blank.
+     *
+     * @param  mixed  $title  the title as the request carries it, which may be any value
      */
     private function title(mixed $title, string $url): string
     {

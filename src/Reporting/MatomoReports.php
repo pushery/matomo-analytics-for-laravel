@@ -87,7 +87,19 @@ final class MatomoReports implements ReportClient
             return array_fill(0, count($requests), null);
         }
 
-        return array_map(static fn (mixed $entry): ?array => is_array($entry) ? $entry : null, array_values($decoded));
+        return array_map($this->reportOrNull(...), array_values($decoded));
+    }
+
+    /**
+     * One answer of a bulk request as the caller reads it: the decoded report, or null for an
+     * answer that is no report.
+     *
+     * @param  mixed  $entry  one entry of Matomo's decoded answer, which may be any JSON value
+     * @return array<array-key, mixed>|null
+     */
+    private function reportOrNull(mixed $entry): ?array
+    {
+        return is_array($entry) ? $entry : null;
     }
 
     public function flushCache(): void

@@ -261,8 +261,8 @@ final class RedisHitBuffer implements ErasableHitBuffer
      * `Connection::__call`, so it would work there too — but not in a way the analyzer can see,
      * and a package that narrows a data path on an unchecked assumption has learned nothing from
      * the rest of this class. The sequential path below is therefore kept, not as dead code but
-     * as the correctness path for every other client; `RedisHitBufferTest` drives it and the
-     * real-server suite drives the pipeline.
+     * as the correctness path for every other client; the suite's mocked connections drive it and
+     * the real-server suite drives the pipeline.
      *
      * @return list<string>
      */

@@ -128,7 +128,11 @@ final class HitBeaconController
         return new SiteSearch($keyword, $this->text($category), $results);
     }
 
-    /** Whether an optional field was left out: absent, empty or only whitespace, Unicode whitespace included. */
+    /**
+     * Whether an optional field was left out: absent, empty or only whitespace, Unicode whitespace included.
+     *
+     * @param  mixed  $value  a field of the beacon as the browser sent it, which may hold any JSON value
+     */
     private function blank(mixed $value): bool
     {
         return $value === null || (is_string($value) && Str::trim($value) === '');
@@ -146,7 +150,11 @@ final class HitBeaconController
         return $allowed === [] || in_array($category, $allowed, true);
     }
 
-    /** Text trimmed of whitespace, Unicode whitespace included, of at most MAX_TEXT characters, or null. */
+    /**
+     * Text trimmed of whitespace, Unicode whitespace included, of at most MAX_TEXT characters, or null.
+     *
+     * @param  mixed  $value  a field of the beacon as the browser sent it, which may hold any JSON value
+     */
     private function text(mixed $value): ?string
     {
         if (! is_string($value)) {
@@ -163,6 +171,8 @@ final class HitBeaconController
      *
      * `is_numeric()` accepts any magnitude, and `"1e400"` casts to `INF`, which poisons every
      * sum and average it lands in.
+     *
+     * @param  mixed  $value  a field of the beacon as the browser sent it, which may hold any JSON value
      */
     private function number(mixed $value): ?float
     {
@@ -175,7 +185,11 @@ final class HitBeaconController
         return is_finite($number) ? $number : null;
     }
 
-    /** An absolute `http` or `https` URL of at most MAX_LINK bytes, or null. */
+    /**
+     * An absolute `http` or `https` URL of at most MAX_LINK bytes, or null.
+     *
+     * @param  mixed  $value  a field of the beacon as the browser sent it, which may hold any JSON value
+     */
     private function link(mixed $value): ?string
     {
         if (! is_string($value) || $value === '' || strlen($value) > self::MAX_LINK) {

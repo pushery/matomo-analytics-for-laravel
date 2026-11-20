@@ -53,6 +53,9 @@ final class ConsentMode
         return is_string($value) ? "'".$value."'" : (json_encode($value) ?: get_debug_type($value));
     }
 
+    /**
+     * @return mixed the setting as the configuration holds it, which a host may write as any type
+     */
     private static function configured(): mixed
     {
         return ConfigFacade::has(self::KEY) ? ConfigFacade::get(self::KEY) : self::NONE;

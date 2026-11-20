@@ -385,9 +385,8 @@ final class TestConnectionCommand extends Command
      * The gap is one layer further out: the merge does not run at all when the configuration is
      * cached. A cache built before a package update, and never rebuilt, is then the whole truth,
      * and a key added since is simply absent. Nothing throws — an absent key yields the code
-     * fallback, which `ConfigFallbackParityTest` forces to equal the shipped value, so it is
-     * usually even correct. Usually is not always, and the exceptions are exactly the settings
-     * somebody set on purpose.
+     * fallback, which a test forces to equal the shipped value, so it is usually even correct.
+     * Usually is not always, and the exceptions are exactly the settings somebody set on purpose.
      *
      * Advisory, never fatal: this command is asked when something is already wrong, and turning
      * a diagnostic into a failure removes the diagnosis.

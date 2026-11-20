@@ -59,17 +59,38 @@ MATOMO_REDACT_BASE_DOMAINS=example.test
 MATOMO_REDACT_KEPT_LABELS=app,api
 ```
 
-Publish everything at once, or one part of it:
+Publish the configuration file:
 
 ```bash
-php artisan vendor:publish --tag="matomo-analytics"             # all of the below
-php artisan vendor:publish --tag="matomo-analytics-config"      # config/matomo-analytics.php
-php artisan vendor:publish --tag="matomo-analytics-migrations"  # the batch buffer and dead-letter tables
-php artisan vendor:publish --tag="matomo-analytics-views"       # the privacy-policy view
-php artisan vendor:publish --tag="matomo-analytics-lang"        # the translations
+php artisan vendor:publish --tag="matomo-analytics-config"
 ```
 
+The other publish tags:
+
+| Tag | Publishes |
+|---|---|
+| `matomo-analytics-views` | the privacy-policy view, to override it in the application |
+| `matomo-analytics-lang` | the translations, to override them in the application |
+| `matomo-analytics-migrations` | the migrations of the batch buffer and the dead-letter queue, in step 4 |
+| `matomo-analytics` | every group at once, the migrations included |
+
 Every option in `config/matomo-analytics.php` is documented inline.
+
+The cookieless visitor id is salted with a random secret per day, or per week under
+`rotate => 'weekly'`, which the package keeps in the cache store
+`MATOMO_VISITOR_SECRET_STORE` names, or the default store.
+Name a store every server shares and no `cache:clear` reaches: a Redis connection and
+database no other store uses, with `maxmemory-policy noeviction` and
+`appendonly yes`, or a database store with a table of its own. A database or a file
+store keeps the secret of every past period until something deletes it, so on
+either store schedule the pruning every hour, in `routes/console.php`:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+use MatomoAnalytics\Identity\PruneExpiredVisitorSecrets;
+
+Schedule::call(PruneExpiredVisitorSecrets::class)->hourly();
+```
 
 ### 3. Apply the package
 
@@ -123,13 +144,34 @@ setting worth thinking about:
 - `batch` — hits buffer across requests in a `database`, `redis`, or `file`
   buffer and flush in large batches via `matomo:flush` or `matomo:work`.
   The `database` driver's migrations are registered automatically, so
-  `php artisan migrate` creates the tables — publish them only if you want to own
-  them, and then call `MatomoAnalyticsServiceProvider::ignoreMigrations()` from a
-  provider's `register()` so they are not registered twice.
+  `php artisan migrate` creates the tables; publish them only to own them, as
+  below.
 - `sync` — inline, for tests and low-volume apps.
 
 None of them let a Matomo outage surface in the application: delivery failures
 are swallowed and reported, never rethrown into the request.
+
+To keep the migrations in the application, call
+`\MatomoAnalytics\MatomoAnalyticsServiceProvider::ignoreMigrations()` in the `register`
+method of one of its service providers before its first `php artisan migrate`, then
+publish and run them:
+
+```bash
+php artisan vendor:publish --tag="matomo-analytics-migrations"
+php artisan migrate
+```
+
+Without the call the package goes on registering its own migrations beside the published
+copies, which carry the date they were published, so `php artisan migrate` creates
+`matomo_tracking_buffer` or `matomo_dead_letters` a second time and fails on the table
+that already exists. The `matomo-analytics` tag publishes the migrations with every other
+group, so the same holds for it. Publish them once: a migration a later release adds,
+which its release notes name, is copied from
+`vendor/pushery/matomo-analytics-for-laravel/database/migrations` into
+`database/migrations`, renamed to start with today's date, never by publishing the tag
+again. Where `php artisan migrate` has already run the migrations from the package, copy the
+files from that directory under their own names instead of publishing them, so the
+`migrations` table recognizes them as run.
 
 ### 5. Read data back
 
@@ -169,6 +211,7 @@ a request parameter: the token reads every site it was granted.
 Every facade has a fake, so tracking is asserted rather than mocked:
 
 ```php
+use MatomoAnalytics\Facades\Matomo;
 use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\PageView;
 
@@ -212,6 +255,13 @@ follow the same shape.
   `CustomParameters::for($hit)->param('_rcn', 'newsletter')` and pass it to
   `Matomo::track()`, so the gate, the URL redaction and the delivery mode still
   apply to it.
+- Do not keep the visitor secret, or in `batch` mode the default store, on a store
+  that loses keys: a Redis under any `maxmemory-policy` but `noeviction`, Memcached
+  without `-M`, a Redis without `appendonly yes`, or a store a deploy flushes with
+  `cache:clear` or `optimize:clear`. A lost secret counts every visitor of the rest of
+  the period a second time, and the default store holds the count of failed flushes, so
+  losing it lets a stuck batch retry longer before it is dead-lettered. A full Redis
+  under `noeviction` refuses writes instead of dropping keys.
 - Do not switch to `sync` to "make tracking reliable". It moves a third-party
   HTTP call into the request path; `queue` and `batch` exist precisely so a slow
   Matomo cannot slow the application.

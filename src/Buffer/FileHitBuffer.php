@@ -122,7 +122,9 @@ final class FileHitBuffer implements ErasableHitBuffer
      * lines only ever move towards the start, so a line is always read before its bytes can be
      * overwritten.
      *
-     * @param  resource  $file
+     * @param  mixed  $file  a stream, for which PHP has no type a declaration can name
+     *
+     * @phpstan-param  resource  $file
      */
     private function eraseFrom(mixed $file, DataSubject $subject): int
     {
@@ -191,7 +193,9 @@ final class FileHitBuffer implements ErasableHitBuffer
      * batch is how the flusher learns the buffer is drained, so treating it as empty would leave
      * the hits in the file with every signal green.
      *
-     * @return resource|null
+     * @return mixed a stream, or null where none opened, for which PHP has no type a declaration can name
+     *
+     * @phpstan-return  resource|null
      */
     private function openQueue(): mixed
     {
@@ -220,7 +224,9 @@ final class FileHitBuffer implements ErasableHitBuffer
      * two, the lines are in both places and the stale claim is reclaimed later: a hit sent twice
      * rather than one lost.
      *
-     * @param  resource  $queue
+     * @param  mixed  $queue  a stream, for which PHP has no type a declaration can name
+     *
+     * @phpstan-param  resource  $queue
      */
     private function takeFrom(mixed $queue, int $limit): BufferBatch
     {
@@ -266,7 +272,9 @@ final class FileHitBuffer implements ErasableHitBuffer
      * Reading always runs ahead of writing, because the claim took at least one line from the
      * front, so no byte is overwritten before it has been copied.
      *
-     * @param  resource  $queue
+     * @param  mixed  $queue  a stream, for which PHP has no type a declaration can name
+     *
+     * @phpstan-param  resource  $queue
      */
     private function keepFrom(mixed $queue, ?int $from): void
     {

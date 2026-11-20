@@ -45,6 +45,8 @@ final class BeaconOrigin
      * the field, so it proves nothing about the sender, and isOwn() answers that from the
      * request's own origin. Compared on scheme, host and port the way isOwn() compares an
      * `Origin`: case-insensitively, with the scheme's default port filled in.
+     *
+     * @param  mixed  $url  the URL as the beacon carries it, which may be any value
      */
     public static function pageUrl(mixed $url): ?string
     {

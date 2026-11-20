@@ -130,12 +130,14 @@ final class ReportCache
 
     private function day(string $date): ?CarbonInterface
     {
+        // Trimmed first, so no line feed is left at the end for the `$` of the date pattern to stop
+        // before.
         $date = trim($date);
 
         return match (true) {
             $date === 'today', $date === 'now' => Date::today(),
             $date === 'yesterday' => Date::today()->subDay(),
-            preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 => Date::createFromFormat('!Y-m-d', $date) ?: null,
+            preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) === 1 => Date::createFromFormat('!Y-m-d', $date) ?: null,
             default => null,
         };
     }

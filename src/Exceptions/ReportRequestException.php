@@ -19,6 +19,8 @@ final class ReportRequestException extends RuntimeException
      * Matomo quotes the request's segment in an error, and a segment can name a person, as
      * `userId==…` in a GDPR request does. The text stays with the caller, in `lastError()`, and
      * the log and the exception tracker learn which API answered which method.
+     *
+     * @param  mixed  $method  the method as the caller named it, which may be any value the API was asked with
      */
     public static function errorAnswer(string $api, mixed $method): self
     {

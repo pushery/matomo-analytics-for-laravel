@@ -110,7 +110,8 @@ final class DefaultBotDetector implements BotDetector
      * "164 entries" twice, and it was wrong the day the upstream sync landed eight more — a
      * comment that names the size of a list a bot maintains is a claim nobody re-checks, and it
      * goes stale on a schedule. The cost is one call per token, which is the part that does not
-     * move. `AiCrawlersTest` holds the rule with a derived arm.
+     * move. A test holds the rule: it counts the list itself and fails when a comment in `src`
+     * states a size the count does not match.
      *
      * Only the constants go through here. A configured list (`bots.allow`, `bots.deny`, a
      * custom chatbot list) is read from config on every call and is short, and memoizing it
