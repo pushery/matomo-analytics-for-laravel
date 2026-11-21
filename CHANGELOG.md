@@ -4,6 +4,18 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] - 2026-11-21
+
+### ✨ Added
+
+- **`Support\PruneExpiredCacheKeys` deletes the expired cache entries the package keeps, scheduled once a day.** A database or a file store deletes an expired entry only when its key is read again, and the report of a past span, or one cached before `flushCache()` moved the prefix on, is not read again. Scheduled with `Schedule::call(PruneExpiredCacheKeys::class)->daily();`, it deletes the expired rows under `matomo-analytics:` from the default store and the store in `cache.limiter`, and the expired files of a file store. Redis, Memcached and every other store that expires its entries itself stay untouched, and so does a report cache in a store of its own.
+- **27 more link-preview fetchers are known, among them Microsoft Teams and Outlook, Bluesky, Tumblr, KakaoTalk and Gmail's image proxy.** `LinkPreviews` names each with its source: Microsoft's documentation for `MicrosoftPreview`, and for the others their entry in Cloudflare's directory of verified bots, category Page Preview. `UserAgentClassifier::classify()` answers `LinkPreview` for them, and the default bot detector keeps them out of the visits. The guide on bots says why the bound detector is asked before the list: the tracking gate asks the same detector, so a request called a preview is never tracked as a visit.
+- **A start from the home screen is counted without a script.** A web app manifest's `start_url` carries a marker, `/?start=homescreen`, and the page-view middleware reads it on the request: the page view carries the marker's value in the visit-scope Custom Dimension `homescreen.dimension` (`MATOMO_HOMESCREEN_DIMENSION`), the counted address leaves the marker out, and with `homescreen.event` on, an event goes out as well. Nothing runs in the browser and nothing is kept on the device. The documentation shows the manifest and the dimension to create in Matomo.
+
+### 🐛 Fixed
+
+- **The package loads on PHP 8.6 without a deprecation.** PHP 8.6 deprecates a class constant named `namespace`, and `Support\Config` declared one, so every request that loaded the class raised the deprecation. The constant has another name, and nothing outside the class read it.
+
 ## [0.44.0] - 2026-11-20
 
 ### ✨ Added
@@ -1854,7 +1866,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...v0.43.0
 [0.42.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.0...v0.42.1

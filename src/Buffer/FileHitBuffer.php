@@ -159,7 +159,7 @@ final class FileHitBuffer implements ErasableHitBuffer
 
     /**
      * Remove the subject's lines from a claimed batch, so that a release or a stale reclaim
-     * cannot put them back. A batch acked in the meantime is simply gone.
+     * cannot put them back. A batch acked in the meantime is gone.
      */
     private function eraseClaimed(string $claimed, DataSubject $subject): int
     {

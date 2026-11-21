@@ -175,7 +175,7 @@ final class RedisHitBuffer implements ErasableHitBuffer
         // expired the moment it is made: the next flush reclaims a batch that the current
         // one is still sending, so at-least-once delivery becomes guaranteed double delivery
         // and Matomo counts every hit twice. Every other bound in this class uses max(1, …);
-        // this one was simply missed.
+        // this one was missed.
         $stale = max(1, Config::int('matomo-analytics.batch.stale_after_minutes', 15));
 
         $cutoff = Date::now()->subMinutes($stale)->getTimestamp();

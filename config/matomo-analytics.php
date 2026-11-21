@@ -492,6 +492,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Starts from the home screen
+    |--------------------------------------------------------------------------
+    | The start_url of a web app manifest carries a marker, `/?start=homescreen`, and the page-view
+    | middleware reads it on the request: it keeps the marker out of the counted address, sends the
+    | marker's value in the visit-scope Custom Dimension `dimension`, and with `event` on, an event
+    | as well. Nothing runs in the browser and nothing is kept on the device.
+    */
+
+    'homescreen' => [
+        'parameter' => 'start',           // the query parameter of the marker; '' switches the detection off
+        'value' => 'homescreen',          // its value, and the value the dimension receives
+        'dimension' => env('MATOMO_HOMESCREEN_DIMENSION'), // id of a visit-scope Custom Dimension; null sends none
+        'event' => false,                 // also send an event for every start
+        'event_category' => 'App',
+        'event_action' => 'Start from the home screen',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Client-side JS snippet
     |--------------------------------------------------------------------------
     */

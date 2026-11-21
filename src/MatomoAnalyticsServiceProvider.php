@@ -425,7 +425,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
      * top-level key wholesale. This config is nested several levels deep and is read that
      * way everywhere, so for anyone who published `config/matomo-analytics.php` the flat
      * merge froze every section at the shape it had on publication day. A subkey added by
-     * a later release did not fall back to its default — it was simply absent, and the
+     * a later release did not fall back to its default — it was absent, and the
      * readers that hurt most took no default at all: `Config::stringList()` answered `[]`
      * until it learned to fall back to the shipped file.
      *
