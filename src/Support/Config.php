@@ -17,7 +17,7 @@ final class Config
     public const string SHIPPED_THROTTLE = '60,1';
 
     /** The package's own config namespace, i.e. the published file's basename. */
-    private const string NAMESPACE = 'matomo-analytics';
+    private const string CONFIG_KEY = 'matomo-analytics';
 
     /**
      * The shipped config file, parsed once. Null until the first fallback needs it, so a
@@ -216,8 +216,8 @@ final class Config
     {
         self::$shipped ??= (array) require __DIR__.'/../../config/matomo-analytics.php';
 
-        $path = str_starts_with($key, self::NAMESPACE.'.')
-            ? substr($key, strlen(self::NAMESPACE) + 1)
+        $path = str_starts_with($key, self::CONFIG_KEY.'.')
+            ? substr($key, strlen(self::CONFIG_KEY) + 1)
             : $key;
 
         return data_get(self::$shipped, $path);

@@ -377,14 +377,14 @@ final class TestConnectionCommand extends Command
     /**
      * Warn about settings the shipped config declares that the running application cannot see.
      *
-     * What this catches, and it is narrower than it first looks. A published config that simply
+     * What this catches, and it is narrower than it first looks. A published config that
      * omits a newer key is not a problem: `mergeConfigRecursivelyFrom()` puts it back, which is
      * measurable — override the whole `batch` block without `dead_letter.retention_days` and the
      * value still reads 30. That recursion exists precisely for this.
      *
      * The gap is one layer further out: the merge does not run at all when the configuration is
      * cached. A cache built before a package update, and never rebuilt, is then the whole truth,
-     * and a key added since is simply absent. Nothing throws — an absent key yields the code
+     * and a key added since is absent. Nothing throws — an absent key yields the code
      * fallback, which a test forces to equal the shipped value, so it is usually even correct.
      * Usually is not always, and the exceptions are exactly the settings somebody set on purpose.
      *

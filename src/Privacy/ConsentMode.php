@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Config as ConfigFacade;
  *
  * An absent key is the shipped default, `none`: the package's config merge fills a missing key
  * with that value in the first place, so reading it as `full` would change the behavior of a
- * published config that simply predates the key.
+ * published config that predates the key.
  */
 final class ConsentMode
 {

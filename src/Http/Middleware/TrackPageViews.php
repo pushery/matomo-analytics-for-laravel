@@ -13,6 +13,7 @@ use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\SpeculativeRequest;
 use MatomoAnalytics\Tracking\CustomParameters;
 use MatomoAnalytics\Tracking\EcommerceView;
+use MatomoAnalytics\Tracking\Event;
 use MatomoAnalytics\Tracking\Hit;
 use MatomoAnalytics\Tracking\PageView;
 use MatomoAnalytics\Tracking\SiteSearch;
@@ -116,7 +117,44 @@ final readonly class TrackPageViews
             is_int($serverTime) ? $serverTime : null,
         );
 
-        $this->tracker->track($product instanceof Hit ? new CustomParameters($pageView, $product->toParams()) : $pageView);
+        $hit = $product instanceof Hit ? new CustomParameters($pageView, $product->toParams()) : $pageView;
+        $start = $this->startsFromTheHomeScreen($request);
+        $dimension = Config::int('matomo-analytics.homescreen.dimension', 0);
+
+        // The visit scope of the dimension carries the start to every page of the visit, though only
+        // the first request has the marker.
+        if ($start !== null && $dimension > 0) {
+            $hit = CustomParameters::for($hit)->dimension($dimension, $start);
+        }
+
+        $this->tracker->track($hit);
+
+        if ($start !== null && Config::bool('matomo-analytics.homescreen.event', false)) {
+            $event = new Event(
+                Config::string('matomo-analytics.homescreen.event_category', 'App'),
+                Config::string('matomo-analytics.homescreen.event_action', 'Start from the home screen'),
+            );
+
+            $this->tracker->track(CustomParameters::for($event)->param('url', $this->url($request)));
+        }
+    }
+
+    /**
+     * The value of the marker a web app manifest's start_url carries, where this request has it, otherwise null.
+     */
+    private function startsFromTheHomeScreen(Request $request): ?string
+    {
+        $parameter = $this->homeScreenParameter();
+        $marker = Config::string('matomo-analytics.homescreen.value', 'homescreen');
+        $value = $parameter === '' ? null : $request->query($parameter);
+
+        return $marker !== '' && $value === $marker ? $marker : null;
+    }
+
+    /** The query parameter of the marker, empty where the detection is off. */
+    private function homeScreenParameter(): string
+    {
+        return Config::string('matomo-analytics.homescreen.parameter', 'start');
     }
 
     /**
@@ -210,7 +248,7 @@ final readonly class TrackPageViews
         // And skipping it alone would trade one wrong number for another, which is why this
         // ships with {@see \MatomoAnalytics\View\Snippet::prefetchPageView()}. When the
         // reader does click, the page is served from the prefetch and the server hears nothing
-        // at all — so without the beacon the view is simply missing. The documentation's page
+        // at all — so without the beacon the view is missing. The documentation's page
         // on prefetched pages says so.
         if (Config::bool('matomo-analytics.middleware.skip_prefetch', true) && SpeculativeRequest::is($request)) {
             return true;
@@ -395,8 +433,14 @@ final readonly class TrackPageViews
 
     private function url(Request $request): string
     {
-        return Config::bool('matomo-analytics.middleware.strip_query', false)
-            ? $request->url()
+        if (Config::bool('matomo-analytics.middleware.strip_query', false)) {
+            return $request->url();
+        }
+
+        // The marker says how the page was opened, not which page it is, so the counted address leaves it
+        // out and the page keeps one row in the reports.
+        return $this->startsFromTheHomeScreen($request) !== null
+            ? $request->fullUrlWithoutQuery([$this->homeScreenParameter()])
             : $request->fullUrl();
     }
 }

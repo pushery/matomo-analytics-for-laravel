@@ -63,7 +63,7 @@ final class IpAnonymizer
      * for the fully written-out form: any address carrying a `::` run explodes into empty
      * elements, so `2001:db8::1` came out as `2001:db8:::` — not an address at all. That is
      * the ordinary way IPv6 is written, so most anonymized addresses left here malformed,
-     * and neither side complains: Matomo stores what it is sent and the geolocation simply
+     * and neither side complains: Matomo stores what it is sent and the geolocation
      * misses.
      *
      * Rejection is `inet_pton` rather than `filter_var`, and the difference is one class:
