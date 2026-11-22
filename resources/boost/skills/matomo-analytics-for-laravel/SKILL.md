@@ -98,18 +98,23 @@ Schedule::call(PruneExpiredVisitorSecrets::class)->hourly();
 
 ```php
 use MatomoAnalytics\Facades\Matomo;
+use MatomoAnalytics\Tracking\EcommerceItem;
 
 Matomo::pageView('Checkout');
 Matomo::event('Checkout', 'completed', name: 'standard', value: 49.90);
 Matomo::goal(3, revenue: 49.90);
-Matomo::ecommerceOrder('ORD-1', grandTotal: 49.90, items: $items);
+Matomo::ecommerceOrder('ORD-1', grandTotal: 49.90, items: [new EcommerceItem('TEE-01', 'T-Shirt', 'Apparel', 49.90)]);
 ```
 
 **Server-side, automatic.** Attach the middleware instead of calling per route:
 
 ```php
 // bootstrap/app.php
-$middleware->appendToGroup('web', \MatomoAnalytics\Http\Middleware\TrackPageViews::class);
+use Illuminate\Foundation\Configuration\Middleware;
+
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->appendToGroup('web', \MatomoAnalytics\Http\Middleware\TrackPageViews::class);
+})
 ```
 
 or set `middleware.auto` in the config so the package registers it itself.

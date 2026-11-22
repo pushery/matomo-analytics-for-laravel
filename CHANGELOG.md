@@ -4,6 +4,16 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.0] - 2026-11-22
+
+### ✨ Added
+
+- **`Support\PruneExpiredCacheKeys` also prunes behind a `failover` store and a `storage` store.** Both of these Laravel cache drivers leave expired entries behind as a database or a file store does. A failover store writes each entry into the first of its stores that answers, so the pruner goes through each of its stores once. A storage store lays its files out on a filesystem disk the way a file store does in its directory, and the pruner deletes the expired files the store laid out there and leaves every other file on the disk alone.
+
+### 📚 Documentation
+
+- **The examples of the Boost skill set every variable they read.** The server-side example passed `$items` and the middleware example called `$middleware` without either being set, so code copied from them stopped at its first call. The order now names its item, and the middleware is attached inside `withMiddleware()`.
+
 ## [0.45.0] - 2026-11-21
 
 ### ✨ Added
@@ -1866,7 +1876,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.42.1...v0.43.0
