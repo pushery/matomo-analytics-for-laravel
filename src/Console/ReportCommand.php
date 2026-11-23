@@ -6,6 +6,7 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\ReportClient;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 final class ReportCommand extends Command
 {
@@ -24,12 +25,12 @@ final class ReportCommand extends Command
         $data = $reports->get($method, $this->params());
 
         if ($data === null) {
-            $this->error($reports->lastError() ?? 'Matomo reporting returned no data.');
+            $this->error(OutputFormatter::escape($reports->lastError() ?? 'Matomo reporting returned no data.'));
 
             return self::FAILURE;
         }
 
-        $this->line((string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        $this->line(OutputFormatter::escape((string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)));
 
         return self::SUCCESS;
     }

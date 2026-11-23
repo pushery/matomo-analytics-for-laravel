@@ -4,6 +4,17 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.1] - 2026-11-23
+
+### 🐛 Fixed
+
+- **The Artisan commands print what Matomo answers and what they export as it stands.** Symfony's console formatter read a part of a Matomo error, a GDPR export, report data or an exception message that looks like a style tag as styling and dropped it.
+
+### 📚 Documentation
+
+- **The documentation says that the `octane` store of Laravel Octane is out of the pruner's reach.** The store keeps an expired entry in a table of a fixed number of rows, `octane.cache.rows`, until its key is written again or the server restarts, and the scheduler, where the pruner runs, sees an empty store. Once the table is full, writing a new key fails, so the documentation advises against making `octane` the default cache store of an application that runs this package.
+- **The documentation of the client IP says where Laravel's request IP is the visitor's choice.** Below `laravel/framework` 13.43.0, and 12.73.0 on the 12.x line, an application that configures no trusted proxy and whose web server answers any host name takes a header the visitor sends as the mark of a Forge or Vapor proxy (GHSA-559m-v249-7qw2). With `ip_header` left at `null`, that address then reaches Matomo as `cip`, slips past `except_ips`, sets the cookieless visitor id and keys the beacon limits. The server-side tracking page names the framework update, trusted proxies and a web server that answers only the application's host names as the ways to close it.
+
 ## [0.46.0] - 2026-11-22
 
 ### ✨ Added
@@ -1876,7 +1887,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.1...HEAD
+[0.46.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.43.0...v0.44.0
@@ -1923,7 +1935,6 @@ half that makes it work was not.
 [0.19.2]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.19.0
-[0.18.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.17.0...v0.19.0
 [0.17.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.14.3...v0.15.0

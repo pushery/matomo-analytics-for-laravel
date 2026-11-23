@@ -16,6 +16,7 @@ use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 final class TestConnectionCommand extends Command
@@ -65,7 +66,7 @@ final class TestConnectionCommand extends Command
         try {
             $result = $sender->send([$this->probe($connection)]);
         } catch (Throwable $e) {
-            $this->error(sprintf('Could not reach Matomo at %s: %s', $connection->trackingUrl(), $e->getMessage()));
+            $this->error(OutputFormatter::escape(sprintf('Could not reach Matomo at %s: %s', $connection->trackingUrl(), $e->getMessage())));
 
             return self::FAILURE;
         }
@@ -214,11 +215,11 @@ final class TestConnectionCommand extends Command
             try {
                 $waiting = App::make(HitBuffer::class)->size();
             } catch (Throwable $e) {
-                $this->warn(sprintf(
+                $this->warn(OutputFormatter::escape(sprintf(
                     'Buffer (%s) could not be read: %s',
                     Config::string('matomo-analytics.batch.driver', 'database'),
                     $this->describe($e),
-                ));
+                )));
                 $waiting = 0;
             }
 
@@ -234,7 +235,7 @@ final class TestConnectionCommand extends Command
         try {
             $dead = App::make(DeadLetterStore::class)->count();
         } catch (Throwable $e) {
-            $this->warn('Dead letters could not be counted: '.$this->describe($e));
+            $this->warn(OutputFormatter::escape('Dead letters could not be counted: '.$this->describe($e)));
 
             return;
         }
@@ -276,7 +277,7 @@ final class TestConnectionCommand extends Command
      */
     private function redisSettingUnchecked(string $setting, string $why, string $confirm): void
     {
-        $this->line(sprintf('Redis %s is unchecked, because CONFIG GET %s. Confirm with the provider %s.', $setting, $why, $confirm));
+        $this->line(OutputFormatter::escape(sprintf('Redis %s is unchecked, because CONFIG GET %s. Confirm with the provider %s.', $setting, $why, $confirm)));
     }
 
     /**
