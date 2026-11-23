@@ -9,6 +9,7 @@ use Illuminate\Support\Sleep;
 use MatomoAnalytics\Buffer\BufferFlusher;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Long-running buffer drainer for a Supervisor / Forge daemon. The scheduled
@@ -94,7 +95,7 @@ final class WorkCommand extends Command
                 || $failures->current() >= max(1, Config::int('matomo-analytics.resilience.reporting.report_after_attempts', 3));
 
             if ($stuck) {
-                $this->error($reason ?? 'The drain is not moving — consecutive failures have reached the alerting threshold.');
+                $this->error(OutputFormatter::escape($reason ?? 'The drain is not moving — consecutive failures have reached the alerting threshold.'));
             }
 
             if ($this->shouldStop

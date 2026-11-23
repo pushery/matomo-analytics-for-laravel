@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use MatomoAnalytics\Buffer\BufferFlusher;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 final class FlushCommand extends Command
 {
@@ -35,7 +36,7 @@ final class FlushCommand extends Command
         $reason = $outcome->stuckReason();
 
         if ($reason !== null) {
-            $this->error($reason);
+            $this->error(OutputFormatter::escape($reason));
 
             return self::FAILURE;
         }

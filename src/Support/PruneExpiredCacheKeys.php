@@ -175,7 +175,11 @@ final readonly class PruneExpiredCacheKeys
     {
         $path = $store['path'] ?? null;
 
-        return is_string($path) && $path !== '' ? ['driver' => 'file', 'path' => rtrim($path, '/')] : null;
+        if (is_string($path) && $path !== '') {
+            return ['driver' => 'file', 'path' => rtrim($path, '/')];
+        }
+
+        return null;
     }
 
     /**

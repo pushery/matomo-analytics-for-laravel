@@ -13,6 +13,7 @@ use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Jobs\SendHitsJob;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 final class ReplayCommand extends Command
 {
@@ -184,7 +185,7 @@ final class ReplayCommand extends Command
             $entry['id'],
             $entry['hits'],
             $entry['attempts'],
-            Str::limit($entry['error'], 50),
+            OutputFormatter::escape(Str::limit($entry['error'], 50)),
             $entry['failed_at'],
         ], $store->recent(20));
 

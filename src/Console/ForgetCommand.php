@@ -25,7 +25,7 @@ final class ForgetCommand extends Command
 
         $found = $gdpr->findDataSubjects($segment, $site);
         if ($found === null) {
-            $this->error($gdpr->lastError() ?? 'Matomo GDPR lookup failed.');
+            $this->error(OutputFormatter::escape($gdpr->lastError() ?? 'Matomo GDPR lookup failed.'));
 
             return self::FAILURE;
         }
@@ -41,12 +41,12 @@ final class ForgetCommand extends Command
 
             $export = $gdpr->exportAll($segment, $site);
             if ($export === null) {
-                $this->error($gdpr->lastError() ?? 'Matomo GDPR export failed.');
+                $this->error(OutputFormatter::escape($gdpr->lastError() ?? 'Matomo GDPR export failed.'));
 
                 return self::FAILURE;
             }
 
-            $this->line((string) json_encode($export['data'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $this->line(OutputFormatter::escape((string) json_encode($export['data'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)));
 
             // The export reads past one lookup in ranges of days, and only a single day that still
             // fills a lookup, or a run out of lookups, leaves it partial. The warning goes to stderr,
@@ -88,7 +88,7 @@ final class ForgetCommand extends Command
 
         $result = $gdpr->forget($segment, $site);
         if ($result === null) {
-            $this->error($gdpr->lastError() ?? 'Matomo GDPR erasure failed.');
+            $this->error(OutputFormatter::escape($gdpr->lastError() ?? 'Matomo GDPR erasure failed.'));
 
             return self::FAILURE;
         }

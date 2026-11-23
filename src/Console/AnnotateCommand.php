@@ -7,6 +7,7 @@ namespace MatomoAnalytics\Console;
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\AnnotationsClient;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 final class AnnotateCommand extends Command
 {
@@ -59,7 +60,7 @@ final class AnnotateCommand extends Command
     private function report(AnnotationsClient $annotations, ?array $result): int
     {
         if ($result === null) {
-            $this->error($annotations->lastError() ?? 'Matomo annotation failed.');
+            $this->error(OutputFormatter::escape($annotations->lastError() ?? 'Matomo annotation failed.'));
 
             return self::FAILURE;
         }
