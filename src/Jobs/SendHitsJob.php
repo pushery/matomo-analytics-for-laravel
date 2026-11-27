@@ -130,7 +130,7 @@ final class SendHitsJob implements ShouldQueue
         }
 
         if ($result->failed()) {
-            $this->absorb($reporter, $deadLetters, TrackingSendException::status($result->status), $result->permanent());
+            $this->absorb($reporter, $deadLetters, TrackingSendException::status($result->status, $result->answer), $result->permanent());
 
             return;
         }

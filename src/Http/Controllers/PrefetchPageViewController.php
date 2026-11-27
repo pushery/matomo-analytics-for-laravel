@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use MatomoAnalytics\Contracts\Tracker;
+use MatomoAnalytics\Support\BeaconBody;
 use MatomoAnalytics\Support\BeaconOrigin;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Tracking\PageView;
@@ -43,6 +44,12 @@ final class PrefetchPageViewController
             // Not abort(): that helper ships only with laravel/framework's Foundation, and
             // this package requires illuminate components instead. It throws exactly this.
             throw new NotFoundHttpException;
+        }
+
+        // A body larger than any beacon, refused before anything of it is read: on the first read of a
+        // field a JSON body is decoded in full, long before the bounds of each field apply.
+        if (BeaconBody::tooLarge($request)) {
+            return new Response(status: Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
         }
 
         // The origin of the request, which the sending page cannot write, before the `url` it can.

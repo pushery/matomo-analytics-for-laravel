@@ -33,6 +33,9 @@ final class HttpSender implements Sender
      */
     private const int UNAUTHENTICATED_TIMESTAMP_WINDOW = 82800;
 
+    /** The most characters of Matomo's answer a refusal carries: enough for its reason, short enough for a log line. */
+    private const int ANSWER_LENGTH = 300;
+
     /**
      * The Guzzle handler every send goes through, built once.
      *
@@ -94,7 +97,7 @@ final class HttpSender implements Sender
             : $this->sendBulk($payloads);
 
         if (! $response->successful()) {
-            return SendResult::failure($response->status());
+            return SendResult::failure($response->status(), $this->answer($response));
         }
 
         return $this->readEnvelope($response);
@@ -120,6 +123,30 @@ final class HttpSender implements Sender
         }
 
         return $payload;
+    }
+
+    /**
+     * What Matomo answered to a request it refused, on one line, shortened, and without the token.
+     *
+     * The body is the only place Matomo names its reason, a site id it does not know or a hit time it does not take
+     * without a token, so a refusal carries it. The token goes wherever it stands, as a value of its own or after
+     * `token_auth`, because the answer ends up in a log and in an error report.
+     */
+    private function answer(Response $response): string
+    {
+        $answer = $response->body();
+        $token = $this->connection->token;
+
+        if ($token !== null && $token !== '') {
+            $answer = str_replace($token, '[redacted]', $answer);
+        }
+
+        // The separator after `token_auth` takes no bracket, so a value the replacement above has already redacted
+        // stays as it is rather than being redacted inside its own brackets.
+        $answer = (string) preg_replace('/(token_auth[^\w\[]{1,4})(?!\[redacted\])[^\s&"\',;}]+/i', '$1[redacted]', $answer);
+        $answer = trim((string) preg_replace('/\s+/', ' ', $answer));
+
+        return mb_strlen($answer) > self::ANSWER_LENGTH ? rtrim(mb_substr($answer, 0, self::ANSWER_LENGTH)).'...' : $answer;
     }
 
     /**
@@ -151,7 +178,7 @@ final class HttpSender implements Sender
         }
 
         if (($body['status'] ?? null) === 'error') {
-            return SendResult::failure($response->status());
+            return SendResult::failure($response->status(), $this->answer($response));
         }
 
         $invalid = $body['invalid'] ?? 0;

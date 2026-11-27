@@ -8,8 +8,10 @@ use Illuminate\Console\Command;
 use MatomoAnalytics\Buffer\BufferFlusher;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AsCommand(name: 'matomo:flush')]
 final class FlushCommand extends Command
 {
     protected $signature = 'matomo:flush';

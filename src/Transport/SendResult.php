@@ -19,10 +19,15 @@ namespace MatomoAnalytics\Transport;
  */
 final readonly class SendResult
 {
+    /**
+     * @param  string  $answer  what Matomo answered to a refused request, on one line, shortened and without the
+     *                          token, and empty where it answered nothing
+     */
     private function __construct(
         public bool $ok,
         public int $status,
         public int $invalid = 0,
+        public string $answer = '',
     ) {}
 
     public static function success(int $status = 200, int $invalid = 0): self
@@ -30,9 +35,9 @@ final readonly class SendResult
         return new self(true, $status, $invalid);
     }
 
-    public static function failure(int $status): self
+    public static function failure(int $status, string $answer = ''): self
     {
-        return new self(false, $status);
+        return new self(false, $status, answer: $answer);
     }
 
     public function failed(): bool

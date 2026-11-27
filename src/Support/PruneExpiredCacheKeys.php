@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Filesystem\Factory as Filesystems;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Date;
 
 /**
@@ -28,6 +29,13 @@ use Illuminate\Support\Facades\Date;
  * missing. A file store and a storage store name a file by the hash of its key, so there the expired
  * file of any key goes, which the store already treats as missing too.
  *
+ * A package that writes to a store of its own choosing, or under a prefix beside `matomo-analytics:`,
+ * names both in `$also` from its service provider, and they are pruned the same way:
+ *
+ *     $this->app->when(PruneExpiredCacheKeys::class)->needs('$also')->give(
+ *         fn (): array => [['store' => 'locks', 'keys' => ['matomo-analytics-locks:']]],
+ *     );
+ *
  * Part of the public API, because a host schedules it in its own scheduler.
  */
 final readonly class PruneExpiredCacheKeys
@@ -35,10 +43,19 @@ final readonly class PruneExpiredCacheKeys
     /** The most rows one statement deletes, so a large table is pruned in short statements. */
     private const int CHUNK = 1000;
 
+    /**
+     * `$also` names the stores this package writes to beside the default one and the store of the rate
+     * limiter, each by its name or null for the default one, with the prefixes of the keys it keeps
+     * there. Every database store loses the expired keys under each of these prefixes as well as under
+     * `matomo-analytics:`.
+     *
+     * @param  list<array{store: ?string, keys: list<string>}>  $also
+     */
     public function __construct(
         private Repository $config,
         private ConnectionResolverInterface $connections,
         private Filesystems $filesystems,
+        private array $also = [],
     ) {}
 
     /** Delete every expired entry of this package, and return how many rows or files went. */
@@ -66,10 +83,10 @@ final readonly class PruneExpiredCacheKeys
     }
 
     /**
-     * The stores pruning reaches, among the default store and the store of the rate limiter, each
-     * once: two names of one table, or a limiter left to the default store, are pruned once. A
-     * failover store writes each entry into the first of its stores that answers, so its stores are
-     * read in its place, each name once, which also ends a failover that names itself.
+     * The stores pruning reaches, among the default store, the store of the rate limiter and the
+     * stores in `$also`, each once: two names of one table, or a limiter left to the default store, are
+     * pruned once. A failover store writes each entry into the first of its stores that answers, so its
+     * stores are read in its place, each name once, which also ends a failover that names itself.
      *
      * @return list<array{driver: 'database', table: string, connection: ?string, prefix: string}|array{driver: 'file', path: string}|array{driver: 'storage', disk: ?string, path: string}>
      */
@@ -79,6 +96,14 @@ final readonly class PruneExpiredCacheKeys
 
         foreach (['cache.default', 'cache.limiter'] as $key) {
             $name = $this->config->get($key);
+
+            if (is_string($name) && $name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        foreach ($this->also as $store) {
+            $name = $store['store'] ?? $this->config->get('cache.default');
 
             if (is_string($name) && $name !== '') {
                 $names[] = $name;
@@ -222,13 +247,17 @@ final readonly class PruneExpiredCacheKeys
     /** Delete the expired rows of this package from the table of a database store, and return how many went. */
     private function pruneRows(?string $connection, string $table, string $prefix): int
     {
-        $pattern = $this->keysLike($prefix);
+        $patterns = $this->keysLike($prefix);
         $now = Date::now()->getTimestamp();
         $deleted = 0;
 
         do {
             $chunk = $this->connections->connection($connection)->table($table)
-                ->where('key', 'like', $pattern)
+                ->where(static function (Builder $query) use ($patterns): void {
+                    foreach ($patterns as $pattern) {
+                        $query->orWhere('key', 'like', $pattern);
+                    }
+                })
                 ->where('expiration', '<=', $now)
                 ->limit(self::CHUNK)
                 ->delete();
@@ -301,16 +330,29 @@ final readonly class PruneExpiredCacheKeys
     }
 
     /**
-     * The keys of this package as a LIKE pattern.
+     * The keys of this package as LIKE patterns, those under `matomo-analytics:` and those under each
+     * prefix in `$also`, which one statement deletes together.
      *
      * A character of the prefix that LIKE reads as more than itself on one of the engines, `%`, `\`
      * and `[`, stands as `_`, any one character, so the pattern means the same on every engine
      * without an escape clause. It can then match a key beside these, and so can a LIKE that ignores
      * case, as SQLite's does and MySQL's under its default collation. Such a key goes only once it
      * has expired, and the store already treats it as missing then.
+     *
+     * @return non-empty-list<string>
      */
-    private function keysLike(string $prefix): string
+    private function keysLike(string $prefix): array
     {
-        return str_replace(['%', '\\', '['], '_', $prefix).'matomo-analytics:%';
+        $patterns = ['matomo-analytics:'];
+
+        foreach ($this->also as $store) {
+            foreach ($store['keys'] as $keys) {
+                if ($keys !== '' && ! in_array($keys, $patterns, true)) {
+                    $patterns[] = $keys;
+                }
+            }
+        }
+
+        return array_map(static fn (string $keys): string => str_replace(['%', '\\', '['], '_', $prefix.$keys).'%', $patterns);
     }
 }

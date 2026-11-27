@@ -6,8 +6,10 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\GdprClient;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AsCommand(name: 'matomo:forget')]
 final class ForgetCommand extends Command
 {
     protected $signature = 'matomo:forget

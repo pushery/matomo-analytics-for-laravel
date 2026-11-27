@@ -4,6 +4,29 @@ All notable changes to `pushery/matomo-analytics-for-laravel` are documented her
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0] - 2026-11-27
+
+### 🔧 Changed
+
+- **A refused tracking request names what Matomo answered.** The sender dropped the body of a refusal, so a report said only `Matomo tracking request failed with HTTP 400` and nobody could read why. The message now ends with Matomo's answer, on one line, cut after 300 characters and with the token taken out, and `SendResult` carries it as `answer`. The throttle of the reporter keys on the failure without the answer, which Matomo fills with the hit counts of each batch.
+- **The visitor-secret pruner deletes a thousand rows to a statement.** `Identity\PruneExpiredVisitorSecrets` deleted every expired secret of a database store in a single statement, so a table that went unpruned for a while was emptied in one long statement, inside the process of `schedule:run`. It now deletes a thousand rows at a time until none is left, as `Support\PruneExpiredCacheKeys` does, and returns the same count.
+
+### ⚡ Performance
+
+- **A start of the console builds none of the package's commands.** Each command class carries `#[AsCommand]` with the name of its signature, so Laravel keeps each in the map of its loader and builds it only when it runs. Before, every start of a host's console built every command of the package through the container, for each run of the schedule, each queue worker and each `artisan` call, whatever ran.
+
+### 🐛 Fixed
+
+- **The cache pruner reaches the reports in a store or under a prefix of their own.** `Support\PruneExpiredCacheKeys` pruned the default store and the store of the rate limiter, and in a database store only the keys under `matomo-analytics:`. With `MATOMO_REPORTING_CACHE_STORE` naming a database or file store beside the default one, or with `reporting.cache.prefix` set outside `matomo-analytics:`, every expired report stayed there for good. The pruner now reads that store and that prefix as well, and the default configuration is pruned as before.
+
+### 🔒 Security
+
+- **The three beacon routes refuse a body over 64 KiB with `413`.** `navigator.sendBeacon()` and a `fetch()` with `keepalive`, the two ways the snippet sends a beacon, carry at most 64 KiB together, while a route decoded a JSON body in full on the first field it read, long before the bounds of each field applied. A larger body now ends the request before the route reads anything of it, the origin included. The declared `Content-Length` decides where there is one, and the body as it arrived where there is none. A switched-off beacon still answers `404`.
+
+### 📚 Documentation
+
+- **The requirements name the versions the package is tested on.** PHP 8.4.27, 8.5.x and 8.6.x, PostgreSQL 18.7 and MySQL 8.4.13, in the README and on the start page of the documentation.
+
 ## [0.46.1] - 2026-11-23
 
 ### 🐛 Fixed
@@ -1887,7 +1910,8 @@ Keep a Changelog's format assumes these definitions; the format was followed and
 half that makes it work was not.
 -->
 
-[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.1...HEAD
+[Unreleased]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.1...v0.47.0
 [0.46.1]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/matomo-analytics-for-laravel/compare/v0.44.0...v0.45.0

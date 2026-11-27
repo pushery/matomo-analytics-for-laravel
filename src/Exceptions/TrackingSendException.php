@@ -8,9 +8,26 @@ use RuntimeException;
 
 final class TrackingSendException extends RuntimeException
 {
-    public static function status(int $status): self
+    /**
+     * @param  string  $failure  the failure without what Matomo answered, which stays the same while the failure does
+     */
+    private function __construct(string $message, public readonly string $failure)
     {
-        return new self('Matomo tracking request failed with HTTP '.$status);
+        parent::__construct($message);
+    }
+
+    /**
+     * Matomo refused the request with this status.
+     *
+     * The message carries what Matomo answered, where it answered anything, because the body is the only place it
+     * names its reason. `failure` leaves the answer out: Matomo counts the hits of the batch in it, so a throttle
+     * keyed on the whole message would take every batch for a new failure.
+     */
+    public static function status(int $status, string $answer = ''): self
+    {
+        $failure = 'Matomo tracking request failed with HTTP '.$status;
+
+        return new self($answer === '' ? $failure : $failure.'. Matomo answered: '.$answer, $failure);
     }
 
     /**
@@ -24,6 +41,8 @@ final class TrackingSendException extends RuntimeException
      */
     public static function rejected(int $count): self
     {
-        return new self(sprintf('Matomo accepted the request and rejected %d of its hit(s) as invalid.', $count));
+        $message = sprintf('Matomo accepted the request and rejected %d of its hit(s) as invalid.', $count);
+
+        return new self($message, $message);
     }
 }

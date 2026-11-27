@@ -6,8 +6,10 @@ namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\ReportClient;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AsCommand(name: 'matomo:report')]
 final class ReportCommand extends Command
 {
     protected $signature = 'matomo:report

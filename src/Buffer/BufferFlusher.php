@@ -173,7 +173,7 @@ final readonly class BufferFlusher
         if ($result->failed()) {
             // A permanent rejection is dead-lettered on the first hit; a transient one is
             // retried with back-off. SendResult::permanent() draws the line for both modes.
-            return $this->onFailure($batch, TrackingSendException::status($result->status), $result->permanent());
+            return $this->onFailure($batch, TrackingSendException::status($result->status, $result->answer), $result->permanent());
         }
 
         // Matomo answers 200 to a bulk request it partly refused, and the count it states was

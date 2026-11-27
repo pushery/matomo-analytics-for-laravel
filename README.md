@@ -40,7 +40,8 @@ starts no tracking at all. It also stays a no-op while either variable above is
 missing, so it is inert in local and CI environments. Verify with
 `php artisan matomo:test`.
 
-Requires PHP 8.4+ and Laravel 12 or 13.
+Requires PHP 8.4+ (tested on 8.4.27, 8.5.x and 8.6.x) and Laravel 12 or 13. Its tables are tested
+on PostgreSQL 18.7 and MySQL 8.4.13, the databases Laravel Cloud runs.
 
 ## Documentation
 

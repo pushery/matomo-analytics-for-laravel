@@ -9,6 +9,7 @@ use Illuminate\Support\Sleep;
 use MatomoAnalytics\Buffer\BufferFlusher;
 use MatomoAnalytics\Buffer\ConsecutiveFailures;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
@@ -16,6 +17,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  * matomo:flush is the simpler default; use this for high-volume file/redis spools.
  * Run a single instance (the atomic claims keep concurrent runs from double-sending).
  */
+#[AsCommand(name: 'matomo:work')]
 final class WorkCommand extends Command
 {
     protected $signature = 'matomo:work
