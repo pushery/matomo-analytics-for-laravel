@@ -56,6 +56,7 @@ use MatomoAnalytics\Reporting\ReportCache;
 use MatomoAnalytics\Sites\SitesManager;
 use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\LanguageFallbackLoader;
+use MatomoAnalytics\Support\PruneExpiredCacheKeys;
 use MatomoAnalytics\Support\RateLimits;
 use MatomoAnalytics\Support\Reporter;
 use MatomoAnalytics\Transport\HttpSender;
@@ -190,6 +191,7 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         $this->registerBladeDirectives();
         $this->registerScheduledFlush();
         $this->registerScheduledDeadLetterPrune();
+        $this->handTheReportsToThePruner();
         $this->registerTerminatingFlush();
 
         if ($this->app->runningInConsole()) {
@@ -338,6 +340,23 @@ final class MatomoAnalyticsServiceProvider extends ServiceProvider
         }
 
         return $event;
+    }
+
+    /**
+     * Name the store and the prefix of the reports to the pruner of expired cache keys.
+     *
+     * The reports are cached in the store `reporting.cache.store` names, which can be one beside the
+     * default store, and under `reporting.cache.prefix`, which can lie outside `matomo-analytics:`. The
+     * pruner reads that store and that prefix as well, so an expired report goes there as it goes in the
+     * default store. Both are read when the pruner is resolved, by the scheduler or by a host's own call,
+     * so a value the host sets after the boot counts.
+     */
+    private function handTheReportsToThePruner(): void
+    {
+        $this->app->when(PruneExpiredCacheKeys::class)->needs('$also')->give(static fn (): array => [[
+            'store' => Config::nullableString('matomo-analytics.reporting.cache.store'),
+            'keys' => [Config::string('matomo-analytics.reporting.cache.prefix', 'matomo-analytics:report').':'],
+        ]]);
     }
 
     /**

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
+use MatomoAnalytics\Exceptions\TrackingSendException;
 use Throwable;
 
 /**
@@ -116,7 +117,9 @@ final class Reporter
             return true;
         }
 
-        $key = 'matomo-analytics:report:'.md5($e::class.'|'.$this->signature($e->getMessage()));
+        // A refusal is keyed on its failure without Matomo's answer, which counts the hits of each batch.
+        $failure = $e instanceof TrackingSendException ? $e->failure : $e->getMessage();
+        $key = 'matomo-analytics:report:'.md5($e::class.'|'.$this->signature($failure));
 
         // A throttle that cannot be asked lets the report through: reporting once too often
         // is recoverable, and throwing from here is not.

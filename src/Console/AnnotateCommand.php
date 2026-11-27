@@ -7,8 +7,10 @@ namespace MatomoAnalytics\Console;
 use Illuminate\Console\Command;
 use MatomoAnalytics\Contracts\AnnotationsClient;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AsCommand(name: 'matomo:annotate')]
 final class AnnotateCommand extends Command
 {
     protected $signature = 'matomo:annotate

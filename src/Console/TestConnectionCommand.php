@@ -16,9 +16,11 @@ use MatomoAnalytics\Contracts\HitBuffer;
 use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Privacy\ConsentMode;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
+#[AsCommand(name: 'matomo:test')]
 final class TestConnectionCommand extends Command
 {
     protected $signature = 'matomo:test';

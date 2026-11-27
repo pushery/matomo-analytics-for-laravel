@@ -201,7 +201,7 @@ final class TrackManager implements Tracker
         }
 
         if ($result->failed()) {
-            $e = TrackingSendException::status($result->status);
+            $e = TrackingSendException::status($result->status, $result->answer);
 
             $this->reporter->report($e, ['stage' => 'sync']);
             $this->announceFailure($e);

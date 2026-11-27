@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace MatomoAnalytics\Console;
 
 use Illuminate\Console\Command;
+use Symfony\Component\Console\Attribute\AsCommand;
 
+#[AsCommand(name: 'matomo:install')]
 final class InstallCommand extends Command
 {
     protected $signature = 'matomo:install';

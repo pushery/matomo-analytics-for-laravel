@@ -22,10 +22,14 @@ use MatomoAnalytics\Support\Config;
  *
  * It prunes the store `visitor.secret_store` names, or the default store, and does nothing where that is neither a
  * database nor a file store. A file store names a file by the hash of its key, so there the expired file of any key
- * goes, which the store already treats as missing.
+ * goes, which the store already treats as missing. A database store is pruned a thousand rows to a statement, so a
+ * table that went unpruned for a while is emptied in short statements rather than in one long one.
  */
 final readonly class PruneExpiredVisitorSecrets
 {
+    /** The most rows one statement deletes, so a large table is pruned in short statements. */
+    private const int CHUNK = 1000;
+
     public function __construct(
         private Repository $config,
         private ConnectionResolverInterface $connections,
@@ -44,10 +48,27 @@ final readonly class PruneExpiredVisitorSecrets
             return $this->pruneFiles($store['path']);
         }
 
-        return $this->connections->connection($store['connection'])->table($store['table'])
-            ->where('key', 'like', $this->secretsLike($store['prefix']))
-            ->where('expiration', '<=', Date::now()->getTimestamp())
-            ->delete();
+        return $this->pruneRows($store['connection'], $store['table'], $store['prefix']);
+    }
+
+    /** Delete the expired secrets from the table of a database store, and return how many rows went. */
+    private function pruneRows(?string $connection, string $table, string $prefix): int
+    {
+        $pattern = $this->secretsLike($prefix);
+        $now = Date::now()->getTimestamp();
+        $deleted = 0;
+
+        do {
+            $chunk = $this->connections->connection($connection)->table($table)
+                ->where('key', 'like', $pattern)
+                ->where('expiration', '<=', $now)
+                ->limit(self::CHUNK)
+                ->delete();
+
+            $deleted += $chunk;
+        } while ($chunk === self::CHUNK);
+
+        return $deleted;
     }
 
     /**

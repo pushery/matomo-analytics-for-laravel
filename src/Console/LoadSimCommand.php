@@ -22,6 +22,7 @@ use MatomoAnalytics\Support\Config;
 use MatomoAnalytics\Support\Reporter;
 use MatomoAnalytics\Tracking\PageView;
 use MatomoAnalytics\Transport\NullSender;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Fires N synthetic hits through the real build -> buffer -> flush pipeline and
@@ -36,6 +37,7 @@ use MatomoAnalytics\Transport\NullSender;
  * synthetic ones and sent them to Matomo. What the run leaves is removed when it ends, and the
  * configuration it changed is put back.
  */
+#[AsCommand(name: 'matomo:load-sim')]
 final class LoadSimCommand extends Command
 {
     /** The configuration a run changes, put back when it ends. */

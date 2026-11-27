@@ -13,8 +13,10 @@ use MatomoAnalytics\Contracts\Sender;
 use MatomoAnalytics\Jobs\SendHitsJob;
 use MatomoAnalytics\Privacy\UrlRedactor;
 use MatomoAnalytics\Support\Config;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AsCommand(name: 'matomo:replay')]
 final class ReplayCommand extends Command
 {
     protected $signature = 'matomo:replay
